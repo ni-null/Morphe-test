@@ -420,9 +420,25 @@ function buildCurlArgs(url, referer, state) {
 
 // ---------- CF bypass: fetch with retry on 403 ----------
 const STATUS_MARKER = "__MORPHE_HTTP_STATUS__:";
-const MAX_CF_RETRIES = 3;
 const RETRY_DELAY_MS_MIN = 2000;
 const RETRY_DELAY_MS_MAX = 5000;
+
+function isCiEnvironment() {
+  const value = String(process.env.CI || "").trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
+function getMaxCfRetries() {
+  const raw = String(process.env.APKMIRROR_CF_RETRIES || "").trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  // CI should fail fast and fallback to archive instead of waiting on CF loops.
+  return isCiEnvironment() ? 0 : 3;
+}
 
 async function curlFetchHtml(url, referer, appName, state, ctx) {
   if (typeof ctx.runCommandCapture !== "function") {
@@ -434,11 +450,12 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
 
   let lastError = null;
 
-  for (let attempt = 0; attempt <= MAX_CF_RETRIES; attempt += 1) {
+  const maxCfRetries = getMaxCfRetries();
+  for (let attempt = 0; attempt <= maxCfRetries; attempt += 1) {
     // Randomised delay on retries to reduce rate-limit detection
     if (attempt > 0) {
       const delay = randomInt(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
-      ctx.logInfo(`[${appName}] CF retry ${attempt}/${MAX_CF_RETRIES} in ${delay}ms...`);
+      ctx.logInfo(`[${appName}] CF retry ${attempt}/${maxCfRetries} in ${delay}ms...`);
       await sleep(delay);
       // Rotate UA on each retry
       state._ua = pickRandomUA();
@@ -990,12 +1007,14 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   }
 
   const state = createCurlState(app, appName, opts, ctx);
-  try {
-    await curlFetchHtml(APKMIRROR_HOME, APKMIRROR_HOME, appName, state, ctx);
-  } catch (err) {
-    ctx.logWarn(
-      `[${appName}] apkmirror home warm-up skipped: ${err && err.message ? err.message : String(err)}`,
-    );
+  if (!isCiEnvironment()) {
+    try {
+      await curlFetchHtml(APKMIRROR_HOME, APKMIRROR_HOME, appName, state, ctx);
+    } catch (err) {
+      ctx.logWarn(
+        `[${appName}] apkmirror home warm-up skipped: ${err && err.message ? err.message : String(err)}`,
+      );
+    }
   }
 
   if (!releaseUrl && baseUrl && versionSpec.base) {

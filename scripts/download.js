@@ -8,6 +8,11 @@ const { resolveArchiveDownloadUrl } = require("./download-apk/archive");
 const REMOTE_PROVIDER_ORDER = ["apkmirror", "archive"];
 const PROVIDER_MAX_RETRIES = 3;
 
+function isCloudflareBlockedMessage(message) {
+  const text = String(message || "").toLowerCase();
+  return text.includes("cloudflare") || text.includes("cf_clearance");
+}
+
 function resolveApkSource(apkFieldValue, appName) {
   const raw = String(apkFieldValue || "").trim();
   const lowered = raw.toLowerCase();
@@ -116,6 +121,7 @@ async function resolveDownloadInfo(
   destinationPath,
   forceDownload,
   ctx,
+  state,
 ) {
   if (apkSource.mode !== "remote-fallback") {
     throw new Error(`[${appName}] resolveDownloadInfo only supports remote-fallback mode.`);
@@ -124,9 +130,16 @@ async function resolveDownloadInfo(
   const providers = Array.isArray(apkSource.providers) && apkSource.providers.length > 0
     ? apkSource.providers
     : REMOTE_PROVIDER_ORDER;
+  const disabledProviders = state && state.disabledProviders instanceof Set
+    ? state.disabledProviders
+    : new Set();
 
   const providerErrors = [];
   for (const provider of providers) {
+    if (disabledProviders.has(provider)) {
+      providerErrors.push(`[${provider}] skipped (disabled in this run)`);
+      continue;
+    }
     for (let attempt = 1; attempt <= PROVIDER_MAX_RETRIES; attempt += 1) {
       try {
         if (attempt > 1) {
@@ -146,6 +159,14 @@ async function resolveDownloadInfo(
       } catch (err) {
         const message = ctx.formatError(err);
         providerErrors.push(`[${provider}#${attempt}] ${message}`);
+        const cfBlocked = provider === "apkmirror" && isCloudflareBlockedMessage(message);
+        if (cfBlocked) {
+          disabledProviders.add(provider);
+          ctx.logWarn(
+            `[${appName}] ${provider} blocked by Cloudflare, skip remaining ${provider} retries and fallback.`,
+          );
+          break;
+        }
         if (attempt < PROVIDER_MAX_RETRIES) {
           ctx.logWarn(`[${appName}] ${provider} attempt ${attempt} failed: ${message}`);
         }
@@ -176,6 +197,7 @@ async function resolveApk(params) {
   let selectedApkPath = null;
   let selectedVersion = null;
   const attemptErrors = [];
+  const providerState = { disabledProviders: new Set() };
 
   for (const candidate of versionCandidates) {
     const versionLabel = candidate.version || (isLocalMode ? "local" : "provider-default");
@@ -226,6 +248,7 @@ async function resolveApk(params) {
           providerDestinationPath,
           options.force,
           ctx,
+          providerState,
         );
         if (downloadInfo.downloadUrl) {
           ctx.logInfo(`Resolved download URL: ${downloadInfo.downloadUrl}`);
