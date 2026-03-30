@@ -1,4 +1,4 @@
-[global]
+﻿[global]
 # Shared patch file path (optional). If missing, auto-fetch rules apply.
 patches = "./patches/youtube.mpp"
 
@@ -28,7 +28,6 @@ mode = "stable"
 # - remote: remote fallback order = apkmirror -> archive
 # - empty/invalid/other value: skip this app section
 # remote base URLs are read from scripts/download-apk/url.json
-apk = "remote"
-
 # package_name = "com.google.android.youtube"
 # local_apk = "./source-apk/youtube.apk"
+
