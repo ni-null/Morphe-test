@@ -201,6 +201,30 @@ function parseApkBaseInfo(baseUrl, app) {
   }
 }
 
+function getExpectedAppPathPrefix(baseUrl, app) {
+  const info = parseApkBaseInfo(baseUrl, app);
+  if (!info) {
+    return "";
+  }
+  return `/apk/${info.org}/${info.name}/`.toLowerCase();
+}
+
+function filterReleaseLinksByAppPath(links, expectedPathPrefix) {
+  const prefix = String(expectedPathPrefix || "").trim().toLowerCase();
+  if (!prefix) {
+    return uniqueStrings(links);
+  }
+  return uniqueStrings(
+    (links || []).filter((item) => {
+      try {
+        return new URL(String(item)).pathname.toLowerCase().startsWith(prefix);
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
 function getReleaseUrlCandidatesFromBase(baseUrl, app, versionSpec) {
   const info = parseApkBaseInfo(baseUrl, app);
   if (!info || !versionSpec || !versionSpec.base) {
@@ -414,7 +438,7 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
     // Randomised delay on retries to reduce rate-limit detection
     if (attempt > 0) {
       const delay = randomInt(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
-      ctx.logInfo(`[${appName}] CF retry ${attempt}/${MAX_CF_RETRIES} in ${delay}ms…`);
+      ctx.logInfo(`[${appName}] CF retry ${attempt}/${MAX_CF_RETRIES} in ${delay}ms...`);
       await sleep(delay);
       // Rotate UA on each retry
       state._ua = pickRandomUA();
@@ -457,7 +481,7 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
       return body;
     }
 
-    // CF blocked — record error, will retry
+    // CF blocked: record error and retry.
     lastError = new Error(
       `[${appName}] Request blocked by Cloudflare (HTTP ${statusCode || 403}): ${url}\n` +
         "Provide apkmirror_cookie / CF_CLEARANCE env var, or wait and retry.",
@@ -518,16 +542,23 @@ async function curlDownloadFile(url, referer, outputPath, appName, state, ctx) {
 
 // ---------- rest of the original logic (unchanged) ----------
 
-function extractReleaseLinksFromHtml(html, baseUrl, ctx) {
+function extractReleaseLinksFromHtml(html, baseUrl, ctx, expectedPathPrefix) {
   const links = ctx.getHrefMatches(
     html,
     'href="([^"]*(?:/apk/[^"]+?/[a-z0-9][a-z0-9-.]*-release/?[^"]*))"',
   );
-  return uniqueStrings(
-    links
+  const candidates = links
       .map((item) => ctx.toAbsoluteUrl(baseUrl, item))
-      .filter((item) => isApkMirrorHost(item) && /-release\/?/iu.test(item)),
-  );
+      .filter((item) => {
+        if (!isApkMirrorHost(item) || !/-release\/?/iu.test(item)) {
+          return false;
+        }
+        if (/disqus_thread/iu.test(item) || /#/u.test(item)) {
+          return false;
+        }
+        return true;
+      });
+  return filterReleaseLinksByAppPath(candidates, expectedPathPrefix);
 }
 
 function pickBestReleaseLink(releaseLinks, targetVersion, strictVersion, appName, ctx) {
@@ -565,14 +596,22 @@ function buildSearchQueries(app, appName, targetVersion) {
   return withVersion === keyword ? [keyword] : [withVersion, keyword];
 }
 
-async function resolveReleaseBySearch(app, appName, targetVersion, strictVersion, state, ctx) {
+async function resolveReleaseBySearch(
+  app,
+  appName,
+  targetVersion,
+  strictVersion,
+  state,
+  ctx,
+  expectedPathPrefix,
+) {
   const queries = buildSearchQueries(app, appName, targetVersion);
   const aggregated = [];
 
   for (const query of queries) {
     const url = `${SEARCH_BASE}${encodeURIComponent(query)}`;
     const html = await curlFetchHtml(url, APKMIRROR_HOME, appName, state, ctx);
-    const links = extractReleaseLinksFromHtml(html, url, ctx);
+    const links = extractReleaseLinksFromHtml(html, url, ctx, expectedPathPrefix);
     aggregated.push(...links);
     const picked = pickBestReleaseLink(links, targetVersion, strictVersion, appName, ctx);
     if (picked) {
@@ -832,7 +871,7 @@ function extractVariantLinksFromReleaseHtml(html, releaseUrl, ctx) {
 
 // Extract the real download.php URL (or id="download-link") from any page HTML.
 function extractDownloadPhpFromHtml(html, baseUrl, ctx) {
-  // Priority 1: <a id="download-link" href="..."> — the final link APKMirror embeds
+  // Priority 1: <a id="download-link" href="...">, the final link APKMirror embeds.
   const byId = ctx.getHrefMatches(html, '<a[^>]*id="download-link"[^>]*href="([^"]+)"');
   if (byId.length > 0) {
     return ctx.toAbsoluteUrl(baseUrl, String(byId[0]).replace(/&amp;/gu, "&"));
@@ -862,7 +901,7 @@ async function resolveFinalDownloadUrl(detailsHtml, detailsUrl, appName, state, 
     return directOnDetails;
   }
 
-  // Step 2: nofollow links — may be /download/?key= (intermediate) or download.php (final)
+  // Step 2: nofollow links may be /download/?key= (intermediate) or download.php (final).
   const nofollowOnDetails = extractNofollowLinks(detailsHtml, ctx);
   for (const link of nofollowOnDetails) {
     const abs = ctx.toAbsoluteUrl(detailsUrl, String(link || "").replace(/&amp;/gu, "&"));
@@ -900,7 +939,7 @@ async function resolveFinalDownloadUrl(detailsHtml, detailsUrl, appName, state, 
     } catch { /* try next button */ }
   }
 
-  // Step 4: last resort — follow any /apk/.../download/ link
+  // Step 4: last resort, follow any /apk/.../download/ link.
   const fallback = ctx.getHrefMatches(detailsHtml, 'href="([^"]*(?:/apk/.+?/download/[^"]*))"');
   if (fallback.length > 0) {
     const fallbackUrl = ctx.toAbsoluteUrl(detailsUrl, fallback[0]);
@@ -932,6 +971,7 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   let baseUrl =
     ctx.pickFirstValue(app, ["apkmirror_dlurl", "apkmirror-dlurl"]) ||
     getProviderUrl(app.__section_name || appName, "apkmirror");
+  const expectedPathPrefix = getExpectedAppPathPrefix(baseUrl || releaseUrl, app);
 
   if (releaseUrl && !isApkMirrorHost(releaseUrl)) {
     throw new Error(`[${appName}] release_url must be apkmirror host. Got: ${releaseUrl}`);
@@ -976,12 +1016,20 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   if (!releaseUrl && baseUrl) {
     const normalizedBase = String(baseUrl).replace(/\/+$/u, "");
     const baseHtml = await curlFetchHtml(normalizedBase, APKMIRROR_HOME, appName, state, ctx);
-    const links = extractReleaseLinksFromHtml(baseHtml, normalizedBase, ctx);
+    const links = extractReleaseLinksFromHtml(baseHtml, normalizedBase, ctx, expectedPathPrefix);
     releaseUrl = pickBestReleaseLink(links, targetVersion, strictVersion, appName, ctx);
   }
 
   if (!releaseUrl) {
-    releaseUrl = await resolveReleaseBySearch(app, appName, targetVersion, strictVersion, state, ctx);
+    releaseUrl = await resolveReleaseBySearch(
+      app,
+      appName,
+      targetVersion,
+      strictVersion,
+      state,
+      ctx,
+      expectedPathPrefix,
+    );
   }
 
   if (!releaseUrl) {

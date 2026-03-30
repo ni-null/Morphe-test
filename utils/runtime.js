@@ -3,12 +3,11 @@
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
-const { Readable } = require("stream");
-const { pipeline } = require("stream/promises");
 const { spawn } = require("child_process");
 
 const ACCEPT_LANGUAGE = "en-US,en;q=0.9";
 const CURL_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0";
+const HTTP_STATUS_MARKER = "__MORPHE_HTTP_STATUS__:";
 
 function summarizeRequestError(url, statusCode, responsePreview, originalMessage) {
   const preview = String(responsePreview || "").slice(0, 700);
@@ -29,48 +28,8 @@ function summarizeRequestError(url, statusCode, responsePreview, originalMessage
   return `Request failed ${statusLine}for ${url}\n${preview || String(originalMessage || "")}`;
 }
 
-function responseHeadersToObject(headers) {
-  const result = {};
-  for (const [key, value] of headers.entries()) {
-    result[key] = value;
-  }
-  return result;
-}
-
-async function readResponsePreview(response) {
-  try {
-    const text = await response.text();
-    return String(text || "").slice(0, 700);
-  } catch {
-    return "";
-  }
-}
-
-async function fetchWithTimeout(url, options, timeoutMs) {
-  if (typeof fetch !== "function") {
-    throw new Error("Global fetch is not available. Please use Node.js 18+.");
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      redirect: "follow",
-    });
-  } catch (err) {
-    if (err && err.name === "AbortError") {
-      throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function createRuntime(params) {
-  const { logStep } = params;
+  const { cookieJarPath, logStep } = params;
 
   async function ensureDir(dirPath) {
     await fsp.mkdir(dirPath, { recursive: true });
@@ -87,64 +46,6 @@ function createRuntime(params) {
 
   async function removeDirRecursive(dirPath) {
     await fsp.rm(dirPath, { recursive: true, force: true });
-  }
-
-  async function runCurl(url, outputPath = null, requestOptions = null) {
-    const opts = requestOptions || {};
-    const requestHeaders = {
-      "User-Agent": CURL_USER_AGENT,
-      "Accept-Language": ACCEPT_LANGUAGE,
-      ...(opts && opts.headers ? opts.headers : {}),
-    };
-    const allowHttpErrorBody = !!(opts && opts.allowHttpErrorBody);
-    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 10000;
-
-    try {
-      const response = await fetchWithTimeout(
-        url,
-        {
-          method: "GET",
-          headers: requestHeaders,
-        },
-        timeoutMs,
-      );
-
-      const status = Number(response.status || 0);
-      const valid = allowHttpErrorBody ? status >= 200 && status < 500 : status >= 200 && status < 300;
-
-      if (!valid) {
-        const preview = await readResponsePreview(response);
-        throw new Error(summarizeRequestError(url, status, preview, `HTTP ${status}`));
-      }
-
-      if (outputPath) {
-        await ensureDir(path.dirname(outputPath));
-        if (!response.body) {
-          throw new Error(`Request failed for ${url}\nResponse body is empty.`);
-        }
-
-        const bodyStream = Readable.fromWeb(response.body);
-        await pipeline(bodyStream, fs.createWriteStream(outputPath));
-        return {
-          stdout: Buffer.alloc(0),
-          statusCode: status,
-          headers: responseHeadersToObject(response.headers),
-        };
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      return {
-        stdout: buffer,
-        statusCode: status,
-        headers: responseHeadersToObject(response.headers),
-      };
-    } catch (err) {
-      const message = err && err.message ? err.message : String(err);
-      if (/^Request failed /u.test(message)) {
-        throw err;
-      }
-      throw new Error(summarizeRequestError(url, null, "", message));
-    }
   }
 
   function runCommandCapture(command, args, cwd = process.cwd()) {
@@ -167,6 +68,96 @@ function createRuntime(params) {
         });
       });
     });
+  }
+
+  function buildCurlArgs(url, outputPath, requestOptions) {
+    const opts = requestOptions || {};
+    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 10000;
+    const timeoutSec = Math.max(10, Math.ceil(timeoutMs / 1000));
+    const headers = {
+      "Accept-Language": ACCEPT_LANGUAGE,
+      "User-Agent": CURL_USER_AGENT,
+      ...(opts.headers || {}),
+    };
+
+    const args = [
+      "-L",
+      "--connect-timeout", "20",
+      "--max-time", String(timeoutSec),
+      "--retry", "1",
+      "--silent",
+      "--show-error",
+      "--compressed",
+      "-A", String(headers["User-Agent"] || CURL_USER_AGENT),
+    ];
+
+    // Keep curl cookie state between requests within one run.
+    if (cookieJarPath) {
+      args.push("-c", cookieJarPath, "-b", cookieJarPath);
+    }
+
+    const headerEntries = Object.entries(headers)
+      .filter(([key, value]) => key.toLowerCase() !== "user-agent" && value !== undefined && value !== null);
+    for (const [key, value] of headerEntries) {
+      args.push("-H", `${key}: ${String(value)}`);
+    }
+
+    if (outputPath) {
+      args.push("-o", outputPath);
+    }
+    args.push("-w", `\n${HTTP_STATUS_MARKER}%{http_code}`, url);
+    return args;
+  }
+
+  function parseCurlOutput(rawStdout) {
+    const stdout = String(rawStdout || "");
+    const markerIndex = stdout.lastIndexOf(HTTP_STATUS_MARKER);
+    if (markerIndex < 0) {
+      return { body: stdout, statusCode: 0 };
+    }
+    const body = stdout.slice(0, markerIndex).replace(/\r?\n$/u, "");
+    const codeText = stdout.slice(markerIndex + HTTP_STATUS_MARKER.length).trim();
+    return {
+      body,
+      statusCode: Number.parseInt(codeText, 10) || 0,
+    };
+  }
+
+  async function runCurl(url, outputPath = null, requestOptions = null) {
+    if (cookieJarPath) {
+      await ensureDir(path.dirname(cookieJarPath));
+    }
+    if (outputPath) {
+      await ensureDir(path.dirname(outputPath));
+    }
+
+    const opts = requestOptions || {};
+    const allowHttpErrorBody = !!opts.allowHttpErrorBody;
+    const args = buildCurlArgs(url, outputPath, opts);
+    const result = await runCommandCapture("curl", args);
+
+    if (result.code !== 0) {
+      throw new Error(
+        summarizeRequestError(
+          url,
+          null,
+          String(result.stdout || ""),
+          String(result.stderr || "").trim() || "curl command failed",
+        ),
+      );
+    }
+
+    const { body, statusCode } = parseCurlOutput(result.stdout);
+    const valid = allowHttpErrorBody ? statusCode >= 200 && statusCode < 500 : statusCode >= 200 && statusCode < 300;
+    if (!valid) {
+      throw new Error(summarizeRequestError(url, statusCode, body, `HTTP ${statusCode}`));
+    }
+
+    return {
+      stdout: Buffer.from(body || "", "utf8"),
+      statusCode,
+      headers: {},
+    };
   }
 
   async function downloadFile(url, outFile, label = "file") {
@@ -208,3 +199,4 @@ function createRuntime(params) {
 module.exports = {
   createRuntime,
 };
+

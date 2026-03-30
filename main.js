@@ -14,7 +14,6 @@ const { resolveSigningConfig } = require("./utils/signing");
 const {
   hasValue,
   pickFirstValue,
-  assertRequiredField,
   resolveAbsolutePath,
   safeFileName,
   formatError,
@@ -328,9 +327,11 @@ async function run() {
       continue;
     }
 
-    assertRequiredField(app, "apk", appName);
-
     const apkSource = downloader.resolveApkSource(app.apk, appName);
+    if (apkSource.mode === "skip") {
+      logWarn(apkSource.reason);
+      continue;
+    }
     const isLocalMode = apkSource.mode === "local";
     let patchPath = null;
     if (!options.downloadOnly) {

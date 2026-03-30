@@ -2,63 +2,36 @@
 
 const path = require("path");
 const fsp = require("fs").promises;
-const { URL } = require("url");
 const { resolveApkMirrorDownloadUrl } = require("./download-apk/apkmirror");
-const { resolveApkPureDownloadUrl } = require("./download-apk/apkpure");
-const { resolveUptodownDownloadUrl } = require("./download-apk/uptodown");
+const { resolveArchiveDownloadUrl } = require("./download-apk/archive");
 
-function isHttpUrl(value) {
-  return /^https?:\/\//iu.test(String(value || "").trim());
-}
+const REMOTE_PROVIDER_ORDER = ["apkmirror", "archive"];
+const PROVIDER_MAX_RETRIES = 3;
 
 function resolveApkSource(apkFieldValue, appName) {
   const raw = String(apkFieldValue || "").trim();
   const lowered = raw.toLowerCase();
 
   if (!raw) {
-    throw new Error(`[${appName}] apk field is empty.`);
+    return {
+      mode: "skip",
+      reason: `[${appName}] apk mode is not defined, skip this app.`,
+    };
   }
   if (lowered === "local") {
     return { mode: "local", value: raw };
-  }                                                          
-  if (isHttpUrl(raw)) {
-    let parsed = null;
-    try {
-      parsed = new URL(raw);
-    } catch {
-      return { mode: "direct-url", value: raw };
-    }
-    const host = parsed.host.toLowerCase();
-    const pathValue = parsed.pathname.toLowerCase();
-
-    if (host.includes("apkmirror.com")) {
-      if (pathValue.includes("download.php")) {
-        return { mode: "direct-url", value: raw };
-      }
-      return { mode: "provider", provider: "apkmirror", inferredBaseUrl: raw };
-    }
-    if (host.includes("uptodown.com")) {
-      if (host.startsWith("dw.") || pathValue.includes("/dwn/")) {
-        return { mode: "direct-url", value: raw };
-      }
-      return { mode: "provider", provider: "uptodown", inferredBaseUrl: raw };
-    }
-    if (host.includes("apkpure.com")) {
-      if (host.startsWith("d.") || host.startsWith("download.")) {
-        return { mode: "direct-url", value: raw };
-      }
-      return { mode: "provider", provider: "apkpure", inferredBaseUrl: raw };
-    }
-    return { mode: "direct-url", value: raw };
   }
-  if (lowered === "apkmirror" || lowered === "uptodown" || lowered === "apkpure") {
-    return { mode: "provider", provider: lowered };
+  if (lowered === "remote") {
+    return {
+      mode: "remote-fallback",
+      providers: REMOTE_PROVIDER_ORDER,
+    };
   }
 
-  throw new Error(
-    `[${appName}] unsupported apk value: ${raw}. ` +
-      "Use one of: local | apkmirror | uptodown | apkpure | https://...",
-  );
+  return {
+    mode: "skip",
+    reason: `[${appName}] invalid apk mode "${raw}", expected "remote" or "local". Skip this app.`,
+  };
 }
 
 function resolveLocalApkPath(app, appName, configDir, ctx) {
@@ -76,7 +49,8 @@ function resolveLocalApkPath(app, appName, configDir, ctx) {
   return ctx.resolveAbsolutePath(`source-apk/${ctx.safeFileName(appName)}.apk`, configDir);
 }
 
-async function resolveDownloadInfo(
+async function resolveProviderDownloadInfo(
+  provider,
   app,
   appName,
   apkSource,
@@ -86,29 +60,9 @@ async function resolveDownloadInfo(
   forceDownload,
   ctx,
 ) {
-  if (apkSource.mode === "direct-url") {
-    return {
-      downloadUrl: apkSource.value,
-      resolvedVersion: targetVersion || null,
-    };
-  }
-  if (apkSource.mode !== "provider") {
-    throw new Error(`[${appName}] resolveDownloadInfo only supports provider/direct-url mode.`);
-  }
-
-  const provider = apkSource.provider;
   const appForProvider = { ...app, __section_name: appName };
   if (apkSource.inferredBaseUrl) {
-    if (provider === "uptodown") {
-      const hasUptodownBase =
-        ctx.hasValue(appForProvider.app_url) ||
-        ctx.hasValue(appForProvider["app-url"]) ||
-        ctx.hasValue(appForProvider.uptodown_dlurl) ||
-        ctx.hasValue(appForProvider["uptodown-dlurl"]);
-      if (!hasUptodownBase) {
-        appForProvider.app_url = apkSource.inferredBaseUrl;
-      }
-    } else if (provider === "apkmirror") {
+    if (provider === "apkmirror") {
       const hasApkMirrorBase =
         ctx.hasValue(appForProvider.release_url) ||
         ctx.hasValue(appForProvider["release-url"]) ||
@@ -117,14 +71,14 @@ async function resolveDownloadInfo(
       if (!hasApkMirrorBase) {
         appForProvider.apkmirror_dlurl = apkSource.inferredBaseUrl;
       }
-    } else if (provider === "apkpure") {
-      const hasApkPureBase =
-        ctx.hasValue(appForProvider.app_url) ||
-        ctx.hasValue(appForProvider["app-url"]) ||
-        ctx.hasValue(appForProvider.apkpure_dlurl) ||
-        ctx.hasValue(appForProvider["apkpure-dlurl"]);
-      if (!hasApkPureBase) {
-        appForProvider.app_url = apkSource.inferredBaseUrl;
+    } else if (provider === "archive") {
+      const hasArchiveBase =
+        ctx.hasValue(appForProvider.archive_url) ||
+        ctx.hasValue(appForProvider["archive-url"]) ||
+        ctx.hasValue(appForProvider.archive_dlurl) ||
+        ctx.hasValue(appForProvider["archive-dlurl"]);
+      if (!hasArchiveBase) {
+        appForProvider.archive_url = apkSource.inferredBaseUrl;
       }
     }
   }
@@ -147,13 +101,61 @@ async function resolveDownloadInfo(
   if (provider === "apkmirror") {
     return resolveApkMirrorDownloadUrl(appForProvider, appName, opts, providerCtx);
   }
-  if (provider === "uptodown") {
-    return resolveUptodownDownloadUrl(appForProvider, appName, opts, providerCtx);
+  if (provider === "archive") {
+    return resolveArchiveDownloadUrl(appForProvider, appName, opts, providerCtx);
   }
-  if (provider === "apkpure") {
-    return resolveApkPureDownloadUrl(appForProvider, appName, opts, providerCtx);
+  throw new Error(`[${appName}] unsupported remote provider: ${provider}.`);
+}
+
+async function resolveDownloadInfo(
+  app,
+  appName,
+  apkSource,
+  targetVersion,
+  strictVersion,
+  destinationPath,
+  forceDownload,
+  ctx,
+) {
+  if (apkSource.mode !== "remote-fallback") {
+    throw new Error(`[${appName}] resolveDownloadInfo only supports remote-fallback mode.`);
   }
-  throw new Error(`[${appName}] unsupported apk provider: ${provider} (allowed: apkmirror, uptodown, apkpure)`);
+
+  const providers = Array.isArray(apkSource.providers) && apkSource.providers.length > 0
+    ? apkSource.providers
+    : REMOTE_PROVIDER_ORDER;
+
+  const providerErrors = [];
+  for (const provider of providers) {
+    for (let attempt = 1; attempt <= PROVIDER_MAX_RETRIES; attempt += 1) {
+      try {
+        if (attempt > 1) {
+          ctx.logWarn(`[${appName}] retry ${attempt}/${PROVIDER_MAX_RETRIES} for ${provider}`);
+        }
+        return await resolveProviderDownloadInfo(
+          provider,
+          app,
+          appName,
+          apkSource,
+          targetVersion,
+          strictVersion,
+          destinationPath,
+          forceDownload,
+          ctx,
+        );
+      } catch (err) {
+        const message = ctx.formatError(err);
+        providerErrors.push(`[${provider}#${attempt}] ${message}`);
+        if (attempt < PROVIDER_MAX_RETRIES) {
+          ctx.logWarn(`[${appName}] ${provider} attempt ${attempt} failed: ${message}`);
+        }
+      }
+    }
+  }
+
+  throw new Error(
+    `[${appName}] failed to resolve remote APK URL after retries.\n${providerErrors.join("\n")}`,
+  );
 }
 
 async function resolveApk(params) {
@@ -169,12 +171,6 @@ async function resolveApk(params) {
   } = params;
 
   const isLocalMode = apkSource.mode === "local";
-  const directDlurl = ctx.pickFirstValue(app, [
-    "download_url",
-    "download-url",
-    "direct_dlurl",
-    "direct-dlurl",
-  ]);
   const localApkPath = isLocalMode ? resolveLocalApkPath(app, appName, configDir, ctx) : null;
 
   let selectedApkPath = null;
@@ -210,10 +206,11 @@ async function resolveApk(params) {
       const preResolvedFileName = `${ctx.safeFileName(appName)}-${ctx.safeFileName(preResolvedVersion)}.apk`;
       const preResolvedApkPath = path.join(downloadDir, preResolvedFileName);
       const providerDestinationPath = preResolvedApkPath;
-      if (options.dryRun && apkSource.mode === "provider" && !directDlurl) {
+      const needsRemoteResolve = apkSource.mode === "remote-fallback";
+      if (options.dryRun && needsRemoteResolve) {
         ctx.logWarn(
           `DryRun: skip online provider resolve for [${appName}] (${versionLabel}). ` +
-            "Set download_url or use apk as direct URL for exact dry-run URL.",
+            "Run without --dry-run to resolve real provider URL.",
         );
         downloadInfo = {
           downloadUrl: "<provider-resolve-skipped>",
