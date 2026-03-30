@@ -8,24 +8,41 @@ const { spawn } = require("child_process");
 const ACCEPT_LANGUAGE = "en-US,en;q=0.9";
 const CURL_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0";
 const HTTP_STATUS_MARKER = "__MORPHE_HTTP_STATUS__:";
+const PAGE_TIMEOUT_MS = 10000;
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+
+function getDownloadTimeoutMs() {
+  const raw = String(process.env.MORPHE_DOWNLOAD_TIMEOUT_MS || "").trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_DOWNLOAD_TIMEOUT_MS;
+}
 
 function summarizeRequestError(url, statusCode, responsePreview, originalMessage) {
   const preview = String(responsePreview || "").slice(0, 700);
+  const cleanedPreview = preview
+    .replace(/\r?\n?__MORPHE_HTTP_STATUS__:\d+\s*$/u, "")
+    .trim();
+  const original = String(originalMessage || "").trim();
 
   const lowerUrl = String(url || "").toLowerCase();
-  const lowerErr = `${String(originalMessage || "")}\n${preview}`.toLowerCase();
+  const lowerErr = `${original}\n${cleanedPreview}`.toLowerCase();
   if (
     lowerUrl.includes("apkmirror.com") &&
     (statusCode === 403 || lowerErr.includes("returned error: 403") || lowerErr.includes("error: 22"))
   ) {
     return (
       `Request blocked by Cloudflare (HTTP 403): ${url}\n` +
-      "Set app.download_url directly or switch provider to uptodown."
+      "Set app.download_url directly, or use remote fallback to archive."
     );
   }
 
   const statusLine = statusCode ? `(${statusCode}) ` : "";
-  return `Request failed ${statusLine}for ${url}\n${preview || String(originalMessage || "")}`;
+  return `Request failed ${statusLine}for ${url}\n${original || cleanedPreview || "unknown error"}`;
 }
 
 function createRuntime(params) {
@@ -72,7 +89,9 @@ function createRuntime(params) {
 
   function buildCurlArgs(url, outputPath, requestOptions) {
     const opts = requestOptions || {};
-    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 10000;
+    const timeoutMs = Number.isFinite(opts.timeoutMs)
+      ? opts.timeoutMs
+      : (outputPath ? getDownloadTimeoutMs() : PAGE_TIMEOUT_MS);
     const timeoutSec = Math.max(10, Math.ceil(timeoutMs / 1000));
     const headers = {
       "Accept-Language": ACCEPT_LANGUAGE,
@@ -167,17 +186,31 @@ function createRuntime(params) {
       await fsp.unlink(outFile);
     }
 
-    const tmpFile = `${outFile}.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    try {
-      await runCurl(url, tmpFile);
-      await fsp.rename(tmpFile, outFile);
-    } catch (err) {
+    const maxAttempts = 3;
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const tmpFile = `${outFile}.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       try {
-        await fsp.unlink(tmpFile);
-      } catch {
-        // Ignore temp cleanup failure.
+        await runCurl(url, tmpFile, { timeoutMs: getDownloadTimeoutMs() });
+        await fsp.rename(tmpFile, outFile);
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        try {
+          await fsp.unlink(tmpFile);
+        } catch {
+          // Ignore temp cleanup failure.
+        }
+        if (attempt < maxAttempts) {
+          const delayMs = 1000 * attempt;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
       }
-      throw err;
+    }
+
+    if (lastError) {
+      throw lastError;
     }
 
     const stat = await fsp.stat(outFile);
@@ -199,4 +232,3 @@ function createRuntime(params) {
 module.exports = {
   createRuntime,
 };
-
