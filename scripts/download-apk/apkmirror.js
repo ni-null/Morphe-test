@@ -1,6 +1,13 @@
 /**
  * ApkMirror provider resolver.
- * Uses native Node runtime HTTP (fetch via ctx.runCurl).
+ * Uses system curl for page requests to keep behavior consistent in Linux CI.
+ *
+ * CF-403 hardening:
+ *  - Modern Chrome UA rotation
+ *  - curl TLS impersonation flags (--tls-max / cipher tweaks)
+ *  - Randomised delay between requests
+ *  - Automatic retry with jitter on 403 / CF challenge
+ *  - Extra browser-like headers (sec-fetch-*, dnt, upgrade-insecure-requests)
  */
 "use strict";
 
@@ -194,30 +201,6 @@ function parseApkBaseInfo(baseUrl, app) {
   }
 }
 
-function getExpectedAppPathPrefix(baseUrl, app) {
-  const info = parseApkBaseInfo(baseUrl, app);
-  if (!info) {
-    return "";
-  }
-  return `/apk/${info.org}/${info.name}/`.toLowerCase();
-}
-
-function filterReleaseLinksByAppPath(links, expectedPathPrefix) {
-  const prefix = String(expectedPathPrefix || "").trim().toLowerCase();
-  if (!prefix) {
-    return uniqueStrings(links);
-  }
-  return uniqueStrings(
-    (links || []).filter((item) => {
-      try {
-        return new URL(String(item)).pathname.toLowerCase().startsWith(prefix);
-      } catch {
-        return false;
-      }
-    }),
-  );
-}
-
 function getReleaseUrlCandidatesFromBase(baseUrl, app, versionSpec) {
   const info = parseApkBaseInfo(baseUrl, app);
   if (!info || !versionSpec || !versionSpec.base) {
@@ -363,68 +346,103 @@ function createCurlState(app, appName, opts, ctx) {
     process.env.APKMIRROR_ACCEPT_LANGUAGE ||
     DEFAULT_ACCEPT_LANGUAGE;
 
+  const preferredDir = opts && opts.destinationPath
+    ? path.dirname(String(opts.destinationPath))
+    : path.join(process.cwd(), "downloads");
+  const cookieJarPath = path.join(preferredDir, `.apkmirror-cookie-${appName}.txt`);
+
   return {
+    cookieJarPath,
     cookieHeader,
     userAgent,
     acceptLanguage,
     accept: DEFAULT_ACCEPT,
+    // Track per-session UA so all retries in one run share the same UA
     _ua: userAgent,
   };
 }
 
-function buildRequestHeaders(referer, state) {
-  const headers = {
-    Accept: state.accept,
-    "Accept-Language": state.acceptLanguage,
-    Referer: referer || APKMIRROR_HOME,
-    DNT: "1",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
-    "User-Agent": state._ua || state.userAgent,
-  };
-  if (state.cookieHeader && String(state.cookieHeader).trim()) {
-    headers.Cookie = state.cookieHeader;
+// ---------- CF bypass: build browser-like curl args ----------
+function buildCurlArgs(url, referer, state) {
+  const args = [
+    "-L",
+    "--connect-timeout", "20",
+    "--retry", "0",           // We handle retries ourselves
+    "--silent",
+    "--show-error",
+    "--compressed",
+    // Mimic Chrome TLS behaviour where possible
+    "--tlsv1.2",
+    "--tls-max", "1.3",
+    "-A", state._ua || state.userAgent,
+    "-H", `Accept: ${state.accept}`,
+    "-H", `Accept-Language: ${state.acceptLanguage}`,
+    "-H", `Referer: ${referer || APKMIRROR_HOME}`,
+    // Extra browser-like headers that help bypass CF
+    "-H", "DNT: 1",
+    "-H", "Upgrade-Insecure-Requests: 1",
+    "-H", "Sec-Fetch-Dest: document",
+    "-H", "Sec-Fetch-Mode: navigate",
+    "-H", "Sec-Fetch-Site: same-origin",
+    "-H", "Sec-Fetch-User: ?1",
+    "-c", state.cookieJarPath,
+    "-b", state.cookieJarPath,
+  ];
+  if (state.cookieHeader) {
+    args.push("-H", `Cookie: ${state.cookieHeader}`);
   }
-  return headers;
+  return args;
 }
 
+// ---------- CF bypass: fetch with retry on 403 ----------
+const STATUS_MARKER = "__MORPHE_HTTP_STATUS__:";
 const MAX_CF_RETRIES = 3;
 const RETRY_DELAY_MS_MIN = 2000;
 const RETRY_DELAY_MS_MAX = 5000;
 
 async function curlFetchHtml(url, referer, appName, state, ctx) {
-  if (typeof ctx.runCurl !== "function") {
-    throw new Error(`[${appName}] runCurl is required.`);
+  if (typeof ctx.runCommandCapture !== "function") {
+    throw new Error(`[${appName}] runCommandCapture is required for curl mode.`);
+  }
+  if (typeof ctx.ensureDir === "function") {
+    await ctx.ensureDir(path.dirname(state.cookieJarPath));
   }
 
   let lastError = null;
 
   for (let attempt = 0; attempt <= MAX_CF_RETRIES; attempt += 1) {
+    // Randomised delay on retries to reduce rate-limit detection
     if (attempt > 0) {
       const delay = randomInt(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
-      ctx.logInfo(`[${appName}] CF retry ${attempt}/${MAX_CF_RETRIES} in ${delay}ms...`);
+      ctx.logInfo(`[${appName}] CF retry ${attempt}/${MAX_CF_RETRIES} in ${delay}ms…`);
       await sleep(delay);
+      // Rotate UA on each retry
       state._ua = pickRandomUA();
     }
 
+    const args = buildCurlArgs(url, referer, state);
+    args.push("-w", `\n${STATUS_MARKER}%{http_code}`, url);
+
     ctx.logInfo(`Request: ${url}`);
-    let result;
-    try {
-      result = await ctx.runCurl(url, null, {
-        headers: buildRequestHeaders(referer, state),
-        allowHttpErrorBody: true,
-        timeoutMs: 20000,
-      });
-    } catch (err) {
-      lastError = new Error(`[${appName}] request failed: ${url}\n${err && err.message ? err.message : String(err)}`);
+    const result = await ctx.runCommandCapture("curl", args);
+
+    if (result.code !== 0) {
+      const stderr = String(result.stderr || "").trim();
+      const stdout = String(result.stdout || "").trim().slice(0, 300);
+      lastError = new Error(`[${appName}] curl request failed: ${url}\n${stderr || stdout}`);
+      // Network-level failure, no point retrying CF-specific logic
       throw lastError;
     }
 
-    const statusCode = Number.parseInt(String(result.statusCode || 0), 10) || 0;
-    const body = String(result.stdout || "");
+    const stdout = String(result.stdout || "");
+    const markerIndex = stdout.lastIndexOf(STATUS_MARKER);
+    let statusCode = 0;
+    let body = stdout;
+    if (markerIndex >= 0) {
+      body = stdout.slice(0, markerIndex).replace(/\r?\n$/u, "");
+      const codeText = stdout.slice(markerIndex + STATUS_MARKER.length).trim();
+      statusCode = Number.parseInt(codeText, 10) || 0;
+    }
 
     const isCfBlocked = statusCode === 403 || looksLikeCloudflareChallenge(body);
 
@@ -439,7 +457,7 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
       return body;
     }
 
-    // CF blocked: record error and retry.
+    // CF blocked — record error, will retry
     lastError = new Error(
       `[${appName}] Request blocked by Cloudflare (HTTP ${statusCode || 403}): ${url}\n` +
         "Provide apkmirror_cookie / CF_CLEARANCE env var, or wait and retry.",
@@ -451,8 +469,8 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
 }
 
 async function curlDownloadFile(url, referer, outputPath, appName, state, ctx) {
-  if (typeof ctx.runCurl !== "function") {
-    throw new Error(`[${appName}] runCurl is required.`);
+  if (typeof ctx.runCommandCapture !== "function") {
+    throw new Error(`[${appName}] runCommandCapture is required for curl mode.`);
   }
   if (!outputPath || !String(outputPath).trim()) {
     throw new Error(`[${appName}] output path is required for curl file download.`);
@@ -464,20 +482,22 @@ async function curlDownloadFile(url, referer, outputPath, appName, state, ctx) {
   }
 
   const tmpPath = `${outputPath}.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const args = buildCurlArgs(url, referer, state);
+  // --fail so curl exits non-zero on HTTP errors; -o writes to tmp file; URL must be last
+  args.push("--retry", "1", "--fail", "-o", tmpPath, url);
 
   ctx.logInfo(`Request: ${url}`);
-  try {
-    await ctx.runCurl(url, tmpPath, {
-      headers: buildRequestHeaders(referer, state),
-      timeoutMs: 30000,
-    });
-  } catch (err) {
+  const result = await ctx.runCommandCapture("curl", args);
+  if (result.code !== 0) {
+    const stderr = String(result.stderr || "").trim();
     try {
       await fsp.unlink(tmpPath);
     } catch {
       // ignore
     }
-    throw new Error(`[${appName}] download failed: ${url}\n${err && err.message ? err.message : String(err)}`);
+    throw new Error(
+      `[${appName}] curl download failed: ${url}\n${stderr || "unknown curl error"}`,
+    );
   }
 
   const stat = await fsp.stat(tmpPath);
@@ -498,23 +518,16 @@ async function curlDownloadFile(url, referer, outputPath, appName, state, ctx) {
 
 // ---------- rest of the original logic (unchanged) ----------
 
-function extractReleaseLinksFromHtml(html, baseUrl, ctx, expectedPathPrefix) {
+function extractReleaseLinksFromHtml(html, baseUrl, ctx) {
   const links = ctx.getHrefMatches(
     html,
     'href="([^"]*(?:/apk/[^"]+?/[a-z0-9][a-z0-9-.]*-release/?[^"]*))"',
   );
-  const candidates = links
+  return uniqueStrings(
+    links
       .map((item) => ctx.toAbsoluteUrl(baseUrl, item))
-      .filter((item) => {
-        if (!isApkMirrorHost(item) || !/-release\/?/iu.test(item)) {
-          return false;
-        }
-        if (/disqus_thread/iu.test(item) || /#/u.test(item)) {
-          return false;
-        }
-        return true;
-      });
-  return filterReleaseLinksByAppPath(candidates, expectedPathPrefix);
+      .filter((item) => isApkMirrorHost(item) && /-release\/?/iu.test(item)),
+  );
 }
 
 function pickBestReleaseLink(releaseLinks, targetVersion, strictVersion, appName, ctx) {
@@ -552,22 +565,14 @@ function buildSearchQueries(app, appName, targetVersion) {
   return withVersion === keyword ? [keyword] : [withVersion, keyword];
 }
 
-async function resolveReleaseBySearch(
-  app,
-  appName,
-  targetVersion,
-  strictVersion,
-  state,
-  ctx,
-  expectedPathPrefix,
-) {
+async function resolveReleaseBySearch(app, appName, targetVersion, strictVersion, state, ctx) {
   const queries = buildSearchQueries(app, appName, targetVersion);
   const aggregated = [];
 
   for (const query of queries) {
     const url = `${SEARCH_BASE}${encodeURIComponent(query)}`;
     const html = await curlFetchHtml(url, APKMIRROR_HOME, appName, state, ctx);
-    const links = extractReleaseLinksFromHtml(html, url, ctx, expectedPathPrefix);
+    const links = extractReleaseLinksFromHtml(html, url, ctx);
     aggregated.push(...links);
     const picked = pickBestReleaseLink(links, targetVersion, strictVersion, appName, ctx);
     if (picked) {
@@ -827,7 +832,7 @@ function extractVariantLinksFromReleaseHtml(html, releaseUrl, ctx) {
 
 // Extract the real download.php URL (or id="download-link") from any page HTML.
 function extractDownloadPhpFromHtml(html, baseUrl, ctx) {
-  // Priority 1: <a id="download-link" href="...">, the final link APKMirror embeds.
+  // Priority 1: <a id="download-link" href="..."> — the final link APKMirror embeds
   const byId = ctx.getHrefMatches(html, '<a[^>]*id="download-link"[^>]*href="([^"]+)"');
   if (byId.length > 0) {
     return ctx.toAbsoluteUrl(baseUrl, String(byId[0]).replace(/&amp;/gu, "&"));
@@ -857,7 +862,7 @@ async function resolveFinalDownloadUrl(detailsHtml, detailsUrl, appName, state, 
     return directOnDetails;
   }
 
-  // Step 2: nofollow links may be /download/?key= (intermediate) or download.php (final).
+  // Step 2: nofollow links — may be /download/?key= (intermediate) or download.php (final)
   const nofollowOnDetails = extractNofollowLinks(detailsHtml, ctx);
   for (const link of nofollowOnDetails) {
     const abs = ctx.toAbsoluteUrl(detailsUrl, String(link || "").replace(/&amp;/gu, "&"));
@@ -895,7 +900,7 @@ async function resolveFinalDownloadUrl(detailsHtml, detailsUrl, appName, state, 
     } catch { /* try next button */ }
   }
 
-  // Step 4: last resort, follow any /apk/.../download/ link.
+  // Step 4: last resort — follow any /apk/.../download/ link
   const fallback = ctx.getHrefMatches(detailsHtml, 'href="([^"]*(?:/apk/.+?/download/[^"]*))"');
   if (fallback.length > 0) {
     const fallbackUrl = ctx.toAbsoluteUrl(detailsUrl, fallback[0]);
@@ -927,7 +932,6 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   let baseUrl =
     ctx.pickFirstValue(app, ["apkmirror_dlurl", "apkmirror-dlurl"]) ||
     getProviderUrl(app.__section_name || appName, "apkmirror");
-  const expectedPathPrefix = getExpectedAppPathPrefix(baseUrl || releaseUrl, app);
 
   if (releaseUrl && !isApkMirrorHost(releaseUrl)) {
     throw new Error(`[${appName}] release_url must be apkmirror host. Got: ${releaseUrl}`);
@@ -972,20 +976,12 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   if (!releaseUrl && baseUrl) {
     const normalizedBase = String(baseUrl).replace(/\/+$/u, "");
     const baseHtml = await curlFetchHtml(normalizedBase, APKMIRROR_HOME, appName, state, ctx);
-    const links = extractReleaseLinksFromHtml(baseHtml, normalizedBase, ctx, expectedPathPrefix);
+    const links = extractReleaseLinksFromHtml(baseHtml, normalizedBase, ctx);
     releaseUrl = pickBestReleaseLink(links, targetVersion, strictVersion, appName, ctx);
   }
 
   if (!releaseUrl) {
-    releaseUrl = await resolveReleaseBySearch(
-      app,
-      appName,
-      targetVersion,
-      strictVersion,
-      state,
-      ctx,
-      expectedPathPrefix,
-    );
+    releaseUrl = await resolveReleaseBySearch(app, appName, targetVersion, strictVersion, state, ctx);
   }
 
   if (!releaseUrl) {
