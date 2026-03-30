@@ -1,0 +1,116 @@
+name: Build And Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_path:
+        description: "Path to config.toml"
+        required: false
+        default: "config.toml"
+      release_tag:
+        description: "Release tag (leave empty to auto-generate)"
+        required: false
+        default: ""
+      release_name:
+        description: "Release name (leave empty to auto-generate)"
+        required: false
+        default: ""
+      force:
+        description: "Use --force while building"
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Patched APKs
+        shell: bash
+        env:
+          MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
+          MORPHE_KEYSTORE_PASSWORD: ${{ secrets.MORPHE_KEYSTORE_PASSWORD }}
+          MORPHE_KEYSTORE_ENTRY_ALIAS: ${{ secrets.MORPHE_KEYSTORE_ENTRY_ALIAS }}
+          MORPHE_KEYSTORE_ENTRY_PASSWORD: ${{ secrets.MORPHE_KEYSTORE_ENTRY_PASSWORD }}
+          MORPHE_KEYSTORE_PATH: ./.keystore/morphe-ci.keystore
+        run: |
+          configPath="${{ github.event.inputs.config_path }}"
+          if [ -z "$configPath" ]; then
+            configPath="config.toml"
+          fi
+
+          args=(./main.js --config "$configPath")
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            args+=(--force)
+          fi
+
+          node "${args[@]}"
+
+      - name: Generate Release Notes
+        run: >
+          node ./scripts/ci/generate-release-notes.js
+          --metadata ./output/release-metadata.json
+          --output ./output/release-notes.md
+
+      - name: Resolve Release Meta
+        id: release_meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${{ github.ref_name }}"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            tag="${{ github.event.inputs.release_tag }}"
+          else
+            tag="v$(date +'%Y.%m.%d-%H%M%S')"
+          fi
+
+          if [ -n "${{ github.event.inputs.release_name }}" ]; then
+            name="${{ github.event.inputs.release_name }}"
+          else
+            name="Morphe Auto Patch $tag"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          body_path: output/release-notes.md
+          files: |
+            output/**/*.apk
+            output/release-metadata.json
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup CI Keystore
+        if: always()
+        shell: bash
+        run: rm -f ./.keystore/morphe-ci.keystore

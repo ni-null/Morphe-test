@@ -1,0 +1,11 @@
+downloads/
+output/
+*.apk
+*.tmp
+*.log
+*.mpp
+*.keystore
+!morphe-test.keystore
+*.txt
+*.jar
+.keystore/
