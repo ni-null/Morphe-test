@@ -29,7 +29,7 @@ mode = "stable" # stable | dev
 # ver = "patches-1.23.0-dev.1.mpp" # optional: lock patch filename
 
 [youtube]
-apk = "local" # apkmirror / uptodown / URL / local
+apk = "local" # apkmirror / uptodown / apkpure / URL / local
 # ver = "20.45.36"
 # package_name = "com.google.android.youtube"
 # local_apk = "./source-apk/youtube.apk"
@@ -54,8 +54,14 @@ When auto-fetching patch bundle, file is saved with original asset name, for exa
 ## `apk` Field Modes
 - `apk = "apkmirror"`: use ApkMirror provider
 - `apk = "uptodown"`: use Uptodown provider
+- `apk = "apkpure"`: use APKPure provider
 - `apk = "https://..."`: provider base URL or direct APK URL
 - `apk = "local"`: skip download and use local APK
+- ApkMirror provider uses system `curl` for page resolution (Windows and Linux CI behavior is aligned)
+
+Provider URL map fallback:
+- `scripts/download-apk/url.json` can store per-app provider URLs.
+- If provider URL is not set in `config.toml`, downloader will try this map first.
 
 Local mode:
 - default path: `./source-apk/<section>.apk`

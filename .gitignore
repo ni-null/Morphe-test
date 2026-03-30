@@ -9,3 +9,4 @@ output/
 *.txt
 *.jar
 .keystore/
+.node_modules/

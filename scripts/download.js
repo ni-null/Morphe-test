@@ -1,8 +1,10 @@
 "use strict";
 
 const path = require("path");
+const fsp = require("fs").promises;
 const { URL } = require("url");
 const { resolveApkMirrorDownloadUrl } = require("./download-apk/apkmirror");
+const { resolveApkPureDownloadUrl } = require("./download-apk/apkpure");
 const { resolveUptodownDownloadUrl } = require("./download-apk/uptodown");
 
 function isHttpUrl(value) {
@@ -18,7 +20,7 @@ function resolveApkSource(apkFieldValue, appName) {
   }
   if (lowered === "local") {
     return { mode: "local", value: raw };
-  }
+  }                                                          
   if (isHttpUrl(raw)) {
     let parsed = null;
     try {
@@ -41,15 +43,21 @@ function resolveApkSource(apkFieldValue, appName) {
       }
       return { mode: "provider", provider: "uptodown", inferredBaseUrl: raw };
     }
+    if (host.includes("apkpure.com")) {
+      if (host.startsWith("d.") || host.startsWith("download.")) {
+        return { mode: "direct-url", value: raw };
+      }
+      return { mode: "provider", provider: "apkpure", inferredBaseUrl: raw };
+    }
     return { mode: "direct-url", value: raw };
   }
-  if (lowered === "apkmirror" || lowered === "uptodown") {
+  if (lowered === "apkmirror" || lowered === "uptodown" || lowered === "apkpure") {
     return { mode: "provider", provider: lowered };
   }
 
   throw new Error(
     `[${appName}] unsupported apk value: ${raw}. ` +
-      "Use one of: local | apkmirror | uptodown | https://...",
+      "Use one of: local | apkmirror | uptodown | apkpure | https://...",
   );
 }
 
@@ -68,7 +76,16 @@ function resolveLocalApkPath(app, appName, configDir, ctx) {
   return ctx.resolveAbsolutePath(`source-apk/${ctx.safeFileName(appName)}.apk`, configDir);
 }
 
-async function resolveDownloadInfo(app, appName, apkSource, targetVersion, strictVersion, ctx) {
+async function resolveDownloadInfo(
+  app,
+  appName,
+  apkSource,
+  targetVersion,
+  strictVersion,
+  destinationPath,
+  forceDownload,
+  ctx,
+) {
   if (apkSource.mode === "direct-url") {
     return {
       downloadUrl: apkSource.value,
@@ -80,7 +97,7 @@ async function resolveDownloadInfo(app, appName, apkSource, targetVersion, stric
   }
 
   const provider = apkSource.provider;
-  const appForProvider = { ...app };
+  const appForProvider = { ...app, __section_name: appName };
   if (apkSource.inferredBaseUrl) {
     if (provider === "uptodown") {
       const hasUptodownBase =
@@ -100,20 +117,32 @@ async function resolveDownloadInfo(app, appName, apkSource, targetVersion, stric
       if (!hasApkMirrorBase) {
         appForProvider.apkmirror_dlurl = apkSource.inferredBaseUrl;
       }
+    } else if (provider === "apkpure") {
+      const hasApkPureBase =
+        ctx.hasValue(appForProvider.app_url) ||
+        ctx.hasValue(appForProvider["app-url"]) ||
+        ctx.hasValue(appForProvider.apkpure_dlurl) ||
+        ctx.hasValue(appForProvider["apkpure-dlurl"]);
+      if (!hasApkPureBase) {
+        appForProvider.app_url = apkSource.inferredBaseUrl;
+      }
     }
   }
 
   const providerCtx = {
     pickFirstValue: ctx.pickFirstValue,
     hasValue: ctx.hasValue,
+    formatError: ctx.formatError,
     toAbsoluteUrl: ctx.toAbsoluteUrl,
     getHrefMatches: ctx.getHrefMatches,
     selectBestByVersion: ctx.selectBestByVersion,
     runCurl: ctx.runCurl,
+    runCommandCapture: ctx.runCommandCapture,
+    ensureDir: ctx.ensureDir,
     logInfo: ctx.logInfo,
     logWarn: ctx.logWarn,
   };
-  const opts = { targetVersion, strictVersion };
+  const opts = { targetVersion, strictVersion, destinationPath, force: !!forceDownload };
 
   if (provider === "apkmirror") {
     return resolveApkMirrorDownloadUrl(appForProvider, appName, opts, providerCtx);
@@ -121,7 +150,10 @@ async function resolveDownloadInfo(app, appName, apkSource, targetVersion, stric
   if (provider === "uptodown") {
     return resolveUptodownDownloadUrl(appForProvider, appName, opts, providerCtx);
   }
-  throw new Error(`[${appName}] unsupported apk provider: ${provider} (allowed: apkmirror, uptodown)`);
+  if (provider === "apkpure") {
+    return resolveApkPureDownloadUrl(appForProvider, appName, opts, providerCtx);
+  }
+  throw new Error(`[${appName}] unsupported apk provider: ${provider} (allowed: apkmirror, uptodown, apkpure)`);
 }
 
 async function resolveApk(params) {
@@ -174,6 +206,10 @@ async function resolveApk(params) {
       }
 
       let downloadInfo = null;
+      const preResolvedVersion = candidate.version || "latest";
+      const preResolvedFileName = `${ctx.safeFileName(appName)}-${ctx.safeFileName(preResolvedVersion)}.apk`;
+      const preResolvedApkPath = path.join(downloadDir, preResolvedFileName);
+      const providerDestinationPath = preResolvedApkPath;
       if (options.dryRun && apkSource.mode === "provider" && !directDlurl) {
         ctx.logWarn(
           `DryRun: skip online provider resolve for [${appName}] (${versionLabel}). ` +
@@ -181,7 +217,7 @@ async function resolveApk(params) {
         );
         downloadInfo = {
           downloadUrl: "<provider-resolve-skipped>",
-          resolvedVersion: candidate.version || null,
+          resolvedVersion: candidate.version || "latest",
         };
       } else {
         downloadInfo = await resolveDownloadInfo(
@@ -190,9 +226,15 @@ async function resolveApk(params) {
           apkSource,
           candidate.version,
           candidate.strictVersion,
+          providerDestinationPath,
+          options.force,
           ctx,
         );
-        ctx.logInfo(`Resolved download URL: ${downloadInfo.downloadUrl}`);
+        if (downloadInfo.downloadUrl) {
+          ctx.logInfo(`Resolved download URL: ${downloadInfo.downloadUrl}`);
+        } else if (downloadInfo.localPath) {
+          ctx.logInfo(`Provider downloaded file: ${downloadInfo.localPath}`);
+        }
       }
 
       const effectiveVersion = candidate.version || downloadInfo.resolvedVersion || "latest";
@@ -209,6 +251,15 @@ async function resolveApk(params) {
       const apkExists = await ctx.fileExists(apkPath);
       if (apkExists && !options.force) {
         ctx.logWarn(`APK already exists, skip download: ${apkPath} (use --force to redownload)`);
+      } else if (downloadInfo.localPath) {
+        const sourcePath = path.resolve(downloadInfo.localPath);
+        if (!(await ctx.fileExists(sourcePath))) {
+          throw new Error(`[${appName}] provider output file not found: ${sourcePath}`);
+        }
+        if (path.normalize(sourcePath) !== path.normalize(apkPath)) {
+          await ctx.ensureDir(path.dirname(apkPath));
+          await fsp.copyFile(sourcePath, apkPath);
+        }
       } else {
         await ctx.downloadFile(downloadInfo.downloadUrl, apkPath, "APK");
       }

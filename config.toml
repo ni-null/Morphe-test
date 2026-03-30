@@ -23,8 +23,18 @@ mode = "stable"
 
 
 [youtube]
-# apk can be: apkmirror / uptodown / URL / local
-apk = "local"
-# ver = "20.45.36"
+# apk can be: apkmirror / uptodown / apkpure / URL / local
+# apkmirror optional fields (when apk = "apkmirror", uses curl):
+# apkmirror_dlurl = "https://www.apkmirror.com/apk/google-inc/youtube"
+# release_url = "https://www.apkmirror.com/apk/google-inc/youtube/youtube-20-45-36-release/"
+# search_keyword = "YouTube"
+# cf_clearance = "..."
+# apkmirror_cookie = "cf_clearance=...; other_cookie=..."
+# apkpure optional fields (when apk = "apkpure"):
+# app_url = "https://apkpure.com/youtube-2025/com.google.android.youtube"
+# or app_url = "https://apkpure.com/youtube-2025/com.google.android.youtube/download/20.45.36"
+# if app_url is omitted, loader will fallback to scripts/download-apk/url.json
+apk = "apkmirror" 
+
 # package_name = "com.google.android.youtube"
 # local_apk = "./source-apk/youtube.apk"

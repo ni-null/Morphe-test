@@ -3,32 +3,18 @@
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
+const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
 const { spawn } = require("child_process");
-const axios = require("axios");
-const { wrapper } = require("axios-cookiejar-support");
-const { CookieJar } = require("tough-cookie");
 
 const ACCEPT_LANGUAGE = "en-US,en;q=0.9";
 const CURL_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0";
 
-function summarizeRequestError(url, err) {
-  const statusCode = err && err.response && err.response.status ? err.response.status : null;
-  let responsePreview = "";
-  if (err && err.response && err.response.data) {
-    const data = err.response.data;
-    if (Buffer.isBuffer(data)) {
-      responsePreview = data.toString("utf8");
-    } else if (typeof data === "string") {
-      responsePreview = data;
-    } else if (typeof data === "object") {
-      responsePreview = JSON.stringify(data);
-    }
-  }
-  responsePreview = String(responsePreview || "").slice(0, 700);
+function summarizeRequestError(url, statusCode, responsePreview, originalMessage) {
+  const preview = String(responsePreview || "").slice(0, 700);
 
   const lowerUrl = String(url || "").toLowerCase();
-  const lowerErr = `${String(err && err.message ? err.message : "")}\n${responsePreview}`.toLowerCase();
+  const lowerErr = `${String(originalMessage || "")}\n${preview}`.toLowerCase();
   if (
     lowerUrl.includes("apkmirror.com") &&
     (statusCode === 403 || lowerErr.includes("returned error: 403") || lowerErr.includes("error: 22"))
@@ -40,12 +26,51 @@ function summarizeRequestError(url, err) {
   }
 
   const statusLine = statusCode ? `(${statusCode}) ` : "";
-  return `Request failed ${statusLine}for ${url}\n${responsePreview || String(err && err.message ? err.message : err)}`;
+  return `Request failed ${statusLine}for ${url}\n${preview || String(originalMessage || "")}`;
+}
+
+function responseHeadersToObject(headers) {
+  const result = {};
+  for (const [key, value] of headers.entries()) {
+    result[key] = value;
+  }
+  return result;
+}
+
+async function readResponsePreview(response) {
+  try {
+    const text = await response.text();
+    return String(text || "").slice(0, 700);
+  } catch {
+    return "";
+  }
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  if (typeof fetch !== "function") {
+    throw new Error("Global fetch is not available. Please use Node.js 18+.");
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      redirect: "follow",
+    });
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function createRuntime(params) {
-  const { cookieJarPath, logStep } = params;
-  let axiosClientPromise = null;
+  const { logStep } = params;
 
   async function ensureDir(dirPath) {
     await fsp.mkdir(dirPath, { recursive: true });
@@ -64,73 +89,61 @@ function createRuntime(params) {
     await fsp.rm(dirPath, { recursive: true, force: true });
   }
 
-  async function buildAxiosClient() {
-    await ensureDir(path.dirname(cookieJarPath));
+  async function runCurl(url, outputPath = null, requestOptions = null) {
+    const opts = requestOptions || {};
+    const requestHeaders = {
+      "User-Agent": CURL_USER_AGENT,
+      "Accept-Language": ACCEPT_LANGUAGE,
+      ...(opts && opts.headers ? opts.headers : {}),
+    };
+    const allowHttpErrorBody = !!(opts && opts.allowHttpErrorBody);
+    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 10000;
 
-    let jar = new CookieJar();
     try {
-      if (await fileExists(cookieJarPath)) {
-        const jsonText = await fsp.readFile(cookieJarPath, "utf8");
-        const parsed = JSON.parse(jsonText);
-        jar = CookieJar.fromJSON(parsed);
+      const response = await fetchWithTimeout(
+        url,
+        {
+          method: "GET",
+          headers: requestHeaders,
+        },
+        timeoutMs,
+      );
+
+      const status = Number(response.status || 0);
+      const valid = allowHttpErrorBody ? status >= 200 && status < 500 : status >= 200 && status < 300;
+
+      if (!valid) {
+        const preview = await readResponsePreview(response);
+        throw new Error(summarizeRequestError(url, status, preview, `HTTP ${status}`));
       }
-    } catch {
-      // Ignore cookie restore failure and use a new jar.
-      jar = new CookieJar();
-    }
 
-    const client = wrapper(
-      axios.create({
-        timeout: 10000,
-        maxRedirects: 10,
-        jar,
-        withCredentials: true,
-        headers: {
-          "User-Agent": CURL_USER_AGENT,
-          "Accept-Language": ACCEPT_LANGUAGE,
-        },
-        validateStatus(status) {
-          return status >= 200 && status < 300;
-        },
-      }),
-    );
-
-    return { client, jar };
-  }
-
-  async function getAxiosClient() {
-    if (!axiosClientPromise) {
-      axiosClientPromise = buildAxiosClient();
-    }
-    return axiosClientPromise;
-  }
-
-  async function persistCookieJar(jar) {
-    try {
-      await ensureDir(path.dirname(cookieJarPath));
-      await fsp.writeFile(cookieJarPath, JSON.stringify(jar.toJSON(), null, 2), "utf8");
-    } catch {
-      // Ignore cookie persist failure.
-    }
-  }
-
-  async function runCurl(url, outputPath = null) {
-    const { client, jar } = await getAxiosClient();
-
-    try {
       if (outputPath) {
         await ensureDir(path.dirname(outputPath));
-        const response = await client.get(url, { responseType: "stream" });
-        await pipeline(response.data, fs.createWriteStream(outputPath));
-        await persistCookieJar(jar);
-        return { stdout: Buffer.alloc(0) };
+        if (!response.body) {
+          throw new Error(`Request failed for ${url}\nResponse body is empty.`);
+        }
+
+        const bodyStream = Readable.fromWeb(response.body);
+        await pipeline(bodyStream, fs.createWriteStream(outputPath));
+        return {
+          stdout: Buffer.alloc(0),
+          statusCode: status,
+          headers: responseHeadersToObject(response.headers),
+        };
       }
 
-      const response = await client.get(url, { responseType: "arraybuffer" });
-      await persistCookieJar(jar);
-      return { stdout: Buffer.from(response.data) };
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return {
+        stdout: buffer,
+        statusCode: status,
+        headers: responseHeadersToObject(response.headers),
+      };
     } catch (err) {
-      throw new Error(summarizeRequestError(url, err));
+      const message = err && err.message ? err.message : String(err);
+      if (/^Request failed /u.test(message)) {
+        throw err;
+      }
+      throw new Error(summarizeRequestError(url, null, "", message));
     }
   }
 
