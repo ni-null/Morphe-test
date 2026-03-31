@@ -118,6 +118,9 @@ async function main() {
   lines.push("| Channel | Type | Name / App | Output File |");
   lines.push("|---|---|---|---|");
   lines.push(`| Common | Tool File | ${escapeCell(cliFile)} | - |`);
+  lines.push(
+    "| Common | Requirement | [MicroG-RE](https://github.com/MorpheApp/MicroG-RE/releases) | - |",
+  );
 
   for (const channelInfo of channels) {
     const channel = channelInfo.channel;

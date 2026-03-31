@@ -94,6 +94,33 @@ jobs:
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
+      - name: Resolve Latest MicroG Asset
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        id: microg_meta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node ./scripts/ci/resolve-microg-release.js --repo MorpheApp/MicroG-RE
+
+      - name: Restore MicroG Cache
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: downloads/microg
+          key: microg-${{ runner.os }}-${{ steps.microg_meta.outputs.asset_name }}
+          restore-keys: |
+            microg-${{ runner.os }}-
+
+      - name: Fetch MicroG APK
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          node ./scripts/ci/fetch-microg-asset.js
+          --name "${{ steps.microg_meta.outputs.asset_name }}"
+          --url "${{ steps.microg_meta.outputs.asset_url }}"
+          --cache-dir ./downloads/microg
+          --output-dir ./output
+
       - name: Resolve Release Meta
         if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         id: release_meta
@@ -125,6 +152,7 @@ jobs:
           body_path: output/release-notes.md
           files: |
             output/**/*.apk
+            output/microg-*.apk
             output/release-metadata.json
           fail_on_unmatched_files: true
         env:
