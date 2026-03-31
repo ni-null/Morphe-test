@@ -195,9 +195,6 @@ async function main() {
       const raw = await fsp.readFile(metadataPath, "utf8");
       const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
 
-      const channelMetadataPath = path.join(outputDir, `release-metadata-${channel}.json`);
-      await fsp.writeFile(channelMetadataPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-
       channelMetas.push({
         channel,
         metadata: parsed,

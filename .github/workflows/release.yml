@@ -57,7 +57,22 @@ jobs:
           restore-keys: |
             apk-${{ runner.os }}-
 
+      - name: Check Existing Published Combo
+        id: release_check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_FORCE: ${{ github.event.inputs.force }}
+          MORPHE_CLI_REPO: MorpheApp/morphe-cli
+          PATCHES_REPO: MorpheApp/morphe-patches
+        run: node ./scripts/ci/check-release-exists.js
+
+      - name: Skip Build (Already Published)
+        if: steps.release_check.outputs.should_skip == 'true'
+        run: echo "Skip build: existing release already contains the same cli + stable/dev patches combo (${{ steps.release_check.outputs.matched_release }})."
+
       - name: Build Patched APKs
+        if: steps.release_check.outputs.should_skip != 'true'
         shell: bash
         env:
           MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
@@ -79,12 +94,14 @@ jobs:
           node "${args[@]}"
 
       - name: Generate Release Notes
+        if: steps.release_check.outputs.should_skip != 'true'
         run: >
           node ./scripts/ci/generate-release-notes.js
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
       - name: Resolve Release Meta
+        if: steps.release_check.outputs.should_skip != 'true'
         id: release_meta
         shell: bash
         run: |
@@ -108,6 +125,7 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
+        if: steps.release_check.outputs.should_skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}
@@ -116,8 +134,6 @@ jobs:
           files: |
             output/**/*.apk
             output/release-metadata.json
-            output/release-metadata-stable.json
-            output/release-metadata-dev.json
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
