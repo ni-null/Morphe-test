@@ -5,22 +5,25 @@ const fsp = require("fs").promises;
 const path = require("path");
 const { spawn } = require("child_process");
 
-const CHANNELS = ["stable", "dev"];
-
 function parseArgs(argv) {
   const options = {
     config: "config.toml",
+    channel: "",
     force: false,
   };
-
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--config") {
       const value = argv[i + 1];
-      if (!value) {
-        throw new Error("Missing value for --config");
-      }
+      if (!value) throw new Error("Missing value for --config");
       options.config = value;
+      i += 1;
+      continue;
+    }
+    if (arg === "--channel") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("Missing value for --channel");
+      options.channel = String(value).trim().toLowerCase();
       i += 1;
       continue;
     }
@@ -30,15 +33,10 @@ function parseArgs(argv) {
     }
     throw new Error(`Unknown option: ${arg}`);
   }
-
+  if (!options.channel || !["stable", "dev"].includes(options.channel)) {
+    throw new Error("Invalid --channel. Allowed: stable, dev.");
+  }
   return options;
-}
-
-function channelLabel(channel) {
-  const value = String(channel || "").toLowerCase();
-  if (value === "stable") return "Stable";
-  if (value === "dev") return "Dev";
-  return value || "Unknown";
 }
 
 function isSectionLine(line) {
@@ -72,24 +70,19 @@ function withPatchesMode(baseToml, mode) {
       out.push(line);
       continue;
     }
-
     if (inPatches && /^\s*mode\s*=/u.test(line)) {
       out.push(`mode = "${mode}"`);
       wroteMode = true;
       continue;
     }
-
     out.push(line);
   }
 
   if (inPatches && !wroteMode) {
     out.push(`mode = "${mode}"`);
   }
-
   if (!hasPatchesSection) {
-    if (out.length > 0 && String(out[out.length - 1]).trim() !== "") {
-      out.push("");
-    }
+    if (out.length > 0 && String(out[out.length - 1]).trim() !== "") out.push("");
     out.push("[patches]");
     out.push(`mode = "${mode}"`);
   }
@@ -116,10 +109,10 @@ function runNode(args, cwd) {
 }
 
 function uniquePatchFiles(apps) {
-  const values = [];
   const seen = new Set();
+  const values = [];
   for (const app of apps) {
-    const patchFile = app && app.patchFileName ? String(app.patchFileName) : "";
+    const patchFile = String(app && app.patchFileName ? app.patchFileName : "").trim();
     if (!patchFile || seen.has(patchFile)) continue;
     seen.add(patchFile);
     values.push(patchFile);
@@ -127,91 +120,49 @@ function uniquePatchFiles(apps) {
   return values;
 }
 
-function mergeMetadata(configPath, channelMetas) {
-  const mergedApps = [];
-  const channels = [];
-
-  for (const item of channelMetas) {
-    const channel = item.channel;
-    const metadata = item.metadata || {};
-    const apps = Array.isArray(metadata.apps) ? metadata.apps : [];
-    const patchFiles = uniquePatchFiles(apps);
-
-    channels.push({
-      channel,
-      channelLabel: channelLabel(channel),
-      patchFiles,
-    });
-
-    for (const app of apps) {
-      mergedApps.push({
-        ...app,
-        channel,
-        channelLabel: channelLabel(channel),
-      });
-    }
-  }
-
-  const firstWithCli = channelMetas.find((item) => item.metadata && item.metadata.morpheCli);
-
-  return {
-    generatedAt: new Date().toISOString(),
-    configPath: path.resolve(configPath),
-    morpheCli: firstWithCli ? firstWithCli.metadata.morpheCli : null,
-    channels,
-    apps: mergedApps,
-  };
-}
-
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
   const mainPath = path.join(cwd, "main.js");
   const baseConfigPath = path.resolve(cwd, options.config);
-  const baseConfigDir = path.dirname(baseConfigPath);
-  const outputDir = path.resolve(baseConfigDir, "output");
+  const configDir = path.dirname(baseConfigPath);
+  const outputDir = path.resolve(configDir, "output");
+  const tempConfigPath = path.join(configDir, `_tmp-config-${options.channel}.toml`);
 
   const baseConfig = await fsp.readFile(baseConfigPath, "utf8");
-  await fsp.mkdir(outputDir, { recursive: true });
-
-  const channelMetas = [];
-  const tempConfigPaths = [];
+  const channelConfig = withPatchesMode(baseConfig, options.channel);
+  await fsp.writeFile(tempConfigPath, channelConfig, "utf8");
 
   try {
-    for (const channel of CHANNELS) {
-      const tempConfigPath = path.join(baseConfigDir, `_tmp-config-${channel}.toml`);
-      tempConfigPaths.push(tempConfigPath);
+    const args = [mainPath, "--config", tempConfigPath];
+    if (options.force) args.push("--force");
+    await runNode(args, cwd);
 
-      const channelConfig = withPatchesMode(baseConfig, channel);
-      await fsp.writeFile(tempConfigPath, channelConfig, "utf8");
+    const metadataPath = path.join(outputDir, "release-metadata.json");
+    const raw = await fsp.readFile(metadataPath, "utf8");
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
+    const apps = Array.isArray(parsed.apps) ? parsed.apps : [];
 
-      const args = [mainPath, "--config", tempConfigPath];
-      if (options.force) {
-        args.push("--force");
-      }
-      await runNode(args, cwd);
+    const channelMetadata = {
+      channel: options.channel,
+      generatedAt: new Date().toISOString(),
+      configPath: parsed.configPath || baseConfigPath,
+      morpheCli: parsed.morpheCli || null,
+      patchFiles: uniquePatchFiles(apps),
+      apps: apps.map((app) => ({
+        ...app,
+        channel: options.channel,
+      })),
+    };
 
-      const metadataPath = path.resolve(baseConfigDir, "output", "release-metadata.json");
-      const raw = await fsp.readFile(metadataPath, "utf8");
-      const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
-
-      channelMetas.push({
-        channel,
-        metadata: parsed,
-      });
-    }
-
-    const merged = mergeMetadata(baseConfigPath, channelMetas);
-    const mergedPath = path.join(outputDir, "release-metadata.json");
-    await fsp.writeFile(mergedPath, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
-    console.log(mergedPath);
+    const channelMetadataPath = path.join(outputDir, `release-metadata-${options.channel}.json`);
+    await fsp.writeFile(channelMetadataPath, `${JSON.stringify(channelMetadata, null, 2)}\n`, "utf8");
+    console.log(channelMetadataPath);
   } finally {
-    for (const tempConfigPath of tempConfigPaths) {
-      try {
-        await fsp.unlink(tempConfigPath);
-      } catch {
-        // ignore cleanup failure
-      }
+    try {
+      await fsp.unlink(tempConfigPath);
+    } catch {
+      // ignore
     }
   }
 }
@@ -220,3 +171,4 @@ main().catch((err) => {
   console.error(err && err.message ? err.message : String(err));
   process.exit(1);
 });
+

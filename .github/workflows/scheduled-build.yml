@@ -16,12 +16,49 @@ on:
         type: boolean
         default: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
 jobs:
-  scheduled-build:
+  precheck:
     runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.release_check.outputs.should_skip }}
+      matched_release: ${{ steps.release_check.outputs.matched_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Check Existing Published Combo
+        id: release_check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_FORCE: ${{ github.event.inputs.force }}
+          MORPHE_CLI_REPO: MorpheApp/morphe-cli
+          PATCHES_REPO: MorpheApp/morphe-patches
+        run: node ./scripts/ci/check-release-exists.js
+
+  build-channel:
+    needs: precheck
+    if: ${{ needs.precheck.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [stable, dev]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +78,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Restore APK Cache
+      - name: Restore Download Cache
         uses: actions/cache@v4
         with:
           path: downloads
@@ -49,24 +86,32 @@ jobs:
           restore-keys: |
             apk-${{ runner.os }}-
 
-      - name: Check Existing Published Combo
-        id: release_check
+      - name: Resolve Channel Status
+        id: channel_check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           INPUT_FORCE: ${{ github.event.inputs.force }}
           MORPHE_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
-        run: node ./scripts/ci/check-release-exists.js
+        run: node ./scripts/ci/check-channel-release.js --channel "${{ matrix.channel }}"
 
-      - name: Skip Build (Already Published)
-        if: ${{ steps.release_check.outputs.should_skip == 'true' }}
-        run: |
-          echo "Skip scheduled build: existing release already contains current cli + stable/dev patches combo."
+      - name: Reuse Existing Channel Assets
+        if: ${{ steps.channel_check.outputs.should_build != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: >
+          node ./scripts/ci/reuse-channel-assets.js
+          --channel "${{ matrix.channel }}"
+          --release-id "${{ steps.channel_check.outputs.matched_release_id }}"
+          --patch-file "${{ steps.channel_check.outputs.patch_file }}"
+          --cli-file "${{ steps.channel_check.outputs.cli_file }}"
+          --output-dir ./output
+          --cache-dir ./downloads/release-assets
 
-      - name: Build Patched APKs
-        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
-        shell: bash
+      - name: Build Channel
+        if: ${{ steps.channel_check.outputs.should_build == 'true' }}
         env:
           MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
         run: |
@@ -74,23 +119,64 @@ jobs:
           if [ -z "$configPath" ]; then
             configPath="config.toml"
           fi
-
-          args=(./scripts/ci/build-dual-channel.js --config "$configPath")
+          args=(./scripts/ci/build-channel.js --config "$configPath" --channel "${{ matrix.channel }}")
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             args+=(--force)
           fi
-
           node "${args[@]}"
 
+      - name: Upload Channel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-${{ matrix.channel }}
+          path: |
+            output/**/*.apk
+            output/release-metadata-${{ matrix.channel }}.json
+          if-no-files-found: error
+
+  package-artifacts:
+    needs: [precheck, build-channel]
+    if: ${{ needs.precheck.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Download Channel Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: channel-*
+          path: .
+          merge-multiple: true
+
+      - name: Merge Channel Metadata
+        run: |
+          configPath="${{ github.event.inputs.config_path }}"
+          if [ -z "$configPath" ]; then
+            configPath="config.toml"
+          fi
+          node ./scripts/ci/merge-channel-metadata.js \
+            --config "$configPath" \
+            --output ./output/release-metadata.json \
+            --input ./output/release-metadata-stable.json \
+            --input ./output/release-metadata-dev.json
+
       - name: Generate Release Notes
-        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         run: >
           node ./scripts/ci/generate-release-notes.js
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
       - name: Upload Build Artifacts
-        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: morphe-scheduled-build
@@ -99,8 +185,3 @@ jobs:
             output/release-metadata.json
             output/release-notes.md
           if-no-files-found: error
-
-      - name: Cleanup CI Keystore
-        if: always()
-        shell: bash
-        run: rm -f ./.keystore/morphe-ci.keystore
