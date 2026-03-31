@@ -59,7 +59,7 @@ flowchart TD
     D -->|"No"| E["Build channels in parallel: stable + dev"]
 
     E --> F["Per channel: check-channel-release.js"]
-    F --> G{"Channel already published<br/>for same source?"}
+    F --> G{"Channel already published<br/>from any source?"}
     G -->|"Yes"| H["Reuse assets from matched release"]
     G -->|"No"| I["Run build-channel.js"]
 
@@ -73,8 +73,8 @@ flowchart TD
 ```
 
 Summary:
-- Manual and scheduled releases are checked separately by `workflow_source`.
-- Existing releases are reused when possible (no unnecessary rebuild).
+- Precheck is separated by `workflow_source` (manual/scheduled).
+- Channel asset reuse checks all existing releases (not separated by source).
 - Stable and dev channels are handled independently, then merged into one release.
 
 ## Run In Your Own Fork

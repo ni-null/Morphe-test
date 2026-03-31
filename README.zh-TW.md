@@ -59,7 +59,7 @@ flowchart TD
     D -->|"否"| E["平行建置 channel: stable + dev"]
 
     E --> F["各 channel 執行 check-channel-release.js"]
-    F --> G{"此 channel 是否已發布<br/>（同來源）?"}
+    F --> G{"此 channel 是否已發布<br/>（不限來源）?"}
     G -->|"是"| H["重用既有 release 資產"]
     G -->|"否"| I["執行 build-channel.js"]
 
@@ -73,8 +73,8 @@ flowchart TD
 ```
 
 摘要：
-- 手動與排程會依 `workflow_source` 分開檢查已發布版本。
-- 若可重用既有發布資產，會直接重用避免重建。
+- Precheck 會依 `workflow_source`（manual/scheduled）分開檢查。
+- Channel 資產重用會跨所有既有 release 檢查（不分來源）。
 - stable/dev 會各自處理，最後合併成同一次發布。
 
 ## Fork 後如何自己跑

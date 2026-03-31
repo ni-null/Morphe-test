@@ -100,7 +100,6 @@ jobs:
           INPUT_FORCE: ${{ github.event.inputs.force }}
           MORPHE_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
-          RELEASE_SOURCE_SCOPE: manual
         run: node ./scripts/ci/check-channel-release.js --channel "${{ matrix.channel }}"
 
       - name: Reuse Existing Channel Assets
