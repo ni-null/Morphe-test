@@ -166,9 +166,10 @@ function mergeMetadata(configPath, channelMetas) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
-  const outputDir = path.join(cwd, "output");
   const mainPath = path.join(cwd, "main.js");
   const baseConfigPath = path.resolve(cwd, options.config);
+  const baseConfigDir = path.dirname(baseConfigPath);
+  const outputDir = path.resolve(baseConfigDir, "output");
 
   const baseConfig = await fsp.readFile(baseConfigPath, "utf8");
   await fsp.mkdir(outputDir, { recursive: true });
@@ -178,7 +179,7 @@ async function main() {
 
   try {
     for (const channel of CHANNELS) {
-      const tempConfigPath = path.join(outputDir, `_tmp-config-${channel}.toml`);
+      const tempConfigPath = path.join(baseConfigDir, `_tmp-config-${channel}.toml`);
       tempConfigPaths.push(tempConfigPath);
 
       const channelConfig = withPatchesMode(baseConfig, channel);
@@ -190,7 +191,7 @@ async function main() {
       }
       await runNode(args, cwd);
 
-      const metadataPath = path.join(outputDir, "release-metadata.json");
+      const metadataPath = path.resolve(baseConfigDir, "output", "release-metadata.json");
       const raw = await fsp.readFile(metadataPath, "utf8");
       const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
 
@@ -222,4 +223,3 @@ main().catch((err) => {
   console.error(err && err.message ? err.message : String(err));
   process.exit(1);
 });
-
