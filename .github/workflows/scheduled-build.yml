@@ -1,20 +1,15 @@
-name: Manual Build And Release APK
+name: Scheduled Build APK (No Release)
 
 on:
+  schedule:
+    # UTC time. 02:30 UTC = 10:30 Asia/Taipei
+    - cron: "30 2 * * *"
   workflow_dispatch:
     inputs:
       config_path:
         description: "Path to config.toml"
         required: false
         default: "config.toml"
-      release_tag:
-        description: "Release tag (leave empty to auto-generate)"
-        required: false
-        default: ""
-      release_name:
-        description: "Release name (leave empty to auto-generate)"
-        required: false
-        default: ""
       force:
         description: "Use --force while building"
         required: false
@@ -22,10 +17,10 @@ on:
         default: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-and-release:
+  scheduled-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -66,7 +61,7 @@ jobs:
 
       - name: Skip Build (Already Published)
         if: steps.release_check.outputs.should_skip == 'true'
-        run: echo "Skip build: existing release already contains the same cli + stable/dev patches combo (${{ steps.release_check.outputs.matched_release }})."
+        run: echo "Skip scheduled build: existing release already contains current cli + stable/dev patches combo."
 
       - name: Build Patched APKs
         if: steps.release_check.outputs.should_skip != 'true'
@@ -97,43 +92,19 @@ jobs:
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
-      - name: Resolve Release Meta
+      - name: Upload Build Artifacts
         if: steps.release_check.outputs.should_skip != 'true'
-        id: release_meta
-        shell: bash
-        run: |
-          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
-            tag="${{ github.event.inputs.release_tag }}"
-          else
-            tag="v$(date +'%Y.%m.%d-%H%M%S')"
-          fi
-
-          if [ -n "${{ github.event.inputs.release_name }}" ]; then
-            name="${{ github.event.inputs.release_name }}"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            name="Morphe Patch Build (Manual) $tag"
-          else
-            name="Morphe Auto Patch $tag"
-          fi
-
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-
-      - name: Publish GitHub Release
-        if: steps.release_check.outputs.should_skip != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ steps.release_meta.outputs.tag }}
-          name: ${{ steps.release_meta.outputs.name }}
-          body_path: output/release-notes.md
-          files: |
+          name: morphe-scheduled-build
+          path: |
             output/**/*.apk
             output/release-metadata.json
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            output/release-notes.md
+          if-no-files-found: error
 
       - name: Cleanup CI Keystore
         if: always()
         shell: bash
         run: rm -f ./.keystore/morphe-ci.keystore
+
