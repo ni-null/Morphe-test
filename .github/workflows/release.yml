@@ -1,0 +1,136 @@
+name: Manual Build And Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_path:
+        description: "Path to config.toml"
+        required: false
+        default: "config.toml"
+      release_tag:
+        description: "Release tag (leave empty to auto-generate)"
+        required: false
+        default: ""
+      release_name:
+        description: "Release name (leave empty to auto-generate)"
+        required: false
+        default: ""
+      force:
+        description: "Use --force while building"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Restore APK Cache
+        uses: actions/cache@v4
+        with:
+          path: downloads
+          key: apk-${{ runner.os }}-${{ hashFiles('config.toml', 'scripts/download-apk/url.json') }}
+          restore-keys: |
+            apk-${{ runner.os }}-
+
+      - name: Check Existing Published Combo
+        id: release_check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_FORCE: ${{ github.event.inputs.force }}
+          MORPHE_CLI_REPO: MorpheApp/morphe-cli
+          PATCHES_REPO: MorpheApp/morphe-patches
+        run: node ./scripts/ci/check-release-exists.js
+
+      - name: Skip Build (Already Published)
+        if: ${{ steps.release_check.outputs.should_skip == 'true' }}
+        run: |
+          echo "Skip build: existing release already contains current cli + stable/dev patches combo."
+
+      - name: Build Patched APKs
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        shell: bash
+        env:
+          MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
+        run: |
+          configPath="${{ github.event.inputs.config_path }}"
+          if [ -z "$configPath" ]; then
+            configPath="config.toml"
+          fi
+
+          args=(./scripts/ci/build-dual-channel.js --config "$configPath")
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            args+=(--force)
+          fi
+
+          node "${args[@]}"
+
+      - name: Generate Release Notes
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        run: >
+          node ./scripts/ci/generate-release-notes.js
+          --metadata ./output/release-metadata.json
+          --output ./output/release-notes.md
+
+      - name: Resolve Release Meta
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        id: release_meta
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            tag="${{ github.event.inputs.release_tag }}"
+          else
+            tag="v$(date +'%Y.%m.%d-%H%M%S')"
+          fi
+
+          if [ -n "${{ github.event.inputs.release_name }}" ]; then
+            name="${{ github.event.inputs.release_name }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            name="Morphe Patch Build (Manual) $tag"
+          else
+            name="Morphe Auto Patch $tag"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          body_path: output/release-notes.md
+          files: |
+            output/**/*.apk
+            output/release-metadata.json
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup CI Keystore
+        if: always()
+        shell: bash
+        run: rm -f ./.keystore/morphe-ci.keystore

@@ -1,0 +1,12 @@
+{
+  "name": "morphe-test",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Auto download APK and patch with morphe-cli on Windows",
+  "scripts": {
+    "auto-patch": "node ./scripts/run-auto-patch.js"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2"
+  }
+}
