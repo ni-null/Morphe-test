@@ -54,6 +54,7 @@ jobs:
           INPUT_FORCE: ${{ github.event.inputs.force }}
           MORPHE_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
+          RELEASE_SOURCE_SCOPE: manual
         run: node ./scripts/ci/check-release-exists.js
 
   build-channel:
@@ -99,6 +100,7 @@ jobs:
           INPUT_FORCE: ${{ github.event.inputs.force }}
           MORPHE_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
+          RELEASE_SOURCE_SCOPE: manual
         run: node ./scripts/ci/check-channel-release.js --channel "${{ matrix.channel }}"
 
       - name: Reuse Existing Channel Assets
@@ -180,6 +182,11 @@ jobs:
           node ./scripts/ci/generate-release-notes.js
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
+
+      - name: Append Release Source Marker
+        run: |
+          echo "" >> ./output/release-notes.md
+          echo "workflow_source: manual" >> ./output/release-notes.md
 
       - name: Resolve Latest MicroG Asset
         id: microg_meta

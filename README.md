@@ -43,7 +43,39 @@ apk = "remote"
 
 ## CI Workflows
 - Manual build and release: `.github/workflows/release.yml`
-- Scheduled build (no release): `.github/workflows/scheduled-build.yml`
+- Scheduled build and release: `.github/workflows/scheduled-build.yml`
+
+## CI/CD Flow
+```mermaid
+flowchart TD
+    A["Trigger"] --> B{"Workflow Type"}
+    B -->|"Manual (workflow_dispatch)"| M1["Set RELEASE_SOURCE_SCOPE=manual"]
+    B -->|"Scheduled (cron / workflow_dispatch)"| S1["Set RELEASE_SOURCE_SCOPE=scheduled"]
+
+    M1 --> C["Precheck: check-release-exists.js"]
+    S1 --> C
+    C --> D{"Matched release for same source<br/>+ same cli + stable/dev patches?"}
+    D -->|"Yes"| Z["Skip build/release"]
+    D -->|"No"| E["Build channels in parallel: stable + dev"]
+
+    E --> F["Per channel: check-channel-release.js"]
+    F --> G{"Channel already published<br/>for same source?"}
+    G -->|"Yes"| H["Reuse assets from matched release"]
+    G -->|"No"| I["Run build-channel.js"]
+
+    H --> J["Upload channel artifacts"]
+    I --> J
+    J --> K["Merge channel metadata"]
+    K --> L["Generate release notes"]
+    L --> M["Append marker: workflow_source: manual/scheduled"]
+    M --> N["Fetch latest MicroG asset"]
+    N --> O["Publish GitHub Release"]
+```
+
+Summary:
+- Manual and scheduled releases are checked separately by `workflow_source`.
+- Existing releases are reused when possible (no unnecessary rebuild).
+- Stable and dev channels are handled independently, then merged into one release.
 
 ## Run In Your Own Fork
 1. Fork this repository.
@@ -55,4 +87,4 @@ apk = "remote"
 4. If `MORPHE_KEYSTORE_BASE64` is not set, workflows will use `morphe-test.keystore` in the repository.
 5. Open the `Actions` tab:
 - Run `Manual Build And Release APK` for release publishing
-- Or enable `Scheduled Build APK (No Release)` for periodic builds
+- Or enable `Scheduled Build And Release APK` for periodic publishing

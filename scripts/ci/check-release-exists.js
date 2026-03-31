@@ -6,6 +6,9 @@ const fsp = require("fs").promises;
 
 const DEFAULT_MORPHE_CLI_REPO = "MorpheApp/morphe-cli";
 const DEFAULT_PATCHES_REPO = "MorpheApp/morphe-patches";
+const RELEASE_SOURCE_ANY = "any";
+const RELEASE_SOURCE_MANUAL = "manual";
+const RELEASE_SOURCE_SCHEDULED = "scheduled";
 
 function isDevIdentifier(text) {
   return String(text || "").toLowerCase().includes("dev");
@@ -102,6 +105,18 @@ function releaseBodyContainsAll(release, requiredTokens) {
   return requiredTokens.every((token) => body.includes(token));
 }
 
+function normalizeReleaseSourceScope(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === RELEASE_SOURCE_MANUAL || raw === RELEASE_SOURCE_SCHEDULED) return raw;
+  return RELEASE_SOURCE_ANY;
+}
+
+function releaseMatchesSourceScope(release, scope) {
+  if (scope === RELEASE_SOURCE_ANY) return true;
+  const body = String(release && release.body ? release.body : "").toLowerCase();
+  return body.includes(`workflow_source: ${scope}`);
+}
+
 async function setGithubOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
@@ -127,6 +142,7 @@ async function main() {
 
   const cliRepo = String(process.env.MORPHE_CLI_REPO || DEFAULT_MORPHE_CLI_REPO).trim();
   const patchesRepo = String(process.env.PATCHES_REPO || DEFAULT_PATCHES_REPO).trim();
+  const releaseSourceScope = normalizeReleaseSourceScope(process.env.RELEASE_SOURCE_SCOPE);
 
   const [cliReleases, patchReleases, currentReleases] = await Promise.all([
     fetchReleases(cliRepo, token),
@@ -145,10 +161,13 @@ async function main() {
   }
 
   const required = [cliFile, stablePatch, devPatch];
-  console.log(`Check existing release tokens: ${required.join(", ")}`);
+  console.log(
+    `Check existing release tokens: ${required.join(", ")} (source_scope=${releaseSourceScope})`,
+  );
 
   const matched = currentReleases.find((release) => {
     if (!release || release.draft) return false;
+    if (!releaseMatchesSourceScope(release, releaseSourceScope)) return false;
     return releaseBodyContainsAll(release, required);
   });
 

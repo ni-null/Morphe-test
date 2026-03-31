@@ -43,7 +43,39 @@ apk = "remote"
 
 ## CI Workflows
 - 手動發布：`.github/workflows/release.yml`
-- 定時建置（不發布）：`.github/workflows/scheduled-build.yml`
+- 定時建置並發布：`.github/workflows/scheduled-build.yml`
+
+## CI/CD 流程
+```mermaid
+flowchart TD
+    A["觸發流程"] --> B{"流程類型"}
+    B -->|"手動 workflow_dispatch"| M1["設定 RELEASE_SOURCE_SCOPE=manual"]
+    B -->|"排程 cron / workflow_dispatch"| S1["設定 RELEASE_SOURCE_SCOPE=scheduled"]
+
+    M1 --> C["Precheck: check-release-exists.js"]
+    S1 --> C
+    C --> D{"同來源 + 同 cli + 同 stable/dev patch<br/>是否已發布?"}
+    D -->|"是"| Z["略過建置與發布"]
+    D -->|"否"| E["平行建置 channel: stable + dev"]
+
+    E --> F["各 channel 執行 check-channel-release.js"]
+    F --> G{"此 channel 是否已發布<br/>（同來源）?"}
+    G -->|"是"| H["重用既有 release 資產"]
+    G -->|"否"| I["執行 build-channel.js"]
+
+    H --> J["上傳 channel artifacts"]
+    I --> J
+    J --> K["合併 channel metadata"]
+    K --> L["產生 release notes"]
+    L --> M["追加標記: workflow_source: manual/scheduled"]
+    M --> N["抓取最新 MicroG 資產"]
+    N --> O["發布 GitHub Release"]
+```
+
+摘要：
+- 手動與排程會依 `workflow_source` 分開檢查已發布版本。
+- 若可重用既有發布資產，會直接重用避免重建。
+- stable/dev 會各自處理，最後合併成同一次發布。
 
 ## Fork 後如何自己跑
 1. Fork 專案到自己的 GitHub 倉庫。
@@ -55,4 +87,4 @@ apk = "remote"
 4. 如果沒設定 `MORPHE_KEYSTORE_BASE64`，workflow 會自動使用倉庫內的 `morphe-test.keystore`。
 5. 進入 `Actions` 頁面：
 - 手動執行 `Manual Build And Release APK` 進行發布
-- 或啟用 `Scheduled Build APK (No Release)` 等待排程自動建置
+- 或啟用 `Scheduled Build And Release APK` 等待排程自動發布

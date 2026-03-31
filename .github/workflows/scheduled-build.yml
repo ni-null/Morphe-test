@@ -1,9 +1,9 @@
-name: Scheduled Build APK (No Release)
+name: Scheduled Build And Release APK
 
 on:
   schedule:
-    # UTC time. 02:30 UTC = 10:30 Asia/Taipei
-    - cron: "30 2 * * *"
+    # UTC time. Runs at 02:30 and 14:30 UTC (10:30 and 22:30 Asia/Taipei)
+    - cron: "30 2,14 * * *"
   workflow_dispatch:
     inputs:
       config_path:
@@ -20,7 +20,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   precheck:
@@ -49,6 +49,7 @@ jobs:
           INPUT_FORCE: ${{ github.event.inputs.force }}
           MORPHE_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
+          RELEASE_SOURCE_SCOPE: scheduled
         run: node ./scripts/ci/check-release-exists.js
 
   build-channel:
@@ -94,6 +95,7 @@ jobs:
           INPUT_FORCE: ${{ github.event.inputs.force }}
           MORPHE_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
+          RELEASE_SOURCE_SCOPE: scheduled
         run: node ./scripts/ci/check-channel-release.js --channel "${{ matrix.channel }}"
 
       - name: Reuse Existing Channel Assets
@@ -134,7 +136,7 @@ jobs:
             **/release-metadata-${{ matrix.channel }}.json
           if-no-files-found: error
 
-  package-artifacts:
+  release:
     needs: [precheck, build-channel]
     if: ${{ needs.precheck.outputs.should_skip != 'true' }}
     runs-on: ubuntu-latest
@@ -176,12 +178,54 @@ jobs:
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Append Release Source Marker
+        run: |
+          echo "" >> ./output/release-notes.md
+          echo "workflow_source: scheduled" >> ./output/release-notes.md
+
+      - name: Resolve Latest MicroG Asset
+        id: microg_meta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node ./scripts/ci/resolve-microg-release.js --repo MorpheApp/MicroG-RE
+
+      - name: Restore MicroG Cache
+        uses: actions/cache@v4
         with:
-          name: morphe-scheduled-build
-          path: |
+          path: downloads/microg
+          key: microg-${{ runner.os }}-${{ steps.microg_meta.outputs.asset_name }}
+          restore-keys: |
+            microg-${{ runner.os }}-
+
+      - name: Fetch MicroG APK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          node ./scripts/ci/fetch-microg-asset.js
+          --name "${{ steps.microg_meta.outputs.asset_name }}"
+          --url "${{ steps.microg_meta.outputs.asset_url }}"
+          --cache-dir ./downloads/microg
+          --output-dir ./output
+
+      - name: Resolve Release Meta
+        id: release_meta
+        shell: bash
+        run: |
+          tag="v$(date +'%Y.%m.%d-%H%M%S')"
+          name="Morphe Patch Build (Scheduled) $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          body_path: output/release-notes.md
+          files: |
             output/**/*.apk
+            output/microg-*.apk
             output/release-metadata.json
-            output/release-notes.md
-          if-no-files-found: error
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
