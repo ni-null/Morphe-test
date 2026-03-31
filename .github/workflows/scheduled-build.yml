@@ -60,11 +60,12 @@ jobs:
         run: node ./scripts/ci/check-release-exists.js
 
       - name: Skip Build (Already Published)
-        if: steps.release_check.outputs.should_skip == 'true'
-        run: echo "Skip scheduled build: existing release already contains current cli + stable/dev patches combo."
+        if: ${{ steps.release_check.outputs.should_skip == 'true' }}
+        run: |
+          echo "Skip scheduled build: existing release already contains current cli + stable/dev patches combo."
 
       - name: Build Patched APKs
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         shell: bash
         env:
           MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
@@ -86,14 +87,14 @@ jobs:
           node "${args[@]}"
 
       - name: Generate Release Notes
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         run: >
           node ./scripts/ci/generate-release-notes.js
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
       - name: Upload Build Artifacts
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: morphe-scheduled-build
@@ -107,4 +108,3 @@ jobs:
         if: always()
         shell: bash
         run: rm -f ./.keystore/morphe-ci.keystore
-

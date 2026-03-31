@@ -65,11 +65,12 @@ jobs:
         run: node ./scripts/ci/check-release-exists.js
 
       - name: Skip Build (Already Published)
-        if: steps.release_check.outputs.should_skip == 'true'
-        run: echo "Skip build: existing release already contains the same cli + stable/dev patches combo (${{ steps.release_check.outputs.matched_release }})."
+        if: ${{ steps.release_check.outputs.should_skip == 'true' }}
+        run: |
+          echo "Skip build: existing release already contains current cli + stable/dev patches combo."
 
       - name: Build Patched APKs
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         shell: bash
         env:
           MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
@@ -91,14 +92,14 @@ jobs:
           node "${args[@]}"
 
       - name: Generate Release Notes
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         run: >
           node ./scripts/ci/generate-release-notes.js
           --metadata ./output/release-metadata.json
           --output ./output/release-notes.md
 
       - name: Resolve Release Meta
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         id: release_meta
         shell: bash
         run: |
@@ -120,7 +121,7 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
-        if: steps.release_check.outputs.should_skip != 'true'
+        if: ${{ steps.release_check.outputs.should_skip != 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}
