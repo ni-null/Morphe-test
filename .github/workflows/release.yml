@@ -63,7 +63,7 @@ jobs:
             configPath="config.toml"
           fi
 
-          args=(./main.js --config "$configPath")
+          args=(./scripts/ci/build-dual-channel.js --config "$configPath")
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             args+=(--force)
           fi
@@ -108,6 +108,8 @@ jobs:
           files: |
             output/**/*.apk
             output/release-metadata.json
+            output/release-metadata-stable.json
+            output/release-metadata-dev.json
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
