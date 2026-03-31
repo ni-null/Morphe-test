@@ -2,6 +2,7 @@
 "use strict";
 
 const fsp = require("fs").promises;
+const fs = require("fs");
 const path = require("path");
 
 function parseArgs(argv) {
@@ -52,9 +53,43 @@ async function readJson(filePath) {
   return JSON.parse(raw.replace(/^\uFEFF/u, ""));
 }
 
+async function fileExists(filePath) {
+  try {
+    await fsp.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveInputPath(inputPath, cwd) {
+  const tried = [];
+  const basename = path.basename(String(inputPath || "").trim());
+  const candidates = [
+    path.resolve(cwd, inputPath),
+    path.resolve(cwd, basename),
+    path.resolve(cwd, "output", basename),
+    path.resolve(cwd, "output", "output", basename),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || tried.includes(candidate)) continue;
+    tried.push(candidate);
+    if (await fileExists(candidate)) return candidate;
+  }
+
+  throw new Error(
+    `Metadata input not found: ${inputPath}\nTried:\n- ${tried.join("\n- ")}`,
+  );
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const channelFiles = options.input.map((item) => path.resolve(item));
+  const cwd = process.cwd();
+  const channelFiles = [];
+  for (const item of options.input) {
+    channelFiles.push(await resolveInputPath(item, cwd));
+  }
   const channelMetadata = await Promise.all(channelFiles.map((filePath) => readJson(filePath)));
 
   const channels = [];
@@ -103,4 +138,3 @@ main().catch((err) => {
   console.error(err && err.message ? err.message : String(err));
   process.exit(1);
 });
-

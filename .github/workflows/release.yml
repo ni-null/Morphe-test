@@ -136,7 +136,7 @@ jobs:
           name: channel-${{ matrix.channel }}
           path: |
             output/**/*.apk
-            output/release-metadata-${{ matrix.channel }}.json
+            **/release-metadata-${{ matrix.channel }}.json
           if-no-files-found: error
 
   release:

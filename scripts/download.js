@@ -5,7 +5,7 @@ const fsp = require("fs").promises;
 const { resolveApkMirrorDownloadUrl } = require("./download-apk/apkmirror");
 const { resolveArchiveDownloadUrl } = require("./download-apk/archive");
 
-const REMOTE_PROVIDER_ORDER = ["archive"];
+const REMOTE_PROVIDER_ORDER = [ "apkmirror","archive"];
 const PROVIDER_MAX_RETRIES = 3;
 
 function isCloudflareBlockedMessage(message) {
