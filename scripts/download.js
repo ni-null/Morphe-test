@@ -223,6 +223,22 @@ async function resolveApk(params) {
         break;
       }
 
+      const candidateVersion = ctx.hasValue(candidate.version)
+        ? String(candidate.version).trim()
+        : "";
+      if (!options.force && candidateVersion) {
+        const cachedFileName = `${ctx.safeFileName(appName)}-${ctx.safeFileName(candidateVersion)}.apk`;
+        const cachedApkPath = path.join(downloadDir, cachedFileName);
+        if (await ctx.fileExists(cachedApkPath)) {
+          ctx.logInfo(
+            `Use cached APK, skip provider resolve: ${cachedApkPath} (use --force to redownload)`,
+          );
+          selectedApkPath = cachedApkPath;
+          selectedVersion = candidateVersion;
+          break;
+        }
+      }
+
       let downloadInfo = null;
       const preResolvedVersion = candidate.version || "latest";
       const preResolvedFileName = `${ctx.safeFileName(appName)}-${ctx.safeFileName(preResolvedVersion)}.apk`;
