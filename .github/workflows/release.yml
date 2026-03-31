@@ -90,6 +90,8 @@ jobs:
 
           if [ -n "${{ github.event.inputs.release_name }}" ]; then
             name="${{ github.event.inputs.release_name }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            name="Morphe Patch Build (Manual) $tag"
           else
             name="Morphe Auto Patch $tag"
           fi

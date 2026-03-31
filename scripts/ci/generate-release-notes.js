@@ -36,20 +36,6 @@ function parseArgs(argv) {
   return options;
 }
 
-function extractCliVersion(fileName) {
-  const name = String(fileName || "");
-  const match = name.match(/^morphe-cli-(.+)-all\.jar$/iu);
-  if (match) return match[1];
-  return path.basename(name, path.extname(name)) || "unknown";
-}
-
-function extractPatchVersion(fileName) {
-  const name = String(fileName || "");
-  const match = name.match(/^patches-(.+)\.mpp$/iu);
-  if (match) return match[1];
-  return path.basename(name, path.extname(name)) || "unknown";
-}
-
 function escapeCell(value) {
   return String(value || "").replace(/\|/gu, "\\|");
 }
@@ -67,40 +53,34 @@ async function main() {
   }
 
   const cliFile = metadata.morpheCli && metadata.morpheCli.fileName ? metadata.morpheCli.fileName : "unknown";
-  const cliVersion = extractCliVersion(cliFile);
+  const patchFiles = [...new Set(
+    apps
+      .map((app) => app.patchFileName || path.basename(String(app.patchPath || "")))
+      .filter(Boolean),
+  )];
 
   const lines = [];
-  lines.push("# Morphe Auto Patch Release");
-  lines.push("");
-  lines.push("## Versions");
-  lines.push("");
-  lines.push(`- morphe-cli: \`${cliVersion}\` (${cliFile})`);
-  lines.push("");
-  lines.push("| App | APK Version | Patches Version | Output File |");
-  lines.push("| --- | --- | --- | --- |");
+  lines.push("| Type | Name / App | Output File |");
+  lines.push("|---|---|---|");
+  lines.push(`| Tool File | ${escapeCell(cliFile)} | - |`);
+
+  for (const patchFileName of patchFiles) {
+    lines.push(`| Patch File | ${escapeCell(patchFileName)} | - |`);
+  }
 
   for (const app of apps) {
     const appName = app.appName || "unknown";
     const apkVersion = app.apkVersion || "unknown";
-    const patchFileName = app.patchFileName || path.basename(String(app.patchPath || ""));
-    const patchVersion = extractPatchVersion(patchFileName);
     const outputFile = app.outputApkPath ? path.basename(app.outputApkPath) : "unknown";
-
+    const targetName = `${appName}-${apkVersion}`;
     lines.push(
-      `| ${escapeCell(appName)} | ${escapeCell(apkVersion)} | ${escapeCell(patchVersion)} (${escapeCell(
-        patchFileName,
-      )}) | ${escapeCell(outputFile)} |`,
+      `| Build Target | ${escapeCell(targetName)} | ${escapeCell(outputFile)} |`,
     );
   }
 
   lines.push("");
-  lines.push("## Build");
-  lines.push("");
   if (metadata.generatedAt) {
     lines.push(`- generated_at: \`${metadata.generatedAt}\``);
-  }
-  if (metadata.configPath) {
-    lines.push(`- config: \`${metadata.configPath}\``);
   }
 
   await fsp.mkdir(path.dirname(outputPath), { recursive: true });
