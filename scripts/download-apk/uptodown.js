@@ -5,7 +5,6 @@
 "use strict";
 
 const { URL } = require("url");
-const { getProviderUrl } = require("./url-map");
 
 function isUptodownHost(urlValue) {
   try {
@@ -61,8 +60,7 @@ async function resolveUptodownDownloadUrl(app, appName, opts, ctx) {
   }
 
   const appUrl =
-    ctx.pickFirstValue(app, ["app_url", "app-url", "uptodown_dlurl", "uptodown-dlurl"]) ||
-    getProviderUrl(app.__section_name || appName, "uptodown");
+    ctx.pickFirstValue(app, ["app_url", "app-url", "uptodown_dlurl", "uptodown-dlurl"]);
   if (!appUrl) {
     throw new Error(
       `[${appName}] missing app_url/app-url or uptodown-dlurl. ` +

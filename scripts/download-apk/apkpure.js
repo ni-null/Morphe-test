@@ -5,7 +5,6 @@
 "use strict";
 
 const { URL } = require("url");
-const { getProviderUrl } = require("./url-map");
 
 function isApkPureHost(urlValue) {
   try {
@@ -88,7 +87,7 @@ function buildDownloadPageCandidates(app, targetVersion, ctx) {
     "apkpure-dlurl",
     "release_url",
     "release-url",
-    ]) || getProviderUrl(app.__section_name || app.app_name || app.name || app.section_name, "apkpure");
+    ]);
   if (!input) return [];
 
   const source = String(input).trim().replace(/\/+$/u, "");

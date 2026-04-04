@@ -3,9 +3,10 @@
 const path = require("path");
 const fsp = require("fs").promises;
 const { resolveApkMirrorDownloadUrl } = require("./download-apk/apkmirror");
+const { resolveUptodownDownloadUrl } = require("./download-apk/uptodown");
 const { resolveArchiveDownloadUrl } = require("./download-apk/archive");
 
-const REMOTE_PROVIDER_ORDER = [ "apkmirror","archive"];
+const REMOTE_PROVIDER_ORDER = [ "apkmirror","uptodown","archive"];
 const PROVIDER_MAX_RETRIES = 3;
 
 function isCloudflareBlockedMessage(message) {
@@ -105,6 +106,9 @@ async function resolveProviderDownloadInfo(
 
   if (provider === "apkmirror") {
     return resolveApkMirrorDownloadUrl(appForProvider, appName, opts, providerCtx);
+  }
+  if (provider === "uptodown") {
+    return resolveUptodownDownloadUrl(appForProvider, appName, opts, providerCtx);
   }
   if (provider === "archive") {
     return resolveArchiveDownloadUrl(appForProvider, appName, opts, providerCtx);

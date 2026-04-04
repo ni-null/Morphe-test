@@ -15,10 +15,13 @@ const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
 const { URL } = require("url");
-const { getProviderUrl } = require("./url-map");
 
 const APKMIRROR_HOME = "https://www.apkmirror.com/";
 const SEARCH_BASE = "https://www.apkmirror.com/?post_type=app_release&searchtype=apk&s=";
+const FIREFOX_VERSIONS_ENDPOINT = "https://product-details.mozilla.org/1.0/firefox_versions.json";
+let _curlOptionSupportPromise = null;
+let _warnedMissingHttp2 = false;
+let _warnedMissingTls13 = false;
 
 // ---------- CF bypass: rotate modern Chrome UAs ----------
 const USER_AGENTS = [
@@ -359,11 +362,12 @@ function createCurlState(app, appName, opts, ctx) {
     "";
   const cookieHeader = mergeCookieHeader(rawCookie, cfClearance);
 
-  // CF bypass: prefer env-specified UA, otherwise rotate randomly
-  const userAgent =
+  // Prefer explicit UA from config/env; otherwise we resolve a recent Firefox UA dynamically.
+  const explicitUserAgent =
     ctx.pickFirstValue(app, ["apkmirror_user_agent", "apkmirror-user-agent"]) ||
     process.env.APKMIRROR_USER_AGENT ||
-    pickRandomUA();
+    "";
+  const userAgent = explicitUserAgent || DEFAULT_UA;
 
   const acceptLanguage =
     ctx.pickFirstValue(app, ["apkmirror_accept_language", "apkmirror-accept-language"]) ||
@@ -378,12 +382,123 @@ function createCurlState(app, appName, opts, ctx) {
   return {
     cookieJarPath,
     cookieHeader,
+    explicitUserAgent,
     userAgent,
     acceptLanguage,
     accept: DEFAULT_ACCEPT,
-    // Track per-session UA so all retries in one run share the same UA
+    supportsHttp2: false,
+    supportsTls13: false,
+    // Keep one UA per run to avoid cookie/UA mismatch between retries.
     _ua: userAgent,
   };
+}
+
+function parseLatestFirefoxVersion(rawBody) {
+  try {
+    const parsed = JSON.parse(String(rawBody || "{}"));
+    const value = String(parsed.LATEST_FIREFOX_VERSION || "").trim();
+    if (!value) {
+      return null;
+    }
+    const major = value.split(".")[0];
+    return /^\d+$/u.test(major) ? major : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildLinuxFirefoxUA(majorVersion) {
+  const major = String(majorVersion || "").trim();
+  if (!/^\d+$/u.test(major)) {
+    return null;
+  }
+  return `Mozilla/5.0 (X11; Linux x86_64; rv:${major}.0) Gecko/20100101 Firefox/${major}.0`;
+}
+
+async function resolveLatestFirefoxUserAgent(appName, ctx) {
+  if (typeof ctx.runCommandCapture !== "function") {
+    return null;
+  }
+  const result = await ctx.runCommandCapture("curl", ["-sfL", FIREFOX_VERSIONS_ENDPOINT]);
+  if (result.code !== 0) {
+    return null;
+  }
+  const major = parseLatestFirefoxVersion(result.stdout);
+  if (!major) {
+    return null;
+  }
+  const ua = buildLinuxFirefoxUA(major);
+  if (ua && typeof ctx.logInfo === "function") {
+    ctx.logInfo(`[${appName}] Using dynamic Firefox UA ${major}.x for APKMirror requests.`);
+  }
+  return ua;
+}
+
+async function hydrateUserAgent(state, appName, ctx) {
+  if (state.explicitUserAgent) {
+    state._ua = state.explicitUserAgent;
+    return;
+  }
+
+  const dynamicFirefoxUa = await resolveLatestFirefoxUserAgent(appName, ctx);
+  if (dynamicFirefoxUa) {
+    state.userAgent = dynamicFirefoxUa;
+    state._ua = dynamicFirefoxUa;
+    return;
+  }
+
+  // Fall back to rotating from bundled list if endpoint is temporarily unavailable.
+  const fallbackUa = pickRandomUA();
+  state.userAgent = fallbackUa;
+  state._ua = fallbackUa;
+}
+
+function parseCurlOptionSupport(helpText) {
+  const lower = String(helpText || "").toLowerCase();
+  return {
+    http2: lower.includes("--http2"),
+    tls13: lower.includes("--tlsv1.3"),
+  };
+}
+
+async function getCurlOptionSupport(ctx) {
+  if (_curlOptionSupportPromise) {
+    return _curlOptionSupportPromise;
+  }
+
+  _curlOptionSupportPromise = (async () => {
+    if (typeof ctx.runCommandCapture !== "function") {
+      return { http2: false, tls13: false };
+    }
+
+    let result = await ctx.runCommandCapture("curl", ["--help", "all"]);
+    if (result.code !== 0) {
+      result = await ctx.runCommandCapture("curl", ["--help"]);
+    }
+
+    const output = `${String(result.stdout || "")}\n${String(result.stderr || "")}`;
+    if (!output.trim()) {
+      return { http2: false, tls13: false };
+    }
+    return parseCurlOptionSupport(output);
+  })();
+
+  return _curlOptionSupportPromise;
+}
+
+async function hydrateCurlOptionSupport(state, appName, ctx) {
+  const support = await getCurlOptionSupport(ctx);
+  state.supportsHttp2 = !!support.http2;
+  state.supportsTls13 = !!support.tls13;
+
+  if (!state.supportsHttp2 && !_warnedMissingHttp2 && typeof ctx.logWarn === "function") {
+    _warnedMissingHttp2 = true;
+    ctx.logWarn(`[${appName}] curl does not support --http2, using default HTTP mode.`);
+  }
+  if (!state.supportsTls13 && !_warnedMissingTls13 && typeof ctx.logWarn === "function") {
+    _warnedMissingTls13 = true;
+    ctx.logWarn(`[${appName}] curl does not support --tlsv1.3, using default TLS negotiation.`);
+  }
 }
 
 // ---------- CF bypass: build browser-like curl args ----------
@@ -395,9 +510,6 @@ function buildCurlArgs(url, referer, state) {
     "--silent",
     "--show-error",
     "--compressed",
-    // Mimic Chrome TLS behaviour where possible
-    "--tlsv1.2",
-    "--tls-max", "1.3",
     "-A", state._ua || state.userAgent,
     "-H", `Accept: ${state.accept}`,
     "-H", `Accept-Language: ${state.acceptLanguage}`,
@@ -414,6 +526,12 @@ function buildCurlArgs(url, referer, state) {
   ];
   if (state.cookieHeader) {
     args.push("-H", `Cookie: ${state.cookieHeader}`);
+  }
+  if (state.supportsHttp2) {
+    args.push("--http2");
+  }
+  if (state.supportsTls13) {
+    args.push("--tlsv1.3");
   }
   return args;
 }
@@ -436,8 +554,8 @@ function getMaxCfRetries() {
       return parsed;
     }
   }
-  // CI should fail fast and fallback to archive instead of waiting on CF loops.
-  return isCiEnvironment() ? 0 : 3;
+  // CI needs a few retries because APKMirror frequently serves transient CF challenge pages.
+  return isCiEnvironment() ? 2 : 3;
 }
 
 async function curlFetchHtml(url, referer, appName, state, ctx) {
@@ -457,8 +575,6 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
       const delay = randomInt(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
       ctx.logInfo(`[${appName}] CF retry ${attempt}/${maxCfRetries} in ${delay}ms...`);
       await sleep(delay);
-      // Rotate UA on each retry
-      state._ua = pickRandomUA();
     }
 
     const args = buildCurlArgs(url, referer, state);
@@ -986,8 +1102,7 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
 
   let releaseUrl = ctx.pickFirstValue(app, ["release_url", "release-url"]);
   let baseUrl =
-    ctx.pickFirstValue(app, ["apkmirror_dlurl", "apkmirror-dlurl"]) ||
-    getProviderUrl(app.__section_name || appName, "apkmirror");
+    ctx.pickFirstValue(app, ["apkmirror_dlurl", "apkmirror-dlurl"]);
   const expectedPathPrefix = getExpectedAppPathPrefix(baseUrl || releaseUrl, app);
 
   if (releaseUrl && !isApkMirrorHost(releaseUrl)) {
@@ -1007,6 +1122,8 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   }
 
   const state = createCurlState(app, appName, opts, ctx);
+  await hydrateUserAgent(state, appName, ctx);
+  await hydrateCurlOptionSupport(state, appName, ctx);
   if (!isCiEnvironment()) {
     try {
       await curlFetchHtml(APKMIRROR_HOME, APKMIRROR_HOME, appName, state, ctx);

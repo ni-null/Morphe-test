@@ -4,7 +4,6 @@
 "use strict";
 
 const { URL } = require("url");
-const { getProviderUrl } = require("./url-map");
 
 function normalizeVersion(version) {
   return String(version || "").trim();
@@ -137,7 +136,7 @@ async function resolveArchiveDownloadUrl(app, appName, opts, ctx) {
       "archive-dlurl",
       "app_url",
       "app-url",
-    ]) || getProviderUrl(appName, "archive");
+    ]);
 
   if (!baseUrl) {
     throw new Error(
