@@ -3,12 +3,17 @@
 const path = require("path");
 const { URL } = require("url");
 
+function repoToDirName(repo) {
+  const value = String(repo || "").trim();
+  return value.replace(/\//g, "@");
+}
+
 function normalizePatchMode(rawMode) {
   const value = String(rawMode || "stable").trim().toLowerCase();
-  if (value === "stable" || value === "dev") {
+  if (value === "stable" || value === "dev" || value === "local") {
     return value;
   }
-  throw new Error(`Invalid patches.mode: ${rawMode}. Allowed values: stable, dev.`);
+  throw new Error(`Invalid patches.mode: ${rawMode}. Allowed values: stable, dev, local.`);
 }
 
 function isDevIdentifier(text) {
@@ -125,22 +130,43 @@ async function resolvePatchFile(params) {
     app,
     appName,
     configDir,
-    globalCfg,
+    workspaceDir,
     patchesCfg,
     dryRun,
     force,
     ctx,
   } = params;
 
+  const mode = normalizePatchMode(
+    ctx.pickFirstValue(app, ["patches_mode", "patches-mode"]) ||
+      ctx.pickFirstValue(patchesCfg || {}, ["mode"]) ||
+      "stable",
+  );
+  const localPathRaw =
+    ctx.pickFirstValue(app, ["patches_path", "patches-path", "path"]) ||
+    ctx.pickFirstValue(patchesCfg || {}, ["path"]);
+
+  if (mode === "local") {
+    if (!ctx.hasValue(localPathRaw)) {
+      throw new Error(`[${appName}] patches.mode=local requires [patches].path (or app patches_path).`);
+    }
+    const localPath = ctx.resolveAbsolutePath(String(localPathRaw).trim(), configDir);
+    if (dryRun) {
+      ctx.logInfo(`DryRun: would use local patch file for [${appName}]: ${localPath}`);
+      return localPath;
+    }
+    if (!(await ctx.fileExists(localPath))) {
+      throw new Error(`[${appName}] Local patch file not found: ${localPath}`);
+    }
+    ctx.logInfo(`[${appName}] Using local patch file: ${localPath}`);
+    return localPath;
+  }
+
   const repoName =
     ctx.pickFirstValue(app, ["patches_repo", "patches-repo"]) ||
     ctx.pickFirstValue(patchesCfg || {}, ["patches_repo", "patches-repo"]) ||
-    ctx.pickFirstValue(globalCfg || {}, ["patches_repo", "patches-repo"]) ||
     ctx.defaultPatchesRepo;
-  const mode =
-    ctx.pickFirstValue(app, ["patches_mode", "patches-mode"]) ||
-    ctx.pickFirstValue(patchesCfg || {}, ["mode"]) ||
-    "stable";
+  const repoDirName = repoToDirName(repoName);
   const lockedVersionName =
     ctx.pickFirstValue(app, ["patches_ver", "patches-ver"]) ||
     ctx.pickFirstValue(patchesCfg || {}, ["ver"]) ||
@@ -148,7 +174,7 @@ async function resolvePatchFile(params) {
 
   if (lockedVersionName) {
     const lockedFileName = path.basename(String(lockedVersionName).trim());
-    const lockedPath = ctx.resolveAbsolutePath(path.join("patches", lockedFileName), configDir);
+    const lockedPath = ctx.resolveAbsolutePath(path.join("patches", repoDirName, lockedFileName), workspaceDir || configDir);
     const lockedExists = await ctx.fileExists(lockedPath);
 
     if (lockedExists && !force) {
@@ -181,11 +207,11 @@ async function resolvePatchFile(params) {
   if (dryRun) {
     ctx.logInfo(`DryRun: would fetch latest patch bundle from ${repoName} with mode=${mode}`);
     ctx.logInfo("DryRun: save path will keep original release asset filename under ./patches");
-    return ctx.resolveAbsolutePath(path.join("patches", `${ctx.safeFileName(appName)}.mpp`), configDir);
+    return ctx.resolveAbsolutePath(path.join("patches", repoDirName, `${ctx.safeFileName(appName)}.mpp`), workspaceDir || configDir);
   }
 
   const latest = await getLatestMorphePatchAsset(repoName, mode, ctx);
-  const latestPath = ctx.resolveAbsolutePath(path.join("patches", latest.name), configDir);
+  const latestPath = ctx.resolveAbsolutePath(path.join("patches", repoDirName, latest.name), workspaceDir || configDir);
   const exists = await ctx.fileExists(latestPath);
   if (exists && !force) {
     ctx.logInfo(`[${appName}] Latest patch already exists: ${latestPath}`);
@@ -197,6 +223,50 @@ async function resolvePatchFile(params) {
   );
   await ctx.downloadFile(latest.url, latestPath, "patch file");
   return latestPath;
+}
+
+async function probePatchBundle(params) {
+  const { patchesCfg, ctx } = params;
+  const mode = normalizePatchMode(
+    ctx.pickFirstValue(patchesCfg || {}, ["mode"]) || "stable",
+  );
+  if (mode === "local") {
+    throw new Error("patches probe only supports stable/dev mode.");
+  }
+
+  const repoName =
+    ctx.pickFirstValue(patchesCfg || {}, ["patches_repo", "patches-repo"]) ||
+    ctx.defaultPatchesRepo;
+  const lockedVersionName =
+    ctx.pickFirstValue(patchesCfg || {}, ["ver"]) ||
+    null;
+  const fetched = await fetchRepoReleases(repoName, ctx);
+
+  if (lockedVersionName) {
+    const lockedFileName = path.basename(String(lockedVersionName).trim());
+    const matched = findAssetByExactName(fetched.releases, lockedFileName, ctx);
+    if (!matched) {
+      throw new Error(`Locked patch version not found in ${fetched.repo}: ${lockedFileName}`);
+    }
+    return {
+      repo: fetched.repo,
+      mode,
+      tag: matched.tag,
+      fileName: matched.name,
+      url: matched.url,
+      locked: true,
+    };
+  }
+
+  const latest = await getLatestMorphePatchAsset(repoName, mode, ctx);
+  return {
+    repo: latest.repo,
+    mode: latest.mode,
+    tag: latest.tag,
+    fileName: latest.name,
+    url: latest.url,
+    locked: false,
+  };
 }
 
 function normalizeVersionPart(value) {
@@ -303,6 +373,83 @@ function parseListPatchesCompatibility(rawText) {
   }
 
   return packageVersions;
+}
+
+function parsePackageNames(rawText) {
+  const names = new Set();
+  const lines = String(rawText || "").split(/\r?\n/u);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const packageMatch = line.match(/^Package name:\s*(.+)$/iu);
+    if (!packageMatch) continue;
+    const packageName = packageMatch[1].trim();
+    if (packageName) names.add(packageName);
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+function parsePatchEntries(rawText) {
+  const lines = String(rawText || "").split(/\r?\n/u);
+  const entries = [];
+  let current = null;
+
+  function flushCurrent() {
+    if (!current) return;
+    if (Number.isInteger(current.index) && current.name) {
+      entries.push({
+        index: current.index,
+        name: current.name,
+        enabled: current.enabled !== false,
+      });
+    }
+    current = null;
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushCurrent();
+      continue;
+    }
+
+    const indexMatch = line.match(/^Index\s*:\s*(\d+)\s*$/iu);
+    if (indexMatch) {
+      flushCurrent();
+      current = { index: Number.parseInt(indexMatch[1], 10), name: "", enabled: true };
+      continue;
+    }
+
+    const nameMatch = line.match(/^Name\s*:\s*(.+)$/iu);
+    if (nameMatch && current) {
+      current.name = nameMatch[1].trim();
+      continue;
+    }
+
+    const enabledMatch = line.match(/^Enabled\s*:\s*(true|false)\s*$/iu);
+    if (enabledMatch && current) {
+      current.enabled = /^true$/iu.test(enabledMatch[1]);
+      continue;
+    }
+  }
+
+  flushCurrent();
+
+  if (entries.length > 0) {
+    return entries;
+  }
+
+  const rowMatches = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const row = line.match(/^(\d+)\s{2,}(.+?)\s{2,}(true|false)\s*$/iu);
+    if (!row) continue;
+    rowMatches.push({
+      index: Number.parseInt(row[1], 10),
+      name: row[2].trim(),
+      enabled: /^true$/iu.test(row[3]),
+    });
+  }
+  return rowMatches;
 }
 
 function getConfiguredPackageName(app, appName, ctx) {
@@ -418,17 +565,55 @@ async function resolvePatchCompatibleVersions(jarPath, patchPath, appName, app, 
   return { packageName, versions: dedupeAndSortVersions(versions), any: false };
 }
 
+async function listCompatibleVersions(params) {
+  const { app, appName, jarPath, patchPath, ctx } = params;
+  const compatibility = await resolvePatchCompatibleVersions(jarPath, patchPath, appName, app, ctx);
+  return {
+    packageName: compatibility.packageName,
+    any: compatibility.any,
+    versions: compatibility.any ? [] : compatibility.versions,
+  };
+}
+
+async function listPatchEntries(params) {
+  const { app, appName, jarPath, patchPath, ctx } = params;
+  const configuredPackage = getConfiguredPackageName(app, appName, ctx);
+  const listOutput = await listPatchesRawOutput(jarPath, patchPath, configuredPackage, ctx);
+  const entries = parsePatchEntries(listOutput);
+  if (entries.length === 0) {
+    throw new Error(`[${appName}] No patch entries parsed from list-patches output.`);
+  }
+  entries.sort((a, b) => a.index - b.index);
+  return {
+    packageName: configuredPackage || null,
+    entries,
+  };
+}
+
+async function listSupportedPackages(params) {
+  const { jarPath, patchPath, ctx } = params;
+  const listOutput = await listPatchesRawOutput(jarPath, patchPath, null, ctx);
+  const packages = parsePackageNames(listOutput);
+  if (packages.length === 0) {
+    throw new Error("No package names found in list-patches output.");
+  }
+  return packages;
+}
+
 async function resolveVersionCandidates(params) {
   const { app, appName, jarPath, patchPath, dryRun, ctx } = params;
 
-  if (ctx.hasValue(app.ver)) {
-    return [{ version: String(app.ver).trim(), strictVersion: true, source: "config.ver" }];
-  }
   if (!patchPath) {
+    if (ctx.hasValue(app.ver)) {
+      return [{ version: String(app.ver).trim(), strictVersion: true, source: "config.ver-no-patch" }];
+    }
     throw new Error(`[${appName}] ver is empty. Cannot resolve compatible versions without patch file.`);
   }
 
   if (dryRun && !(await ctx.fileExists(jarPath))) {
+    if (ctx.hasValue(app.ver)) {
+      return [{ version: String(app.ver).trim(), strictVersion: true, source: "config.ver-dry-run-no-jar" }];
+    }
     ctx.logWarn(
       `[${appName}] DryRun: morphe-cli jar is not present locally, skip compatibility query. ` +
         "Run once without --dry-run to fetch latest morphe-cli jar.",
@@ -437,6 +622,9 @@ async function resolveVersionCandidates(params) {
   }
 
   if (dryRun && !(await ctx.fileExists(patchPath))) {
+    if (ctx.hasValue(app.ver)) {
+      return [{ version: String(app.ver).trim(), strictVersion: true, source: "config.ver-dry-run-no-patch" }];
+    }
     ctx.logWarn(
       `[${appName}] DryRun: patch file is not present locally, skip compatibility query. ` +
         "Use --force or run once without --dry-run to fetch patches.",
@@ -445,6 +633,20 @@ async function resolveVersionCandidates(params) {
   }
 
   const compatibility = await resolvePatchCompatibleVersions(jarPath, patchPath, appName, app, ctx);
+  if (ctx.hasValue(app.ver)) {
+    const configuredVersion = String(app.ver).trim();
+    if (compatibility.any) {
+      return [{ version: configuredVersion, strictVersion: true, source: "config.ver-patch-any" }];
+    }
+    const matched = compatibility.versions.some((value) => String(value).trim() === configuredVersion);
+    if (matched) {
+      return [{ version: configuredVersion, strictVersion: true, source: "config.ver-compatible" }];
+    }
+    ctx.logWarn(
+      `[${appName}] Config ver=${configuredVersion} not compatible with patch (${compatibility.packageName}). ` +
+        "Fallback to auto compatible versions.",
+    );
+  }
   if (compatibility.any) {
     ctx.logWarn(`[${appName}] Patch compatible versions = Any. Falling back to provider default version.`);
     return [{ version: null, strictVersion: false, source: "patch-any" }];
@@ -465,5 +667,9 @@ async function resolveVersionCandidates(params) {
 
 module.exports = {
   resolvePatchFile,
+  probePatchBundle,
+  listCompatibleVersions,
+  listPatchEntries,
+  listSupportedPackages,
   resolveVersionCandidates,
 };

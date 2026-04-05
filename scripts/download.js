@@ -14,14 +14,27 @@ function isCloudflareBlockedMessage(message) {
   return text.includes("cloudflare") || text.includes("cf_clearance");
 }
 
-function resolveApkSource(apkFieldValue, appName) {
-  const raw = String(apkFieldValue || "").trim();
+function resolveApkSource(modeValue, appName) {
+  if (modeValue === false) {
+    return {
+      mode: "skip",
+      reason: `[${appName}] mode=false, skip this app.`,
+    };
+  }
+
+  const raw = String(modeValue || "").trim();
   const lowered = raw.toLowerCase();
 
   if (!raw) {
     return {
       mode: "skip",
-      reason: `[${appName}] apk mode is not defined, skip this app.`,
+      reason: `[${appName}] mode is not defined, expected remote/local/false. Skip this app.`,
+    };
+  }
+  if (lowered === "false") {
+    return {
+      mode: "skip",
+      reason: `[${appName}] mode=false, skip this app.`,
     };
   }
   if (lowered === "local") {
@@ -36,7 +49,7 @@ function resolveApkSource(apkFieldValue, appName) {
 
   return {
     mode: "skip",
-    reason: `[${appName}] invalid apk mode "${raw}", expected "remote" or "local". Skip this app.`,
+    reason: `[${appName}] invalid mode "${raw}", expected "remote", "local", or false. Skip this app.`,
   };
 }
 
@@ -70,8 +83,6 @@ async function resolveProviderDownloadInfo(
   if (apkSource.inferredBaseUrl) {
     if (provider === "apkmirror") {
       const hasApkMirrorBase =
-        ctx.hasValue(appForProvider.release_url) ||
-        ctx.hasValue(appForProvider["release-url"]) ||
         ctx.hasValue(appForProvider.apkmirror_dlurl) ||
         ctx.hasValue(appForProvider["apkmirror-dlurl"]);
       if (!hasApkMirrorBase) {

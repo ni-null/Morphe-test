@@ -79,15 +79,7 @@ function extractDirectCandidates(html, ctx, baseUrl) {
 }
 
 function buildDownloadPageCandidates(app, targetVersion, ctx) {
-  const input =
-    ctx.pickFirstValue(app, [
-    "app_url",
-    "app-url",
-    "apkpure_dlurl",
-    "apkpure-dlurl",
-    "release_url",
-    "release-url",
-    ]);
+  const input = ctx.pickFirstValue(app, ["apkpure_dlurl", "apkpure-dlurl"]);
   if (!input) return [];
 
   const source = String(input).trim().replace(/\/+$/u, "");
@@ -122,23 +114,10 @@ async function resolveApkPureDownloadUrl(app, appName, opts, ctx) {
   const targetVersion = opts && opts.targetVersion ? normalizeVersion(opts.targetVersion) : null;
   const strictVersion = !!(opts && opts.strictVersion);
 
-  const directDlurl = ctx.pickFirstValue(app, ["download_url", "download-url", "direct_dlurl", "direct-dlurl"]);
-  if (directDlurl) {
-    if (strictVersion && targetVersion && !versionAppearsInText(directDlurl, targetVersion)) {
-      throw new Error(
-        `[${appName}] direct download URL does not include target version ${targetVersion}.`,
-      );
-    }
-    return { downloadUrl: directDlurl, resolvedVersion: targetVersion || null };
-  }
-
   const appWithSectionName = { ...app, __section_name: appName };
   const pageCandidates = buildDownloadPageCandidates(appWithSectionName, targetVersion, ctx);
   if (pageCandidates.length === 0) {
-    throw new Error(
-      `[${appName}] missing app_url/app-url or apkpure-dlurl. ` +
-        "Alternatively set direct download_url.",
-    );
+    throw new Error(`[${appName}] missing apkpure-dlurl.`);
   }
 
   const attemptErrors = [];
@@ -205,7 +184,7 @@ async function resolveApkPureDownloadUrl(app, appName, opts, ctx) {
     );
   }
   throw new Error(
-    `[${appName}] unable to resolve final apkpure download URL. Try setting download_url directly.\n` +
+    `[${appName}] unable to resolve final apkpure download URL.\n` +
       attemptErrors.join("\n"),
   );
 }

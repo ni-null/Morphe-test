@@ -1,12 +1,40 @@
+# Runtime / workspace artifacts
 downloads/
 output/
-*.apk
+cache/
+morphe-cli/
+patches/
+runtime/
+
+# Build artifacts
+dist/
+web/dist/
+desktop/dist/
+desktop/out/
+*.exe
+
+# Dependency directories
+node_modules/
+web/node_modules/
+desktop/node_modules/
+
+# Temp / logs
 *.tmp
 *.log
+*.txt
+
+# Generated binaries / packages
+*.apk
 *.mpp
+*.jar
+*.7z
+*.zip
+
+# Keys
 *.keystore
 !morphe-test.keystore
-*.txt
-*.jar
 .keystore/
-.node_modules/
+
+# OS/editor
+.DS_Store
+Thumbs.db

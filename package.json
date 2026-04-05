@@ -4,9 +4,39 @@
   "version": "0.1.0",
   "description": "Auto download APK and patch with morphe-cli on Windows",
   "scripts": {
-    "auto-patch": "node ./scripts/run-auto-patch.js"
+    "auto-patch": "node ./scripts/run-auto-patch.js",
+    "web:api": "node ./web-api/server.js",
+    "web:ui": "npm --prefix ./web run dev",
+    "web:dev": "node ./scripts/web/start-dev.js",
+    "web:build": "npm --prefix ./web run build",
+    "desktop:install": "npm --prefix ./desktop install",
+    "desktop:dev": "npm --prefix ./desktop run dev",
+    "desktop:start": "npm run web:build && npm --prefix ./desktop run start",
+    "desktop:pack": "npm run web:build && npm --prefix ./desktop run pack"
   },
   "dependencies": {
     "chalk": "^4.1.2"
+  },
+  "build": {
+    "appId": "com.morphe.patcher",
+    "productName": "Morphe Patcher",
+    "extraMetadata": {
+      "main": "desktop/main.js"
+    },
+    "files": [
+      "desktop/**/*",
+      "web-api/**/*",
+      "web/dist/**/*",
+      "main.js",
+      "scripts/**/*",
+      "utils/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        "portable"
+      ]
+    }
   }
 }

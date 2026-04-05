@@ -8,11 +8,18 @@ Usage:
 
 Options:
   -c, --config <path>  config.toml path (default: ./config.toml)
+      --web            start web console stack (web-api + web-ui)
+      --manual         interactive CLI flow: choose APK version and patch set per app
+      --manual-plan <path>  non-interactive manual plan JSON path
       --morphe-cli     test morphe-cli jar module only (skip APK/patches flow)
       --download-only  test APK module only (skip patches module)
       --patches-only   test patches module only (skip APK/patch flow)
       --dry-run        print actions without downloading/patching
       --force          redownload existing APK/.mpp/.jar
+      --clear-cache    clear workspace cache directory before run
+      --no-task-log    disable task folder/log persistence for this run
+      --workspace <path>      set workspace directory for downloads/patches/output/runtime
+      --migrate-workspace     migrate legacy root folders (downloads/patches/morphe-cli/output) into workspace
   -h, --help           show this help
 `);
 }
@@ -20,11 +27,18 @@ Options:
 function parseArgs(argv) {
   const options = {
     configPath: "./config.toml",
+    web: false,
+    manual: false,
+    manualPlanPath: "",
     morpheCliOnly: false,
     downloadOnly: false,
     patchesOnly: false,
     dryRun: false,
     force: false,
+    clearCache: false,
+    noTaskLog: false,
+    workspacePath: "",
+    migrateWorkspace: false,
     help: false,
   };
 
@@ -43,6 +57,23 @@ function parseArgs(argv) {
       options.downloadOnly = true;
       continue;
     }
+    if (arg === "--web") {
+      options.web = true;
+      continue;
+    }
+    if (arg === "--manual") {
+      options.manual = true;
+      continue;
+    }
+    if (arg === "--manual-plan") {
+      const value = argv[i + 1];
+      if (!value) {
+        throw new Error(`Missing value for ${arg}`);
+      }
+      options.manualPlanPath = value;
+      i += 1;
+      continue;
+    }
     if (arg === "--morphe-cli") {
       options.morpheCliOnly = true;
       continue;
@@ -57,6 +88,27 @@ function parseArgs(argv) {
     }
     if (arg === "--force") {
       options.force = true;
+      continue;
+    }
+    if (arg === "--clear-cache") {
+      options.clearCache = true;
+      continue;
+    }
+    if (arg === "--no-task-log") {
+      options.noTaskLog = true;
+      continue;
+    }
+    if (arg === "--workspace") {
+      const value = argv[i + 1];
+      if (!value) {
+        throw new Error(`Missing value for ${arg}`);
+      }
+      options.workspacePath = value;
+      i += 1;
+      continue;
+    }
+    if (arg === "--migrate-workspace") {
+      options.migrateWorkspace = true;
       continue;
     }
     if (arg === "-h" || arg === "--help") {

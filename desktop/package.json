@@ -1,0 +1,15 @@
+{
+  "name": "morphe-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "main": "./main.js",
+  "scripts": {
+    "start": "electron ./main.js",
+    "dev": "node ./dev.js",
+    "pack": "electron-builder --projectDir .. --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}

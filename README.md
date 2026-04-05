@@ -25,28 +25,55 @@ node ./main.js --config ./config.toml
 ```
 
 5. Output
-- Each run creates a task folder: `output/task-<timestamp>-<pid>/`
-- Task log: `output/task-<...>/task.log`
-- Task info: `output/task-<...>/task-info.json`
-- Patched APKs: `output/task-<...>/<app>/`
-- Build metadata (full patch flow): `output/task-<...>/release-metadata.json`
+- Data is stored under workspace (default: OS user data folder):
+  - Windows: `%LOCALAPPDATA%/MorphePatcher/workspace`
+  - macOS: `~/Library/Application Support/MorphePatcher/workspace`
+  - Linux: `~/.local/share/MorphePatcher/workspace`
+- Task folder: `<workspace>/output/task-<timestamp>-<pid>/`
+- Task log: `<workspace>/output/task-<...>/task.log`
+- Task info: `<workspace>/output/task-<...>/task-info.json`
+- Patched APKs: `<workspace>/output/task-<...>/<app>/`
+- Build metadata: `<workspace>/output/task-<...>/release-metadata.json`
+- Override workspace: `--workspace <path>` or `MORPHE_WORKSPACE=/path`
+- Migrate legacy root folders once: `--migrate-workspace`
 
 ## Minimal Config Example
 ```toml
 [morphe-cli]
 patches_repo = "MorpheApp/morphe-cli"
+mode = "stable" # stable / dev / local
+path = ""
 
 [patches]
 patches_repo = "MorpheApp/morphe-patches"
-mode = "stable"
+mode = "stable" # stable / dev / local
+path = ""
 
 [youtube]
-apk = "remote"
+mode = "remote" # remote / local / false
 ```
 
 ## CI Workflows
 - Manual build and release: `.github/workflows/release.yml`
 - Scheduled build and release: `.github/workflows/scheduled-build.yml`
+
+## Optional Web Console
+This project includes an optional low-coupling web tool:
+- Frontend: `web/` (Vite + React)
+- API bridge: `web-api/` (calls CLI `main.js`, does not import patch internals)
+
+Commands:
+- `node ./main.js --web`
+- `npm run web:api`
+- `npm run web:ui`
+- `npm run web:dev`
+- `npm run web:build`
+- `npm run desktop:install` (install Electron-only dependencies under `desktop/`)
+- `npm run desktop:dev` (desktop dev mode: web-ui + web-api + electron, with hot reload)
+- `npm run desktop:start` (build UI + open Electron desktop app)
+- `npm run desktop:pack` (build Windows portable exe via electron-builder)
+
+Detailed architecture: [docs/web.md](./docs/web.md)
 
 ## CI/CD Flow
 ```mermaid

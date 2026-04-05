@@ -49,23 +49,9 @@ async function resolveUptodownDownloadUrl(app, appName, opts, ctx) {
   const targetVersion = opts && opts.targetVersion ? normalizeVersion(opts.targetVersion) : null;
   const strictVersion = !!(opts && opts.strictVersion);
 
-  const directDlurl = ctx.pickFirstValue(app, ["download_url", "download-url", "direct_dlurl", "direct-dlurl"]);
-  if (directDlurl) {
-    if (strictVersion && targetVersion && !versionAppearsInText(directDlurl, targetVersion)) {
-      throw new Error(
-        `[${appName}] direct download URL does not include target version ${targetVersion}.`,
-      );
-    }
-    return { downloadUrl: directDlurl, resolvedVersion: targetVersion || null };
-  }
-
-  const appUrl =
-    ctx.pickFirstValue(app, ["app_url", "app-url", "uptodown_dlurl", "uptodown-dlurl"]);
+  const appUrl = ctx.pickFirstValue(app, ["uptodown_dlurl", "uptodown-dlurl"]);
   if (!appUrl) {
-    throw new Error(
-      `[${appName}] missing app_url/app-url or uptodown-dlurl. ` +
-        "Alternatively set direct download_url.",
-    );
+    throw new Error(`[${appName}] missing uptodown-dlurl.`);
   }
   if (!isUptodownHost(appUrl)) {
     throw new Error(`[${appName}] apk=uptodown requires uptodown host URL. Got: ${appUrl}`);
@@ -159,7 +145,7 @@ async function resolveUptodownDownloadUrl(app, appName, opts, ctx) {
   }
 
   throw new Error(
-    `[${appName}] unable to resolve final uptodown download URL. Try setting download_url directly.\n` +
+    `[${appName}] unable to resolve final uptodown download URL.\n` +
       attemptErrors.join("\n"),
   );
 }

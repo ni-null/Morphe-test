@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-center-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-center-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.6rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image: radial-gradient(circle at top left, #eff6ff 0%, #f8fafc 55%, #e2e8f0 100%);
+  }
+}
+
+@layer components {
+  .dialog-overlay[data-state="open"] {
+    animation: dialog-overlay-in 170ms ease-out;
+  }
+
+  .dialog-overlay[data-state="closed"] {
+    animation: dialog-overlay-out 120ms ease-in;
+  }
+
+  .dialog-content[data-state="open"] {
+    animation: dialog-center-in 190ms ease-out;
+  }
+
+  .dialog-content[data-state="closed"] {
+    animation: dialog-center-out 130ms ease-in;
+  }
+
+  .shell-layout {
+    @apply min-h-screen grid md:grid-cols-[250px_1fr];
+  }
+
+  .left-panel {
+    @apply border-r border-slate-200 bg-white/90 backdrop-blur p-4;
+  }
+
+  .main-panel {
+    @apply p-4 md:p-6;
+  }
+
+  .sidebar-btn {
+    @apply w-full flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition;
+  }
+
+  .sidebar-btn-active {
+    @apply bg-sky-100 text-slate-900 border-sky-200;
+  }
+
+  .sidebar-btn-idle {
+    @apply bg-white/80 text-slate-700 border-slate-200 hover:bg-slate-100;
+  }
+
+  .config-grid {
+    @apply grid gap-3 md:grid-cols-2;
+  }
+
+  .app-grid {
+    @apply grid gap-3 lg:grid-cols-2;
+  }
+
+  .inline-toggle-row {
+    @apply grid grid-cols-[auto_1fr] items-center gap-3;
+  }
+
+  .mono-box {
+    @apply rounded-md border bg-slate-950 text-slate-100 p-3 text-xs font-mono whitespace-pre-wrap break-words max-h-[320px] overflow-auto;
+  }
+}

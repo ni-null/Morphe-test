@@ -25,28 +25,55 @@ node ./main.js --config ./config.toml
 ```
 
 5. 結果位置
-- 每次執行會建立任務資料夾：`output/task-<timestamp>-<pid>/`
-- 任務 log：`output/task-<...>/task.log`
-- 任務資訊：`output/task-<...>/task-info.json`
-- 輸出 APK：`output/task-<...>/<app>/`
-- 建置資訊（完整 patch 流程）：`output/task-<...>/release-metadata.json`
+- 資料會存放到 workspace（預設為系統使用者資料夾）：
+  - Windows：`%LOCALAPPDATA%/MorphePatcher/workspace`
+  - macOS：`~/Library/Application Support/MorphePatcher/workspace`
+  - Linux：`~/.local/share/MorphePatcher/workspace`
+- 每次執行會建立任務資料夾：`<workspace>/output/task-<timestamp>-<pid>/`
+- 任務 log：`<workspace>/output/task-<...>/task.log`
+- 任務資訊：`<workspace>/output/task-<...>/task-info.json`
+- 輸出 APK：`<workspace>/output/task-<...>/<app>/`
+- 建置資訊（完整 patch 流程）：`<workspace>/output/task-<...>/release-metadata.json`
+- 可用 `--workspace <path>` 或 `MORPHE_WORKSPACE` 覆寫 workspace
+- 可用 `--migrate-workspace` 一次性遷移舊根目錄資料夾
 
 ## 最小設定範例
 ```toml
 [morphe-cli]
 patches_repo = "MorpheApp/morphe-cli"
+mode = "stable" # stable / dev / local
+path = ""
 
 [patches]
 patches_repo = "MorpheApp/morphe-patches"
-mode = "stable"
+mode = "stable" # stable / dev / local
+path = ""
 
 [youtube]
-apk = "remote"
+mode = "remote" # remote / local / false
 ```
 
 ## CI Workflows
 - 手動發布：`.github/workflows/release.yml`
 - 定時建置並發布：`.github/workflows/scheduled-build.yml`
+
+## 可選 Web Console
+專案提供低耦合的附加 Web 工具：
+- 前端：`web/`（Vite + React）
+- API 連接層：`web-api/`（呼叫 CLI `main.js`，不直接 import 核心 patch 模組）
+
+指令：
+- `node ./main.js --web`
+- `npm run web:api`
+- `npm run web:ui`
+- `npm run web:dev`
+- `npm run web:build`
+- `npm run desktop:install`（只安裝 `desktop/` 內 Electron 依賴）
+- `npm run desktop:dev`（桌面 dev 模式：同時啟 web-ui + web-api + electron，支援熱更新）
+- `npm run desktop:start`（先建置 UI，再啟動 Electron 桌面版）
+- `npm run desktop:pack`（用 electron-builder 打包 Windows portable exe）
+
+詳細架構： [docs/web.md](./docs/web.md)
 
 ## CI/CD 流程
 ```mermaid

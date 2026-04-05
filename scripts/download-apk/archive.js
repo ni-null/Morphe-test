@@ -119,30 +119,16 @@ async function resolveArchiveDownloadUrl(app, appName, opts, ctx) {
   const targetVersion = opts && opts.targetVersion ? normalizeVersion(opts.targetVersion) : null;
   const strictVersion = !!(opts && opts.strictVersion);
 
-  const directDlurl = ctx.pickFirstValue(app, ["download_url", "download-url", "direct_dlurl", "direct-dlurl"]);
-  if (directDlurl) {
-    if (strictVersion && targetVersion && !versionAppearsInText(directDlurl, targetVersion)) {
-      throw new Error(`[${appName}] direct download URL does not include target version ${targetVersion}.`);
-    }
-    return { downloadUrl: directDlurl, resolvedVersion: targetVersion || null };
-  }
-
   const appWithSectionName = { ...app, __section_name: appName };
-  const baseUrl =
-    ctx.pickFirstValue(appWithSectionName, [
-      "archive_url",
-      "archive-url",
-      "archive_dlurl",
-      "archive-dlurl",
-      "app_url",
-      "app-url",
-    ]);
+  const baseUrl = ctx.pickFirstValue(appWithSectionName, [
+    "archive_url",
+    "archive-url",
+    "archive_dlurl",
+    "archive-dlurl",
+  ]);
 
   if (!baseUrl) {
-    throw new Error(
-      `[${appName}] missing archive_url/archive-url. ` +
-        "Alternatively set direct download_url.",
-    );
+    throw new Error(`[${appName}] missing archive_url/archive-url.`);
   }
   if (!isArchiveHost(baseUrl)) {
     throw new Error(`[${appName}] archive URL must be archive.org host. Got: ${baseUrl}`);

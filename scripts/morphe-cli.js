@@ -5,7 +5,24 @@ const path = require("path");
 const DEFAULT_MORPHE_CLI_REPO = "MorpheApp/morphe-cli";
 const DEFAULT_MORPHE_CLI_DIR_REL = "./morphe-cli";
 
-function pickJarAssetFromRelease(release, ctx) {
+function repoToDirName(repo) {
+  const value = String(repo || "").trim();
+  return value.replace(/\//g, "@");
+}
+
+function normalizeMorpheCliMode(rawMode) {
+  const value = String(rawMode || "stable").trim().toLowerCase();
+  if (value === "stable" || value === "dev" || value === "local") {
+    return value;
+  }
+  throw new Error(`Invalid morphe-cli.mode: ${rawMode}. Allowed values: stable, dev, local.`);
+}
+
+function isDevIdentifier(text) {
+  return String(text || "").toLowerCase().includes("dev");
+}
+
+function pickJarAssetFromRelease(release, mode, ctx) {
   const assets = Array.isArray(release.assets) ? release.assets : [];
   const jarAssets = assets.filter(
     (asset) =>
@@ -17,10 +34,20 @@ function pickJarAssetFromRelease(release, ctx) {
     return null;
   }
 
+  const releaseIdText = `${release.tag_name || ""} ${release.name || ""}`;
+  const matchedByMode = jarAssets.filter((asset) => {
+    const text = `${releaseIdText} ${asset.name || ""}`;
+    const isDev = isDevIdentifier(text);
+    return mode === "dev" ? isDev : !isDev;
+  });
+  if (matchedByMode.length === 0) {
+    return null;
+  }
+
   const preferred =
-    jarAssets.find((asset) => String(asset.name).toLowerCase().endsWith("-all.jar")) ||
-    jarAssets.find((asset) => String(asset.name).toLowerCase().includes("all")) ||
-    jarAssets[0];
+    matchedByMode.find((asset) => String(asset.name).toLowerCase().endsWith("-all.jar")) ||
+    matchedByMode.find((asset) => String(asset.name).toLowerCase().includes("all")) ||
+    matchedByMode[0];
 
   return {
     tag: ctx.hasValue(release.tag_name) ? String(release.tag_name) : "unknown",
@@ -52,12 +79,12 @@ async function fetchRepoReleases(repo, ctx) {
   return { repo: repoValue, releases };
 }
 
-function pickLatestMorpheCliJar(releases, ctx) {
+function pickLatestMorpheCliJar(releases, mode, ctx) {
   for (const release of releases) {
     if (release && release.draft) {
       continue;
     }
-    const picked = pickJarAssetFromRelease(release, ctx);
+    const picked = pickJarAssetFromRelease(release, mode, ctx);
     if (picked) {
       return picked;
     }
@@ -94,14 +121,37 @@ function findJarAssetByExactName(releases, expectedName, ctx) {
 }
 
 async function resolveMorpheCliJar(params) {
-  const { configDir, morpheCliCfg, dryRun, force, ctx } = params;
+  const { configDir, workspaceDir, morpheCliCfg, dryRun, force, ctx } = params;
+  const mode = normalizeMorpheCliMode(
+    ctx.pickFirstValue(morpheCliCfg || {}, ["mode"]) || "stable",
+  );
+  const localPathRaw =
+    ctx.pickFirstValue(morpheCliCfg || {}, ["path", "jar_path", "jar-path"]);
+
+  if (mode === "local") {
+    if (!ctx.hasValue(localPathRaw)) {
+      throw new Error("morphe-cli.mode=local requires [morphe-cli].path.");
+    }
+    const localJarPath = ctx.resolveAbsolutePath(String(localPathRaw).trim(), configDir);
+    if (dryRun) {
+      ctx.logInfo(`DryRun: would use local morphe-cli jar: ${localJarPath}`);
+      return localJarPath;
+    }
+    if (!(await ctx.fileExists(localJarPath))) {
+      throw new Error(`Local morphe-cli jar not found: ${localJarPath}`);
+    }
+    ctx.logInfo(`Using local morphe-cli jar: ${localJarPath}`);
+    return localJarPath;
+  }
+
   const repo =
     ctx.pickFirstValue(morpheCliCfg || {}, ["patches_repo", "patches-repo", "repo"]) ||
     DEFAULT_MORPHE_CLI_REPO;
   const lockedVersionName =
     ctx.pickFirstValue(morpheCliCfg || {}, ["ver", "version", "jar_ver", "jar-ver"]) || null;
 
-  const saveDir = ctx.resolveAbsolutePath(DEFAULT_MORPHE_CLI_DIR_REL, configDir);
+  const repoDirName = repoToDirName(repo);
+  const saveDir = ctx.resolveAbsolutePath(path.join(DEFAULT_MORPHE_CLI_DIR_REL, repoDirName), workspaceDir || configDir);
   if (lockedVersionName) {
     const lockedFileName = path.basename(String(lockedVersionName).trim());
     const lockedPath = path.join(saveDir, lockedFileName);
@@ -132,15 +182,18 @@ async function resolveMorpheCliJar(params) {
   }
 
   if (dryRun) {
-    ctx.logInfo(`DryRun: would fetch latest morphe-cli jar from ${repo}`);
+    ctx.logInfo(`DryRun: would fetch latest morphe-cli jar from ${repo} with mode=${mode}`);
     ctx.logInfo(`DryRun: save path keeps original release filename under ${saveDir}`);
-    return ctx.resolveAbsolutePath(path.join(DEFAULT_MORPHE_CLI_DIR_REL, "morphe-cli-latest-all.jar"), configDir);
+    return ctx.resolveAbsolutePath(
+      path.join(DEFAULT_MORPHE_CLI_DIR_REL, repoDirName, mode === "dev" ? "morphe-cli-dev-latest-all.jar" : "morphe-cli-latest-all.jar"),
+      workspaceDir || configDir,
+    );
   }
 
   const fetched = await fetchRepoReleases(repo, ctx);
-  const latestJar = pickLatestMorpheCliJar(fetched.releases, ctx);
+  const latestJar = pickLatestMorpheCliJar(fetched.releases, mode, ctx);
   if (!latestJar) {
-    throw new Error(`No .jar asset found in releases for ${fetched.repo}.`);
+    throw new Error(`No .jar asset found in releases for ${fetched.repo} with mode=${mode}.`);
   }
 
   const jarPath = path.join(saveDir, latestJar.name);
@@ -150,11 +203,58 @@ async function resolveMorpheCliJar(params) {
     return jarPath;
   }
 
-  ctx.logInfo(`Auto morphe-cli: ${latestJar.name} (${latestJar.tag}) from ${fetched.repo}`);
+  ctx.logInfo(`Auto morphe-cli: ${latestJar.name} (${latestJar.tag}) mode=${mode} from ${fetched.repo}`);
   await ctx.downloadFile(latestJar.url, jarPath, "morphe-cli jar");
   return jarPath;
 }
 
+async function probeMorpheCliJar(params) {
+  const { morpheCliCfg, ctx } = params;
+  const mode = normalizeMorpheCliMode(
+    ctx.pickFirstValue(morpheCliCfg || {}, ["mode"]) || "stable",
+  );
+  if (mode === "local") {
+    throw new Error("morphe-cli probe only supports stable/dev mode.");
+  }
+
+  const repo =
+    ctx.pickFirstValue(morpheCliCfg || {}, ["patches_repo", "patches-repo", "repo"]) ||
+    DEFAULT_MORPHE_CLI_REPO;
+  const lockedVersionName =
+    ctx.pickFirstValue(morpheCliCfg || {}, ["ver", "version", "jar_ver", "jar-ver"]) || null;
+  const fetched = await fetchRepoReleases(repo, ctx);
+
+  if (lockedVersionName) {
+    const lockedFileName = path.basename(String(lockedVersionName).trim());
+    const matched = findJarAssetByExactName(fetched.releases, lockedFileName, ctx);
+    if (!matched) {
+      throw new Error(`Locked morphe-cli jar not found in ${fetched.repo}: ${lockedFileName}`);
+    }
+    return {
+      repo: fetched.repo,
+      mode,
+      tag: matched.tag,
+      fileName: matched.name,
+      url: matched.url,
+      locked: true,
+    };
+  }
+
+  const latestJar = pickLatestMorpheCliJar(fetched.releases, mode, ctx);
+  if (!latestJar) {
+    throw new Error(`No .jar asset found in releases for ${fetched.repo} with mode=${mode}.`);
+  }
+  return {
+    repo: fetched.repo,
+    mode,
+    tag: latestJar.tag,
+    fileName: latestJar.name,
+    url: latestJar.url,
+    locked: false,
+  };
+}
+
 module.exports = {
   resolveMorpheCliJar,
+  probeMorpheCliJar,
 };

@@ -3,6 +3,7 @@
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
+const crypto = require("crypto");
 const { spawn } = require("child_process");
 
 const ACCEPT_LANGUAGE = "en-US,en;q=0.9";
@@ -10,6 +11,8 @@ const CURL_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/2010010
 const HTTP_STATUS_MARKER = "__MORPHE_HTTP_STATUS__:";
 const PAGE_TIMEOUT_MS = 10000;
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_HTTP_CACHE_TTL_MS = 15 * 60 * 1000;
+const RATE_LIMIT_CACHE_TTL_MS = 60 * 1000;
 
 function getDownloadTimeoutMs() {
   const raw = String(process.env.MORPHE_DOWNLOAD_TIMEOUT_MS || "").trim();
@@ -20,6 +23,49 @@ function getDownloadTimeoutMs() {
     }
   }
   return DEFAULT_DOWNLOAD_TIMEOUT_MS;
+}
+
+function getHttpCacheTtlMs() {
+  const raw = String(process.env.MORPHE_HTTP_CACHE_TTL_MS || "").trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_HTTP_CACHE_TTL_MS;
+}
+
+function buildRuntimeHeaders(url, requestOptions) {
+  const opts = requestOptions || {};
+  const headers = {
+    "Accept-Language": ACCEPT_LANGUAGE,
+    "User-Agent": CURL_USER_AGENT,
+    ...(opts.headers || {}),
+  };
+  const lowerUrl = String(url || "").toLowerCase();
+  if (lowerUrl.startsWith("https://api.github.com/")) {
+    const hasAuth = Object.keys(headers).some((key) => key.toLowerCase() === "authorization");
+    const token = String(process.env.GITHUB_TOKEN || "").trim();
+    if (!hasAuth && token) {
+      headers.Authorization = `Bearer ${token}`;
+      if (!headers["X-GitHub-Api-Version"]) {
+        headers["X-GitHub-Api-Version"] = "2022-11-28";
+      }
+    }
+  }
+  return headers;
+}
+
+function resolveHeaderValue(headers, keyName) {
+  const target = String(keyName || "").toLowerCase();
+  const found = Object.keys(headers || {}).find((key) => String(key).toLowerCase() === target);
+  if (!found) return "";
+  return String(headers[found] || "");
+}
+
+function hashText(value) {
+  return crypto.createHash("sha1").update(String(value || "")).digest("hex");
 }
 
 function summarizeRequestError(url, statusCode, responsePreview, originalMessage) {
@@ -37,7 +83,7 @@ function summarizeRequestError(url, statusCode, responsePreview, originalMessage
   ) {
     return (
       `Request blocked by Cloudflare (HTTP 403): ${url}\n` +
-      "Set app.download_url directly, or use remote fallback to archive."
+      "Set provider URL directly (apkmirror-dlurl / uptodown-dlurl / archive-dlurl), or use fallback source."
     );
   }
 
@@ -46,7 +92,8 @@ function summarizeRequestError(url, statusCode, responsePreview, originalMessage
 }
 
 function createRuntime(params) {
-  const { cookieJarPath, logStep } = params;
+  const { cookieJarPath, logStep, cacheDir } = params;
+  const httpCacheDir = cacheDir ? path.join(cacheDir, "http-url") : "";
 
   async function ensureDir(dirPath) {
     await fsp.mkdir(dirPath, { recursive: true });
@@ -93,11 +140,7 @@ function createRuntime(params) {
       ? opts.timeoutMs
       : (outputPath ? getDownloadTimeoutMs() : PAGE_TIMEOUT_MS);
     const timeoutSec = Math.max(10, Math.ceil(timeoutMs / 1000));
-    const headers = {
-      "Accept-Language": ACCEPT_LANGUAGE,
-      "User-Agent": CURL_USER_AGENT,
-      ...(opts.headers || {}),
-    };
+    const headers = buildRuntimeHeaders(url, opts);
 
     const args = [
       "-L",
@@ -142,6 +185,60 @@ function createRuntime(params) {
     };
   }
 
+  function shouldUseUrlCache(url, outputPath, requestOptions) {
+    if (!cacheDir || !httpCacheDir) return false;
+    if (outputPath) return false;
+    const opts = requestOptions || {};
+    if (opts.disableCache === true) return false;
+    const method = String(opts.method || "GET").trim().toUpperCase();
+    if (method !== "GET") return false;
+    return /^https?:\/\//iu.test(String(url || "").trim());
+  }
+
+  function buildUrlCacheKey(url, requestOptions) {
+    const opts = requestOptions || {};
+    const headers = buildRuntimeHeaders(url, opts);
+    const headerFingerprint = {
+      accept: resolveHeaderValue(headers, "accept"),
+      language: resolveHeaderValue(headers, "accept-language"),
+      authorization: hashText(resolveHeaderValue(headers, "authorization")),
+      githubVersion: resolveHeaderValue(headers, "x-github-api-version"),
+    };
+    const payload = {
+      method: String(opts.method || "GET").trim().toUpperCase(),
+      url: String(url || "").trim(),
+      headers: headerFingerprint,
+    };
+    return hashText(JSON.stringify(payload));
+  }
+
+  async function readUrlCache(url, requestOptions) {
+    const key = buildUrlCacheKey(url, requestOptions);
+    const cachePath = path.join(httpCacheDir, `${key}.json`);
+    if (!(await fileExists(cachePath))) {
+      return null;
+    }
+    try {
+      const raw = await fsp.readFile(cachePath, "utf8");
+      const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
+      const now = Date.now();
+      if (!parsed || !Number.isFinite(parsed.expiresAt) || now > Number(parsed.expiresAt)) {
+        await fsp.rm(cachePath, { force: true });
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  async function writeUrlCache(url, requestOptions, data) {
+    const key = buildUrlCacheKey(url, requestOptions);
+    const cachePath = path.join(httpCacheDir, `${key}.json`);
+    await ensureDir(httpCacheDir);
+    await fsp.writeFile(cachePath, `${JSON.stringify(data)}\n`, "utf8");
+  }
+
   async function runCurl(url, outputPath = null, requestOptions = null) {
     if (cookieJarPath) {
       await ensureDir(path.dirname(cookieJarPath));
@@ -151,6 +248,28 @@ function createRuntime(params) {
     }
 
     const opts = requestOptions || {};
+    const enableCache = shouldUseUrlCache(url, outputPath, opts);
+    if (enableCache) {
+      const cached = await readUrlCache(url, opts);
+      if (cached) {
+        if (cached.error === true || !(cached.statusCode >= 200 && cached.statusCode < 300)) {
+          throw new Error(
+            summarizeRequestError(
+              url,
+              Number(cached.statusCode) || 0,
+              String(cached.body || ""),
+              `HTTP ${cached.statusCode} (cached)`,
+            ),
+          );
+        }
+        return {
+          stdout: Buffer.from(String(cached.body || ""), "utf8"),
+          statusCode: Number(cached.statusCode) || 200,
+          headers: {},
+        };
+      }
+    }
+
     const allowHttpErrorBody = !!opts.allowHttpErrorBody;
     const args = buildCurlArgs(url, outputPath, opts);
     const result = await runCommandCapture("curl", args);
@@ -169,7 +288,26 @@ function createRuntime(params) {
     const { body, statusCode } = parseCurlOutput(result.stdout);
     const valid = allowHttpErrorBody ? statusCode >= 200 && statusCode < 500 : statusCode >= 200 && statusCode < 300;
     if (!valid) {
+      if (enableCache && (statusCode === 403 || statusCode === 429)) {
+        await writeUrlCache(url, opts, {
+          savedAt: Date.now(),
+          expiresAt: Date.now() + RATE_LIMIT_CACHE_TTL_MS,
+          statusCode,
+          body: String(body || ""),
+          error: true,
+        });
+      }
       throw new Error(summarizeRequestError(url, statusCode, body, `HTTP ${statusCode}`));
+    }
+
+    if (enableCache && statusCode >= 200 && statusCode < 300) {
+      await writeUrlCache(url, opts, {
+        savedAt: Date.now(),
+        expiresAt: Date.now() + getHttpCacheTtlMs(),
+        statusCode,
+        body: String(body || ""),
+        error: false,
+      });
     }
 
     return {

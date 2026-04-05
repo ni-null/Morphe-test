@@ -1,19 +1,22 @@
-[global]
-patches = "./patches/youtube.mpp"
-
-
 [morphe-cli]
+mode = "stable"
 patches_repo = "MorpheApp/morphe-cli"
 
-
 [patches]
+mode = "stable"
 patches_repo = "MorpheApp/morphe-patches"
-mode = "stable" 
-
-
 
 [youtube]
-apk = "remote"
+mode = "remote"
+package_name = "com.google.android.youtube"
 apkmirror-dlurl = "https://www.apkmirror.com/apk/google-inc/youtube"
 uptodown-dlurl = "https://youtube.en.uptodown.com/android"
 archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.google.android.youtube/"
+
+[com_google_android_apps_youtube_music]
+mode = false
+package_name = "com.google.android.apps.youtube.music"
+
+[com_reddit_frontpage]
+mode = false
+package_name = "com.reddit.frontpage"

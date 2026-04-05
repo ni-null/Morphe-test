@@ -1092,22 +1092,11 @@ async function resolveApkMirrorDownloadUrl(app, appName, opts, ctx) {
   const strictVersion = !!(opts && opts.strictVersion);
   const destinationPath = opts && opts.destinationPath ? String(opts.destinationPath) : null;
 
-  const direct = ctx.pickFirstValue(app, ["download_url", "download-url", "direct_dlurl", "direct-dlurl"]);
-  if (direct) {
-    if (strictVersion && targetVersion && !versionMatchesInText(direct, targetVersion)) {
-      throw new Error(`[${appName}] direct download URL does not contain target version ${targetVersion}.`);
-    }
-    return { downloadUrl: direct, resolvedVersion: targetVersion || null };
-  }
-
-  let releaseUrl = ctx.pickFirstValue(app, ["release_url", "release-url"]);
+  let releaseUrl = null;
   let baseUrl =
     ctx.pickFirstValue(app, ["apkmirror_dlurl", "apkmirror-dlurl"]);
   const expectedPathPrefix = getExpectedAppPathPrefix(baseUrl || releaseUrl, app);
 
-  if (releaseUrl && !isApkMirrorHost(releaseUrl)) {
-    throw new Error(`[${appName}] release_url must be apkmirror host. Got: ${releaseUrl}`);
-  }
   if (baseUrl && !isApkMirrorHost(baseUrl)) {
     throw new Error(`[${appName}] apkmirror-dlurl must be apkmirror host. Got: ${baseUrl}`);
   }
