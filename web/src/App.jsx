@@ -3,6 +3,7 @@ import {
   Archive,
   Boxes,
   Cloud,
+  Check,
   Code2,
   FileText,
   FlaskConical,
@@ -30,6 +31,7 @@ import {
   fetchAndSaveSource,
   fetchAppTemplates,
   fetchAppCompatibleVersions,
+  fetchPackageMap,
   fetchConfig,
   fetchSourceVersions,
   fetchTask,
@@ -80,6 +82,11 @@ const PACKAGE_NAME_LABELS = {
   "com.google.android.apps.youtube.music": "YouTube Music",
   "com.google.android.youtube": "YouTube",
   "com.reddit.frontpage": "Reddit",
+}
+const PACKAGE_NAME_ICON_FALLBACKS = {
+  "com.google.android.youtube": "/assets/apps/youtube.svg",
+  "com.google.android.apps.youtube.music": "/assets/apps/youtube-music.svg",
+  "com.reddit.frontpage": "/assets/apps/reddit.svg",
 }
 
 let appIdSeed = 0
@@ -194,6 +201,20 @@ function normalizeAppMode(rawMode) {
 }
 
 function packageToSectionName(packageName) {
+  const key = String(packageName || "")
+    .trim()
+    .toLowerCase()
+  if (hasText(PACKAGE_NAME_LABELS[key])) {
+    const mapped = String(PACKAGE_NAME_LABELS[key]).trim()
+    const mappedNormalized = mapped
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+    if (mappedNormalized) {
+      if (/^[0-9]/u.test(mappedNormalized)) return `app_${mappedNormalized}`
+      return mappedNormalized
+    }
+  }
   const normalized = String(packageName || "")
     .trim()
     .toLowerCase()
@@ -212,6 +233,26 @@ function resolveDisplayName(packageName, fallbackName) {
   if (hasText(packageName)) return `[${String(packageName).trim()}]`
   if (hasText(fallbackName)) return String(fallbackName).trim()
   return "app"
+}
+
+function normalizeTemplatePackageName(template) {
+  const directCandidates = [template?.packageName, template?.package_name, template?.package]
+  for (const candidate of directCandidates) {
+    if (hasText(candidate)) {
+      return String(candidate).trim()
+    }
+  }
+
+  const section = hasText(template?.section) ? String(template.section).trim() : hasText(template?.key) ? String(template.key).trim() : ""
+  if (!section) return ""
+
+  if (!section.includes(".") && /_/u.test(section)) {
+    const restored = section.replace(/_/gu, ".")
+    if (/^[a-z0-9]+(\.[a-z0-9_]+)+$/iu.test(restored)) {
+      return restored
+    }
+  }
+  return ""
 }
 
 function createEmptyApp(name = "", options = {}) {
@@ -515,6 +556,7 @@ function App() {
   const [appVersionOptions, setAppVersionOptions] = useState({})
   const [appVersionLoadingId, setAppVersionLoadingId] = useState("")
   const [appVersionError, setAppVersionError] = useState("")
+  const [packageMetaMap, setPackageMetaMap] = useState({})
 
   const [isBusy, setIsBusy] = useState(false)
   const [message, setMessage] = useState("Ready")
@@ -558,6 +600,7 @@ function App() {
       }
 
       let addedCount = 0
+      let renamedCount = 0
       setConfigForm((prev) => {
         const existingSections = new Set(
           prev.apps
@@ -577,28 +620,60 @@ function App() {
             )
             .filter(Boolean),
         )
+        const packageIndexByKey = new Map(
+          prev.apps
+            .map((app, index) => [
+              String(app.packageName || "")
+                .trim()
+                .toLowerCase(),
+              index,
+            ])
+            .filter(([key]) => key.length > 0),
+        )
         const nextApps = [...prev.apps]
 
         for (const template of templates) {
-          const packageName = String(template?.packageName || "").trim()
+          const packageName = normalizeTemplatePackageName(template)
           const section = hasText(template?.section) ? String(template.section).trim() : packageToSectionName(packageName)
           const label = hasText(template?.label) ? String(template.label).trim() : resolveDisplayName(packageName, section)
           const packageKey = packageName.toLowerCase()
           const sectionKey = section.toLowerCase()
 
-          if (existingPackages.has(packageKey) || existingSections.has(sectionKey)) {
+          const existingIndex = packageIndexByKey.get(packageKey)
+          if (Number.isInteger(existingIndex)) {
+            const existingApp = nextApps[existingIndex]
+            const currentSection = String(existingApp?.name || "").trim()
+            const currentSectionKey = currentSection.toLowerCase()
+            if (hasText(section) && currentSectionKey !== sectionKey && !existingSections.has(sectionKey)) {
+              nextApps[existingIndex] = {
+                ...existingApp,
+                name: section,
+                displayName: hasText(label) ? label : existingApp.displayName,
+              }
+              existingSections.delete(currentSectionKey)
+              existingSections.add(sectionKey)
+              renamedCount += 1
+            }
+            continue
+          }
+          if (existingSections.has(sectionKey)) {
             continue
           }
           nextApps.push(createEmptyApp(section, { packageName, displayName: label }))
+          packageIndexByKey.set(packageKey, nextApps.length - 1)
           existingPackages.add(packageKey)
           existingSections.add(sectionKey)
           addedCount += 1
         }
 
-        return addedCount > 0 ? { ...prev, apps: nextApps } : prev
+        return addedCount > 0 || renamedCount > 0 ? { ...prev, apps: nextApps } : prev
       })
 
-      setMessage(addedCount > 0 ? `載入模板完成，新增 ${addedCount} 個 App。` : "模板已全部載入。")
+      if (addedCount > 0 || renamedCount > 0) {
+        setMessage(`載入模板完成，新增 ${addedCount} 個，重命名 ${renamedCount} 個。`)
+      } else {
+        setMessage("模板已全部載入。")
+      }
     } catch (error) {
       setMessage(error.message || String(error))
     } finally {
@@ -1040,6 +1115,21 @@ function App() {
   }, [])
 
   useEffect(() => {
+    let canceled = false
+    fetchPackageMap()
+      .then((data) => {
+        if (canceled) return
+        if (data && typeof data.map === "object" && data.map) {
+          setPackageMetaMap(data.map)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      canceled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!configLoaded) return undefined
     const content = rawOverrideMode ? rawConfigInput : generatedToml
     const signature = `${configPath}\n${content}`
@@ -1310,6 +1400,14 @@ function App() {
     { key: NAV_BUILD, label: "1. 打包", icon: Hammer },
     { key: NAV_HISTORY, label: "2. 歷史任務", icon: Archive },
   ]
+  function getPackageIcon(packageName) {
+    const key = String(packageName || "")
+      .trim()
+      .toLowerCase()
+    const item = packageMetaMap && typeof packageMetaMap === "object" ? packageMetaMap[key] : null
+    if (item && hasText(item.icon)) return String(item.icon).trim()
+    return hasText(PACKAGE_NAME_ICON_FALLBACKS[key]) ? String(PACKAGE_NAME_ICON_FALLBACKS[key]).trim() : ""
+  }
   const liveTaskStatus = String(liveTask?.status || "")
   const isBuildRunning = liveTaskStatus.toLowerCase() === "running"
   const isBuildStopping = liveTaskStatus.toLowerCase() === "stopping"
@@ -1341,7 +1439,7 @@ function App() {
                 type='button'
                 className={cn("sidebar-btn", active ? "sidebar-btn-active" : "sidebar-btn-idle")}
                 onClick={() => setActiveNav(item.key)}>
-                <Icon className='h-4 w-4' />
+                <Icon className='h-5 w-5' />
                 {item.label}
               </button>
             )
@@ -1358,7 +1456,7 @@ function App() {
             <Card>
               <CardHeader>
                 <CardTitle className='flex items-center gap-2'>
-                  <Hammer className='h-4 w-4' />
+                  <Hammer className='h-5 w-5' />
                   打包執行
                 </CardTitle>
               </CardHeader>
@@ -1388,7 +1486,7 @@ function App() {
                   {isBuildRunning || buildLaunchPending || isBuildStopping ? (
                     <div className='flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm'>
                       <div className='min-w-0 flex items-center gap-2'>
-                        <Loader2 className='h-4 w-4 animate-spin text-primary' />
+                        <Loader2 className='h-5 w-5 animate-spin text-primary' />
                         <span className='font-medium text-primary'>打包進度資訊</span>
                         <span className='text-muted-foreground'>|</span>
                         <span className='text-muted-foreground break-all'>{liveLastLine || "等待任務輸出..."}</span>
@@ -1401,14 +1499,14 @@ function App() {
                           disabled={!liveTaskId}
                           aria-label='打開當前打包 Log'
                           title='打開當前打包 Log'>
-                          <FileText className='h-4 w-4' />
+                          <FileText className='h-5 w-5' />
                         </Button>
                         <Button
                           variant='outline'
                           onClick={onStopBuildTask}
                           disabled={!liveTaskId || (!isBuildRunning && !isBuildStopping)}
                           className='border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700'>
-                          <Square className='h-4 w-4' />
+                          <Square className='h-5 w-5' />
                           {isBuildStopping ? "中止中..." : "中止"}
                         </Button>
                       </div>
@@ -1416,7 +1514,7 @@ function App() {
                   ) : null}
                   {!isBuildRunning && !isBuildStopping && !buildLaunchPending ? (
                     <Button className='w-full' variant='default' onClick={onBuildPrimaryAction}>
-                      <Play className='h-4 w-4' />
+                      <Play className='h-5 w-5' />
                       開始完整打包
                     </Button>
                   ) : null}
@@ -1429,17 +1527,17 @@ function App() {
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <div>
                     <CardTitle className='flex items-center gap-2'>
-                      <Settings2 className='h-4 w-4' />
+                      <Settings2 className='h-5 w-5' />
                       打包設定（config.toml）
                     </CardTitle>
                     {/*  <CardDescription className='flex items-center gap-2 break-all'>
-                      <FileText className='h-3.5 w-3.5' />
+                      <FileText className='h-4 w-4' />
                       <span className='font-mono'>{configPath}</span>
                     </CardDescription> */}
                   </div>
                   <div className='flex flex-wrap gap-2'>
                     <Button variant={rawOverrideMode ? "default" : "outline"} onClick={onToggleRawMode} disabled={isBusy}>
-                      <Code2 className='h-4 w-4' />
+                      <Code2 className='h-5 w-5' />
                       Raw
                     </Button>
                     <Button
@@ -1448,11 +1546,11 @@ function App() {
                       disabled={isBusy}
                       aria-label='修改讀取設定檔路徑'
                       title='修改讀取設定檔路徑'>
-                      <Pencil className='h-4 w-4' />
+                      <Pencil className='h-5 w-5' />
                       路徑
                     </Button>
                     <Button variant='outline' onClick={loadConfig} disabled={isBusy}>
-                      <RefreshCw className='h-4 w-4' />
+                      <RefreshCw className='h-5 w-5' />
                       重新載入
                     </Button>
                   </div>
@@ -1479,17 +1577,14 @@ function App() {
                 ) : (
                   <div className='space-y-4'>
                     <section className='space-y-2'>
-                      <h3 className='flex items-center gap-2 text-sm font-semibold'>
-                        <Boxes className='h-4 w-4 text-muted-foreground' />
-                        來源設定
-                      </h3>
+                      <h3 className='text-base font-semibold'>來源設定</h3>
                       <div className='flex flex-wrap gap-2'>
-                        <Button variant='outline' onClick={() => setMorpheSettingsOpen(true)} disabled={isBusy}>
-                          <Settings2 className='h-4 w-4' />
+                        <Button variant='outline' className='h-11 px-5 text-base' onClick={() => setMorpheSettingsOpen(true)} disabled={isBusy}>
+                          <Settings2 className='h-6 w-6' />
                           morphe-cli
                         </Button>
-                        <Button variant='outline' onClick={() => setPatchesSettingsOpen(true)} disabled={isBusy}>
-                          <Package className='h-4 w-4' />
+                        <Button variant='outline' className='h-11 px-5 text-base' onClick={() => setPatchesSettingsOpen(true)} disabled={isBusy}>
+                          <Package className='h-6 w-6' />
                           patches
                         </Button>
                       </div>
@@ -1497,55 +1592,57 @@ function App() {
 
                     <section className='space-y-3 pt-1'>
                       <div className='flex flex-wrap items-center justify-between gap-2'>
-                        <h3 className='flex items-center gap-2 text-sm font-semibold'>
-                          <Smartphone className='h-4 w-4 text-muted-foreground' />
-                          App 區塊
-                        </h3>
-                        <Button variant='outline' size='sm' onClick={appendApp} disabled={isBusy || appTemplateLoading}>
-                          {appTemplateLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
+                        <h3 className='text-base font-semibold'>App 區塊</h3>
+                        <Button variant='outline' className='h-11 px-5 text-base' onClick={appendApp} disabled={isBusy || appTemplateLoading}>
+                          {appTemplateLoading ? <Loader2 className='h-6 w-6 animate-spin' /> : <Plus className='h-6 w-6' />}
                           載入模板
                         </Button>
                       </div>
 
-                      <div className='space-y-3'>
+                      <div className='flex flex-wrap gap-2'>
                         {configForm.apps.map((app) => (
-                          <Card key={app.id} className='border-slate-300/80'>
+                          <Card key={app.id} className='border-0 shadow-none bg-transparent'>
                             <div
                               role='button'
                               tabIndex={0}
-                              className='w-full rounded-md p-3 text-left hover:bg-accent/40'
-                              onClick={() => {
-                                setAppSettingsId(app.id)
-                                setAppSettingsOpen(true)
-                              }}
+                              className='inline-flex min-h-20 items-center gap-5 rounded-md px-5 py-4 cursor-pointer bg-muted/35 hover:bg-accent/35'
+                              onClick={() => updateApp(app.id, { mode: app.mode === "false" ? "remote" : "false" })}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter" || event.key === " ") {
                                   event.preventDefault()
-                                  setAppSettingsId(app.id)
-                                  setAppSettingsOpen(true)
+                                  updateApp(app.id, { mode: app.mode === "false" ? "remote" : "false" })
                                 }
                               }}>
-                              <div className='flex items-center justify-between gap-2'>
-                                <div className='flex items-center gap-3'>
-                                  <div
-                                    onClick={(event) => event.stopPropagation()}
-                                    onKeyDown={(event) => event.stopPropagation()}
-                                    role='presentation'>
-                                    <Checkbox
-                                      id={`${app.id}-enabled`}
-                                      checked={app.mode !== "false"}
-                                      onCheckedChange={(checked) => updateApp(app.id, { mode: checked === true ? "remote" : "false" })}
-                                    />
-                                  </div>
-
-                                  <div className='flex items-center gap-2'>
-                                    <Smartphone className='h-4 w-4 text-muted-foreground' />
-                                    <span className='text-sm font-medium'>{app.displayName || app.name || "app-name"}</span>
-                                  </div>
-                                </div>
-
-                                <Badge variant='outline'>{app.mode}</Badge>
+                              <span
+                                className={cn(
+                                  "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                                  app.mode !== "false" ? "bg-emerald-100 text-emerald-700" : "bg-muted/60 text-slate-400",
+                                )}>
+                                {app.mode !== "false" ? <Check className='h-6 w-6' /> : null}
+                              </span>
+                              <div className='flex items-center gap-2'>
+                                {hasText(getPackageIcon(app.packageName)) ? (
+                                  <img
+                                    src={getPackageIcon(app.packageName)}
+                                    alt={app.displayName || app.name || "app"}
+                                    className='h-8 w-8 rounded-sm object-contain'
+                                  />
+                                ) : (
+                                  <Smartphone className='h-8 w-8 text-muted-foreground' />
+                                )}
+                                <span className='text-lg font-medium whitespace-nowrap'>{app.displayName || app.name || "app-name"}</span>
                               </div>
+                              <Button
+                                variant='ghost'
+                                size='icon'
+                                className='h-11 w-11'
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setAppSettingsId(app.id)
+                                  setAppSettingsOpen(true)
+                                }}>
+                                <Pencil className='h-6 w-6' />
+                              </Button>
                             </div>
                           </Card>
                         ))}
@@ -1553,20 +1650,6 @@ function App() {
                     </section>
                   </div>
                 )}
-
-                <div className='flex flex-wrap items-center justify-between gap-2'>
-                  <p className='text-xs text-muted-foreground'>
-                    {rawOverrideMode ? "原始覆蓋模式：儲存時直接寫入原始內容。" : "互動式模式：以 UI 產生 config.toml。"}
-                  </p>
-                  {isAutoSavingConfig ? (
-                    <span className='inline-flex items-center gap-2 text-xs text-muted-foreground'>
-                      <Loader2 className='h-3.5 w-3.5 animate-spin' />
-                      自動保存中...
-                    </span>
-                  ) : (
-                    <span className='text-xs text-muted-foreground'>已啟用即時保存</span>
-                  )}
-                </div>
               </CardContent>
             </Card>
           </>

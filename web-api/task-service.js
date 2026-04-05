@@ -22,14 +22,55 @@ const TASK_STATUS_FAILED_MARKER = "__TASK_STATUS__:failed";
 const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
 const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli"]);
 
-function mapPackageDisplayName(packageName) {
+function getPackageMapRecord(packageName) {
   const key = String(packageName || "").trim().toLowerCase();
-  if (!key) return "";
+  if (!key) return null;
   const mapped = PACKAGE_NAME_MAP[key];
-  return hasValue(mapped) ? String(mapped).trim() : `[${packageName}]`;
+  if (!hasValue(mapped)) return null;
+  if (typeof mapped === "string") {
+    return {
+      label: String(mapped).trim(),
+      icon: "",
+      section: "",
+    };
+  }
+  if (mapped && typeof mapped === "object") {
+    return {
+      label: hasValue(mapped.label) ? String(mapped.label).trim() : "",
+      icon: hasValue(mapped.icon) ? String(mapped.icon).trim() : "",
+      section: hasValue(mapped.section) ? String(mapped.section).trim() : "",
+    };
+  }
+  return null;
+}
+
+function mapPackageDisplayName(packageName) {
+  if (!hasValue(packageName)) return "";
+  const record = getPackageMapRecord(packageName);
+  if (record && hasValue(record.label)) return String(record.label).trim();
+  return `[${packageName}]`;
+}
+
+function nameToSectionName(name) {
+  const normalized = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!normalized) return "";
+  if (/^[0-9]/u.test(normalized)) return `app_${normalized}`;
+  return normalized;
 }
 
 function packageToSectionName(packageName) {
+  const record = getPackageMapRecord(packageName);
+  const mappedSection = hasValue(record && record.section) ? nameToSectionName(record.section) : "";
+  if (mappedSection) return mappedSection;
+  const mappedName = hasValue(record && record.label) ? String(record.label).trim() : "";
+  if (mappedName) {
+    const sectionFromLabel = nameToSectionName(mappedName);
+    if (sectionFromLabel) return sectionFromLabel;
+  }
   const normalized = String(packageName || "")
     .trim()
     .toLowerCase()
@@ -38,6 +79,65 @@ function packageToSectionName(packageName) {
   if (!normalized) return "app_template";
   if (/^[0-9]/u.test(normalized)) return `app_${normalized}`;
   return normalized;
+}
+
+function normalizeTemplatePackageName(template) {
+  const directCandidates = [
+    template && template.packageName,
+    template && template.package_name,
+    template && template.package,
+  ];
+  for (const candidate of directCandidates) {
+    if (hasValue(candidate)) {
+      return String(candidate).trim();
+    }
+  }
+
+  const section = hasValue(template && template.section)
+    ? String(template.section).trim()
+    : hasValue(template && template.key)
+      ? String(template.key).trim()
+      : "";
+  if (!section) return "";
+  if (!section.includes(".") && /_/u.test(section)) {
+    const restored = section.replace(/_/gu, ".");
+    if (/^[a-z0-9]+(\.[a-z0-9_]+)+$/iu.test(restored)) {
+      return restored;
+    }
+  }
+  return "";
+}
+
+function normalizeTemplateRecord(template) {
+  const packageName = normalizeTemplatePackageName(template);
+  const section = hasValue(packageName)
+    ? packageToSectionName(packageName)
+    : (hasValue(template && template.section)
+      ? String(template.section).trim()
+      : "");
+  const label = hasValue(template && template.label)
+    ? String(template.label).trim()
+    : mapPackageDisplayName(packageName || section);
+  return {
+    key: hasValue(template && template.key) ? String(template.key).trim() : section,
+    section,
+    packageName,
+    label,
+  };
+}
+
+function buildPackageMetaMap() {
+  const result = {};
+  for (const packageName of Object.keys(PACKAGE_NAME_MAP || {})) {
+    const record = getPackageMapRecord(packageName);
+    if (!record) continue;
+    result[String(packageName).trim().toLowerCase()] = {
+      label: hasValue(record.label) ? String(record.label).trim() : `[${packageName}]`,
+      icon: hasValue(record.icon) ? String(record.icon).trim() : "",
+      section: hasValue(record.section) ? nameToSectionName(record.section) : packageToSectionName(packageName),
+    };
+  }
+  return result;
 }
 
 function resolvePatchesCfgForApiReads(patchesCfgInput) {
@@ -264,6 +364,10 @@ class TaskService {
     this.templatesCacheDir = path.join(this.cacheDir, "app-templates");
     this.manualOptionsCacheDir = path.join(this.cacheDir, "manual-options");
     this.tasks = new Map();
+  }
+
+  getPackageMetaMap() {
+    return buildPackageMetaMap();
   }
 
   async readCacheJson(cacheDir, cacheKey) {
@@ -526,9 +630,10 @@ class TaskService {
     });
     const templatesCached = await this.readCacheJson(this.templatesCacheDir, templatesCacheKey);
     if (templatesCached && Array.isArray(templatesCached.templates)) {
+      const templates = templatesCached.templates.map((item) => normalizeTemplateRecord(item));
       return {
         configPath,
-        templates: templatesCached.templates,
+        templates,
         cache: { hit: true, key: templatesCacheKey },
       };
     }
@@ -539,7 +644,7 @@ class TaskService {
       ctx,
     });
 
-    const templates = packages.map((packageName) => ({
+    const templates = packages.map((packageName) => normalizeTemplateRecord({
       key: packageToSectionName(packageName),
       section: packageToSectionName(packageName),
       packageName,

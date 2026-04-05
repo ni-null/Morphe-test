@@ -1,5 +1,17 @@
 {
-  "com.google.android.apps.youtube.music": "YouTube Music",
-  "com.google.android.youtube": "YouTube",
-  "com.reddit.frontpage": "Reddit"
+  "com.google.android.apps.youtube.music": {
+    "label": "YouTube Music",
+    "icon": "/assets/apps/youtube-music.svg",
+    "section": "youtube_music"
+  },
+  "com.google.android.youtube": {
+    "label": "YouTube",
+    "icon": "/assets/apps/youtube.svg",
+    "section": "youtube"
+  },
+  "com.reddit.frontpage": {
+    "label": "Reddit",
+    "icon": "/assets/apps/reddit.svg",
+    "section": "reddit"
+  }
 }

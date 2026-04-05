@@ -13,10 +13,10 @@ apkmirror-dlurl = "https://www.apkmirror.com/apk/google-inc/youtube"
 uptodown-dlurl = "https://youtube.en.uptodown.com/android"
 archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.google.android.youtube/"
 
-[com_google_android_apps_youtube_music]
-mode = false
+[youtube_music]
+mode = "remote"
 package_name = "com.google.android.apps.youtube.music"
 
-[com_reddit_frontpage]
-mode = false
+[reddit]
+mode = "remote"
 package_name = "com.reddit.frontpage"

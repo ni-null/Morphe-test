@@ -16,6 +16,10 @@ export async function fetchConfig(configPath = "config.toml") {
   return requestJson(`/api/config?path=${encoded}`);
 }
 
+export async function fetchPackageMap() {
+  return requestJson("/api/package-map");
+}
+
 export async function saveConfig({ path, content }) {
   return requestJson("/api/config", {
     method: "PUT",

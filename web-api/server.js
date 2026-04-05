@@ -142,6 +142,16 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/api/package-map") {
+    sendJson(res, 200, {
+      ok: true,
+      data: {
+        map: taskService.getPackageMetaMap(),
+      },
+    });
+    return;
+  }
+
   if (pathname === "/api/config") {
     if (req.method === "GET") {
       const configPathRaw = url.searchParams.get("path") || "config.toml";
