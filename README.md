@@ -25,8 +25,11 @@ node ./main.js --config ./config.toml
 ```
 
 5. Output
-- Patched APKs: `output/<app>/`
-- Build metadata: `output/release-metadata.json`
+- Each run creates a task folder: `output/task-<timestamp>-<pid>/`
+- Task log: `output/task-<...>/task.log`
+- Task info: `output/task-<...>/task-info.json`
+- Patched APKs: `output/task-<...>/<app>/`
+- Build metadata (full patch flow): `output/task-<...>/release-metadata.json`
 
 ## Minimal Config Example
 ```toml

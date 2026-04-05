@@ -149,7 +149,7 @@ async function resolveDownloadInfo(
         if (attempt > 1) {
           ctx.logWarn(`[${appName}] retry ${attempt}/${PROVIDER_MAX_RETRIES} for ${provider}`);
         }
-        return await resolveProviderDownloadInfo(
+        const info = await resolveProviderDownloadInfo(
           provider,
           app,
           appName,
@@ -160,6 +160,7 @@ async function resolveDownloadInfo(
           forceDownload,
           ctx,
         );
+        return { ...info, provider };
       } catch (err) {
         const message = ctx.formatError(err);
         providerErrors.push(`[${provider}#${attempt}] ${message}`);
@@ -200,6 +201,7 @@ async function resolveApk(params) {
 
   let selectedApkPath = null;
   let selectedVersion = null;
+  let selectedProvider = null;
   const attemptErrors = [];
   const providerState = { disabledProviders: new Set() };
 
@@ -306,6 +308,7 @@ async function resolveApk(params) {
 
       selectedApkPath = apkPath;
       selectedVersion = effectiveVersion;
+      selectedProvider = downloadInfo && downloadInfo.provider ? downloadInfo.provider : null;
       break;
     } catch (err) {
       const message = ctx.formatError(err);
@@ -325,6 +328,7 @@ async function resolveApk(params) {
     apkPath: selectedApkPath,
     version: selectedVersion,
     isLocalMode,
+    provider: selectedProvider,
   };
 }
 

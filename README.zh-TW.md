@@ -25,8 +25,11 @@ node ./main.js --config ./config.toml
 ```
 
 5. 結果位置
-- 輸出 APK：`output/<app>/`
-- 建置資訊：`output/release-metadata.json`
+- 每次執行會建立任務資料夾：`output/task-<timestamp>-<pid>/`
+- 任務 log：`output/task-<...>/task.log`
+- 任務資訊：`output/task-<...>/task-info.json`
+- 輸出 APK：`output/task-<...>/<app>/`
+- 建置資訊（完整 patch 流程）：`output/task-<...>/release-metadata.json`
 
 ## 最小設定範例
 ```toml

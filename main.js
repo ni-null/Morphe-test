@@ -9,7 +9,15 @@ const morpheCli = require("./scripts/morphe-cli");
 const mpp = require("./scripts/mpp");
 const downloader = require("./scripts/download");
 const { printUsage, parseArgs } = require("./utils/cli");
-const { logInfo, logWarn, logStep, logError } = require("./utils/logger");
+const {
+  setLogFilePath,
+  closeLogFile,
+  appendLogRaw,
+  logInfo,
+  logWarn,
+  logStep,
+  logError,
+} = require("./utils/logger");
 const { resolveSigningConfig } = require("./utils/signing");
 const {
   hasValue,
@@ -26,6 +34,20 @@ const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
 const DEFAULT_DOWNLOAD_DIR_REL = "./downloads";
 const DEFAULT_OUTPUT_DIR_REL = "./output";
 const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli"]);
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function createTaskId(now = new Date()) {
+  const y = now.getFullYear();
+  const m = pad2(now.getMonth() + 1);
+  const d = pad2(now.getDate());
+  const hh = pad2(now.getHours());
+  const mm = pad2(now.getMinutes());
+  const ss = pad2(now.getSeconds());
+  return `task-${y}${m}${d}-${hh}${mm}${ss}-${process.pid}`;
+}
 
 function runJavaPatch(jarPath, patchPath, apkPath, outputDir, appName, signingConfig) {
   return new Promise((resolve, reject) => {
@@ -63,12 +85,14 @@ function runJavaPatch(jarPath, patchPath, apkPath, outputDir, appName, signingCo
     child.stdout.on("data", (chunk) => {
       const text = stdoutDecoder.write(chunk);
       if (text) {
+        appendLogRaw(text, "PATCH_STDOUT");
         process.stdout.write(text);
       }
     });
     child.stderr.on("data", (chunk) => {
       const text = stderrDecoder.write(chunk);
       if (text) {
+        appendLogRaw(text, "PATCH_STDERR");
         process.stderr.write(text);
       }
     });
@@ -78,9 +102,11 @@ function runJavaPatch(jarPath, patchPath, apkPath, outputDir, appName, signingCo
       const stdoutTail = stdoutDecoder.end();
       const stderrTail = stderrDecoder.end();
       if (stdoutTail) {
+        appendLogRaw(stdoutTail, "PATCH_STDOUT");
         process.stdout.write(stdoutTail);
       }
       if (stderrTail) {
+        appendLogRaw(stderrTail, "PATCH_STDERR");
         process.stderr.write(stderrTail);
       }
       if (code !== 0) {
@@ -220,7 +246,15 @@ async function run() {
 
   const configFull = resolveAbsolutePath(options.configPath, process.cwd());
   const configDir = path.dirname(configFull);
+  const outputRootDir = resolveAbsolutePath(DEFAULT_OUTPUT_DIR_REL, configDir);
+  const taskId = createTaskId();
+  const taskOutputDir = path.join(outputRootDir, taskId);
+  await fsp.mkdir(taskOutputDir, { recursive: true });
+  const taskLogPath = path.join(taskOutputDir, "task.log");
+  setLogFilePath(taskLogPath);
   logInfo(`Config: ${configFull}`);
+  logInfo(`Task output directory: ${taskOutputDir}`);
+  logInfo(`Task log file: ${taskLogPath}`);
 
   const cookieJarPath = path.join(configDir, "downloads", ".morphe-cookie.txt");
   const bootstrapRuntime = createRuntime({ cookieJarPath, logStep });
@@ -230,14 +264,33 @@ async function run() {
   const morpheCliCfg = config["morphe-cli"] || config.morphe_cli || {};
   const patchesCfg = config.patches || {};
   const downloadDir = resolveAbsolutePath(DEFAULT_DOWNLOAD_DIR_REL, configDir);
-  const outputDir = resolveAbsolutePath(DEFAULT_OUTPUT_DIR_REL, configDir);
 
   const runtime = createRuntime({
     cookieJarPath: path.join(downloadDir, ".morphe-cookie.txt"),
     logStep,
   });
   await runtime.ensureDir(downloadDir);
-  await runtime.ensureDir(outputDir);
+  await runtime.ensureDir(outputRootDir);
+  await runtime.ensureDir(taskOutputDir);
+
+  const runInfo = {
+    taskId,
+    startedAt: new Date().toISOString(),
+    configPath: configFull,
+    taskOutputDir,
+    taskLogPath,
+    argv: process.argv.slice(2),
+    modes: {
+      morpheCliOnly: !!options.morpheCliOnly,
+      downloadOnly: !!options.downloadOnly,
+      patchesOnly: !!options.patchesOnly,
+      dryRun: !!options.dryRun,
+      force: !!options.force,
+    },
+  };
+  const runInfoPath = path.join(taskOutputDir, "task-info.json");
+  await fsp.writeFile(runInfoPath, `${JSON.stringify(runInfo, null, 2)}\n`, "utf8");
+  logInfo(`Task info saved: ${runInfoPath}`);
 
   const allSections = Object.keys(config);
   const ignoredSections = allSections.filter((name) => RESERVED_SECTIONS.has(String(name).toLowerCase()));
@@ -291,6 +344,9 @@ async function run() {
   const releaseMetadata = shouldEmitReleaseMetadata
     ? {
         generatedAt: new Date().toISOString(),
+        taskId,
+        taskOutputDir,
+        taskLogPath,
         configPath: configFull,
         morpheCli: jarPath
           ? {
@@ -386,7 +442,8 @@ async function run() {
       if (apkResult.isLocalMode) {
         logInfo(`[${appName}] Local APK ready: ${apkResult.apkPath}`);
       } else {
-        logInfo(`[${appName}] Download completed with version: ${apkResult.version}`);
+        const providerText = apkResult.provider ? ` provider=${apkResult.provider}` : "";
+        logInfo(`[${appName}] Download completed with version: ${apkResult.version}${providerText}`);
       }
       continue;
     }
@@ -401,7 +458,7 @@ async function run() {
       patchPath,
       apkPath: apkResult.apkPath,
       apkVersion: apkResult.version,
-      outputDir: path.join(outputDir, safeFileName(appName)),
+      outputDir: path.join(taskOutputDir, safeFileName(appName)),
       appName,
       runtime,
       signingConfig,
@@ -410,6 +467,7 @@ async function run() {
       releaseMetadata.apps.push({
         appName,
         apkVersion: apkResult.version,
+        apkProvider: apkResult.provider || null,
         patchPath,
         patchFileName: path.basename(patchPath),
         outputApkPath,
@@ -418,7 +476,7 @@ async function run() {
   }
 
   if (releaseMetadata) {
-    const metadataPath = path.join(outputDir, "release-metadata.json");
+    const metadataPath = path.join(taskOutputDir, "release-metadata.json");
     await fsp.writeFile(metadataPath, `${JSON.stringify(releaseMetadata, null, 2)}\n`, "utf8");
     logInfo(`Release metadata saved: ${metadataPath}`);
   }
@@ -426,7 +484,19 @@ async function run() {
   console.log("\nAll tasks finished.");
 }
 
-run().catch((err) => {
-  logError(formatError(err));
-  process.exit(1);
-});
+async function main() {
+  let exitCode = 0;
+  try {
+    await run();
+  } catch (err) {
+    logError(formatError(err));
+    exitCode = 1;
+  } finally {
+    closeLogFile();
+  }
+  if (exitCode !== 0) {
+    process.exitCode = exitCode;
+  }
+}
+
+main();
