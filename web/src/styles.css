@@ -116,7 +116,7 @@
   }
 
   .shell-layout {
-    @apply min-h-screen grid md:grid-cols-[250px_1fr];
+    @apply min-h-screen;
   }
 
   .left-panel {
@@ -125,6 +125,22 @@
 
   .main-panel {
     @apply p-4 md:p-6;
+  }
+
+  @media (min-width: 768px) {
+    .left-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 250px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .main-panel {
+      margin-left: 250px;
+      min-height: 100vh;
+    }
   }
 
   .sidebar-btn {

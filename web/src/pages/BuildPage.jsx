@@ -1,18 +1,4 @@
-import {
-  Check,
-  Code2,
-  FileText,
-  Hammer,
-  Loader2,
-  Package,
-  Pencil,
-  Play,
-  Plus,
-  RefreshCw,
-  Settings2,
-  Smartphone,
-  Square,
-} from "lucide-react"
+import { Code2, FileText, Hammer, Loader2, Package, Pencil, Play, Plus, RefreshCw, Settings2, Smartphone, Square } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Label } from "../components/ui/label"
@@ -60,6 +46,37 @@ export default function BuildPage({
         </CardHeader>
         <CardContent className='space-y-4'>
           <div className='space-y-2 rounded-md bg-background p-3'>
+            <div className='space-y-2'>
+              <div className='flex flex-wrap gap-2'>
+                {apps.map((app) => {
+                  const enabled = app.mode !== "false"
+                  return (
+                    <button
+                      key={`build-app-enable-${app.id}`}
+                      type='button'
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                        enabled ? "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100",
+                      )}
+                      onClick={() => updateApp(app.id, { mode: enabled ? "false" : "remote" })}>
+                      {hasText(getPackageIcon(app.packageName)) ? (
+                        <img src={getPackageIcon(app.packageName)} alt={app.displayName || app.name || "app"} className='h-5 w-5 rounded-sm object-contain' />
+                      ) : (
+                        <Smartphone className='h-5 w-5 text-muted-foreground' />
+                      )}
+                      <span className='font-medium'>{app.displayName || app.name || "app-name"}</span>
+                      <span
+                        className={cn(
+                          "inline-block h-2.5 w-2.5 rounded-full",
+                          enabled ? "bg-emerald-500" : "bg-slate-300",
+                        )}
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {isBuildRunning || buildLaunchPending || isBuildStopping ? (
               <div className='flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm'>
                 <div className='min-w-0 flex items-center gap-2'>
@@ -179,39 +196,29 @@ export default function BuildPage({
                         role='button'
                         tabIndex={0}
                         className='inline-flex min-h-20 items-center gap-5 rounded-md px-5 py-4 cursor-pointer bg-muted/35 hover:bg-accent/35'
-                        onClick={() => updateApp(app.id, { mode: app.mode === "false" ? "remote" : "false" })}
+                        onClick={() => {
+                          setAppSettingsId(app.id)
+                          setAppSettingsOpen(true)
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault()
-                            updateApp(app.id, { mode: app.mode === "false" ? "remote" : "false" })
+                            setAppSettingsId(app.id)
+                            setAppSettingsOpen(true)
                           }
                         }}>
-                        <span
-                          className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-                            app.mode !== "false" ? "bg-emerald-100 text-emerald-700" : "bg-muted/60 text-slate-400",
-                          )}>
-                          {app.mode !== "false" ? <Check className='h-6 w-6' /> : null}
-                        </span>
                         <div className='flex items-center gap-2'>
                           {hasText(getPackageIcon(app.packageName)) ? (
-                            <img src={getPackageIcon(app.packageName)} alt={app.displayName || app.name || "app"} className='h-8 w-8 rounded-sm object-contain' />
+                            <img
+                              src={getPackageIcon(app.packageName)}
+                              alt={app.displayName || app.name || "app"}
+                              className='h-6 w-6 rounded-sm object-contain grayscale contrast-75 brightness-110'
+                            />
                           ) : (
-                            <Smartphone className='h-8 w-8 text-muted-foreground' />
+                            <Smartphone className='h-6 w-6 text-muted-foreground' />
                           )}
                           <span className='text-lg font-medium whitespace-nowrap'>{app.displayName || app.name || "app-name"}</span>
                         </div>
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-11 w-11'
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setAppSettingsId(app.id)
-                            setAppSettingsOpen(true)
-                          }}>
-                          <Pencil className='h-6 w-6' />
-                        </Button>
                       </div>
                     </Card>
                   ))}
@@ -224,4 +231,3 @@ export default function BuildPage({
     </>
   )
 }
-

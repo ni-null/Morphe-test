@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Archive, Globe, Hammer } from "lucide-react"
+import { Archive, Database, Globe, Hammer } from "lucide-react"
 import { fetchConfig, fetchPackageMap, saveConfig, fetchAppTemplates } from "./services/configService"
 import { fetchAppCompatibleVersions, fetchAppPatchOptions } from "./services/appService"
 import { deleteSourceFile, fetchAndSaveSource, fetchSourceVersions, listDownloadedApks, browseLocalApkPath, listSourceFiles } from "./services/sourceService"
@@ -9,21 +9,23 @@ import { Label } from "./components/ui/label"
 import { Separator } from "./components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
 import { cn } from "./lib/utils"
-import { SUPPORTED_LOCALES, t as translate } from "./i18n"
+import { SUPPORTED_LOCALES, getPatchTranslationsForLocale, t as translate } from "./i18n"
 import { useUiStore } from "./stores/uiStore"
 import { useDialogStore } from "./stores/dialogStore"
 import BuildPage from "./pages/BuildPage"
 import HistoryPage from "./pages/HistoryPage"
+import AssetsPage from "./pages/AssetsPage"
+import defaultPackageMetaMap from "../json/package-name-meta.json"
 import AppSettingsDialog from "./features/app/AppSettingsDialog"
 import ConfigPathDialog from "./features/dialogs/ConfigPathDialog"
 import ConfirmActionDialog from "./features/dialogs/ConfirmActionDialog"
 import MorpheSettingsDialog from "./features/source/MorpheSettingsDialog"
 import PatchesSettingsDialog from "./features/source/PatchesSettingsDialog"
 import TaskDialogs from "./features/task/TaskDialogs"
-import patchTranslations from "./patch-translations.json"
 
 const NAV_BUILD = "build"
 const NAV_HISTORY = "history"
+const NAV_ASSETS = "assets"
 
 const TASK_MODE_BUILD = "build"
 const RESERVED_SECTIONS = new Set(["global", "morphe-cli", "morphe_cli", "patches"])
@@ -43,16 +45,12 @@ const MORPHE_REMOTE_STABLE_VALUE = "__MORPHE_REMOTE_STABLE__"
 const MORPHE_REMOTE_DEV_VALUE = "__MORPHE_REMOTE_DEV__"
 const PATCHES_REMOTE_STABLE_VALUE = "__PATCHES_REMOTE_STABLE__"
 const PATCHES_REMOTE_DEV_VALUE = "__PATCHES_REMOTE_DEV__"
-const PACKAGE_NAME_LABELS = {
-  "com.google.android.apps.youtube.music": "YouTube Music",
-  "com.google.android.youtube": "YouTube",
-  "com.reddit.frontpage": "Reddit",
-}
-const PACKAGE_NAME_ICON_FALLBACKS = {
-  "com.google.android.youtube": "/assets/apps/youtube.svg",
-  "com.google.android.apps.youtube.music": "/assets/apps/youtube-music.svg",
-  "com.reddit.frontpage": "/assets/apps/reddit.svg",
-}
+const PACKAGE_NAME_LABELS = Object.fromEntries(
+  Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [String(packageName || "").trim().toLowerCase(), String(meta?.label || "").trim()]),
+)
+const PACKAGE_NAME_ICON_FALLBACKS = Object.fromEntries(
+  Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [String(packageName || "").trim().toLowerCase(), String(meta?.icon || "").trim()]),
+)
 
 let appIdSeed = 0
 
@@ -609,7 +607,7 @@ function getPatchTranslation(locale, name, description) {
   const rawDescription = String(description || "").trim()
   if (!hasText(rawName)) return { name: rawName, description: rawDescription }
 
-  const entries = patchTranslations && typeof patchTranslations === "object" ? patchTranslations.entries : null
+  const entries = getPatchTranslationsForLocale(locale)
   const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim()
   const normalizedName = normalize(rawName)
   const normalizedDescription = normalize(rawDescription)
@@ -734,7 +732,6 @@ function App() {
   const [morpheSourceVersion, setMorpheSourceVersion] = useState("")
   const [morpheSourceLoading, setMorpheSourceLoading] = useState(false)
   const [morpheSourceDownloading, setMorpheSourceDownloading] = useState(false)
-  const [morpheSourcePopoverOpen, setMorpheSourcePopoverOpen] = useState(false)
   const [patchesSourceRepoOptions, setPatchesSourceRepoOptions] = useState(() => {
     try {
       const raw = String(globalThis?.localStorage?.getItem(PATCHES_SOURCE_REPOS_KEY) || "")
@@ -751,7 +748,6 @@ function App() {
   const [patchesSourceVersion, setPatchesSourceVersion] = useState("")
   const [patchesSourceLoading, setPatchesSourceLoading] = useState(false)
   const [patchesSourceDownloading, setPatchesSourceDownloading] = useState(false)
-  const [patchesSourcePopoverOpen, setPatchesSourcePopoverOpen] = useState(false)
   const [appTemplateLoading, setAppTemplateLoading] = useState(false)
   const [appVersionOptions, setAppVersionOptions] = useState({})
   const [appVersionLoadingId, setAppVersionLoadingId] = useState("")
@@ -763,7 +759,10 @@ function App() {
   const [appLocalApkFiles, setAppLocalApkFiles] = useState([])
   const [appLocalApkLoading, setAppLocalApkLoading] = useState(false)
   const [appLocalApkDir, setAppLocalApkDir] = useState("")
-  const [packageMetaMap, setPackageMetaMap] = useState({})
+  const [downloadedApkFiles, setDownloadedApkFiles] = useState([])
+  const [downloadedApkDir, setDownloadedApkDir] = useState("")
+  const [downloadedApkLoading, setDownloadedApkLoading] = useState(false)
+  const [packageMetaMap, setPackageMetaMap] = useState(() => (defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}))
 
   const [isBusy, setIsBusy] = useState(false)
   const [message, setMessage] = useState("Ready")
@@ -1052,6 +1051,22 @@ function App() {
       setMessage(error.message || String(error))
     } finally {
       setAppLocalApkLoading(false)
+    }
+  }
+
+  async function loadDownloadedApkFiles() {
+    setDownloadedApkLoading(true)
+    try {
+      const data = await listDownloadedApks()
+      const files = sortFilesByVersion(Array.isArray(data?.files) ? data.files : [])
+      setDownloadedApkFiles(files)
+      setDownloadedApkDir(String(data?.dir || ""))
+    } catch (error) {
+      setDownloadedApkFiles([])
+      setDownloadedApkDir("")
+      setMessage(error.message || String(error))
+    } finally {
+      setDownloadedApkLoading(false)
     }
   }
 
@@ -1360,7 +1375,6 @@ async function refreshTasks() {
         updateConfigSection("morpheCli", { path: String(data.fullPath) })
       }
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
-      setMorpheSourcePopoverOpen(false)
     } catch (error) {
       setMessage(error.message || String(error))
     } finally {
@@ -1383,7 +1397,6 @@ async function refreshTasks() {
         updateConfigSection("patches", { path: String(data.fullPath) })
       }
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
-      setPatchesSourcePopoverOpen(false)
     } catch (error) {
       setMessage(error.message || String(error))
     } finally {
@@ -1794,6 +1807,15 @@ async function refreshTasks() {
     }
   }, [patchesSettingsOpen, patchesSourceRepo])
 
+  useEffect(() => {
+    if (activeNav !== NAV_ASSETS) return
+    loadMorpheLocalFiles()
+    loadPatchesLocalFiles()
+    loadMorpheSourceVersions()
+    loadPatchesSourceVersions()
+    loadDownloadedApkFiles()
+  }, [activeNav])
+
   const editingApp = useMemo(() => configForm.apps.find((app) => app.id === appSettingsId) || null, [configForm.apps, appSettingsId])
 
   useEffect(() => {
@@ -1811,6 +1833,7 @@ async function refreshTasks() {
 
   const navItems = [
     { key: NAV_BUILD, label: t("nav.build"), icon: Hammer },
+    { key: NAV_ASSETS, label: t("nav.assets"), icon: Database },
     { key: NAV_HISTORY, label: t("nav.history"), icon: Archive },
   ]
   function getPackageIcon(packageName) {
@@ -1820,6 +1843,15 @@ async function refreshTasks() {
     const item = packageMetaMap && typeof packageMetaMap === "object" ? packageMetaMap[key] : null
     if (item && hasText(item.icon)) return String(item.icon).trim()
     return hasText(PACKAGE_NAME_ICON_FALLBACKS[key]) ? String(PACKAGE_NAME_ICON_FALLBACKS[key]).trim() : ""
+  }
+  function resolvePackageDisplayName(packageName) {
+    const key = String(packageName || "")
+      .trim()
+      .toLowerCase()
+    const item = packageMetaMap && typeof packageMetaMap === "object" ? packageMetaMap[key] : null
+    if (item && hasText(item.label)) return String(item.label).trim()
+    if (key === "__unknown__") return t("assets.unknownPackage")
+    return resolveDisplayName(key, key)
   }
   const liveTaskStatus = String(liveTask?.status || "")
   const isBuildRunning = liveTaskStatus.toLowerCase() === "running"
@@ -1917,6 +1949,51 @@ async function refreshTasks() {
           />
         ) : null}
 
+        {activeNav === NAV_ASSETS ? (
+          <AssetsPage
+            t={t}
+            hasText={hasText}
+            formatBytes={formatBytes}
+            morpheSourceRepo={morpheSourceRepo}
+            morpheSourceRepoOptions={morpheSourceRepoOptions}
+            morpheSourceRepoDraft={morpheSourceRepoDraft}
+            setMorpheSourceRepoDraft={setMorpheSourceRepoDraft}
+            onSelectMorpheSourceRepo={onSelectMorpheSourceRepo}
+            onAddMorpheSourceRepo={onAddMorpheSourceRepo}
+            morpheSourceVersion={morpheSourceVersion}
+            setMorpheSourceVersion={setMorpheSourceVersion}
+            morpheSourceVersions={morpheSourceVersions}
+            onDownloadMorpheFromSource={onDownloadMorpheFromSource}
+            morpheSourceLoading={morpheSourceLoading}
+            morpheSourceDownloading={morpheSourceDownloading}
+            loadMorpheSourceVersions={loadMorpheSourceVersions}
+            loadMorpheLocalFiles={loadMorpheLocalFiles}
+            morpheLocalFiles={morpheLocalFiles}
+            openConfirmDialog={openConfirmDialog}
+            morpheDeleteName={morpheDeleteName}
+            patchesSourceRepo={patchesSourceRepo}
+            patchesSourceRepoOptions={patchesSourceRepoOptions}
+            patchesSourceRepoDraft={patchesSourceRepoDraft}
+            setPatchesSourceRepoDraft={setPatchesSourceRepoDraft}
+            onSelectPatchesSourceRepo={onSelectPatchesSourceRepo}
+            onAddPatchesSourceRepo={onAddPatchesSourceRepo}
+            patchesSourceVersion={patchesSourceVersion}
+            setPatchesSourceVersion={setPatchesSourceVersion}
+            patchesSourceVersions={patchesSourceVersions}
+            onDownloadPatchesFromSource={onDownloadPatchesFromSource}
+            patchesSourceLoading={patchesSourceLoading}
+            patchesSourceDownloading={patchesSourceDownloading}
+            loadPatchesSourceVersions={loadPatchesSourceVersions}
+            loadPatchesLocalFiles={loadPatchesLocalFiles}
+            patchesLocalFiles={patchesLocalFiles}
+            patchesDeleteName={patchesDeleteName}
+            downloadedApkFiles={downloadedApkFiles}
+            downloadedApkDir={downloadedApkDir}
+            downloadedApkLoading={downloadedApkLoading}
+            loadDownloadedApkFiles={loadDownloadedApkFiles}
+          />
+        ) : null}
+
         {activeNav === NAV_HISTORY ? (
           <HistoryPage
             t={t}
@@ -2004,24 +2081,7 @@ async function refreshTasks() {
           open={morpheSettingsOpen}
           onOpenChange={setMorpheSettingsOpen}
           t={t}
-          hasText={hasText}
           configForm={configForm}
-          morpheSourcePopoverOpen={morpheSourcePopoverOpen}
-          setMorpheSourcePopoverOpen={setMorpheSourcePopoverOpen}
-          morpheSourceRepo={morpheSourceRepo}
-          onSelectMorpheSourceRepo={onSelectMorpheSourceRepo}
-          morpheSourceRepoOptions={morpheSourceRepoOptions}
-          morpheSourceRepoDraft={morpheSourceRepoDraft}
-          setMorpheSourceRepoDraft={setMorpheSourceRepoDraft}
-          onAddMorpheSourceRepo={onAddMorpheSourceRepo}
-          onDeleteMorpheSourceRepo={onDeleteMorpheSourceRepo}
-          defaultMorpheSourceRepo={DEFAULT_MORPHE_SOURCE_REPO}
-          morpheSourceVersion={morpheSourceVersion}
-          setMorpheSourceVersion={setMorpheSourceVersion}
-          morpheSourceVersions={morpheSourceVersions}
-          onDownloadMorpheFromSource={onDownloadMorpheFromSource}
-          morpheSourceDownloading={morpheSourceDownloading}
-          morpheSourceLoading={morpheSourceLoading}
           morpheLocalFiles={morpheLocalFiles}
           morpheStableValue={MORPHE_REMOTE_STABLE_VALUE}
           morpheDevValue={MORPHE_REMOTE_DEV_VALUE}
@@ -2035,24 +2095,7 @@ async function refreshTasks() {
           open={patchesSettingsOpen}
           onOpenChange={setPatchesSettingsOpen}
           t={t}
-          hasText={hasText}
           configForm={configForm}
-          patchesSourcePopoverOpen={patchesSourcePopoverOpen}
-          setPatchesSourcePopoverOpen={setPatchesSourcePopoverOpen}
-          patchesSourceRepo={patchesSourceRepo}
-          onSelectPatchesSourceRepo={onSelectPatchesSourceRepo}
-          patchesSourceRepoOptions={patchesSourceRepoOptions}
-          patchesSourceRepoDraft={patchesSourceRepoDraft}
-          setPatchesSourceRepoDraft={setPatchesSourceRepoDraft}
-          onAddPatchesSourceRepo={onAddPatchesSourceRepo}
-          onDeletePatchesSourceRepo={onDeletePatchesSourceRepo}
-          defaultPatchesSourceRepo={DEFAULT_PATCHES_SOURCE_REPO}
-          patchesSourceVersion={patchesSourceVersion}
-          setPatchesSourceVersion={setPatchesSourceVersion}
-          patchesSourceVersions={patchesSourceVersions}
-          onDownloadPatchesFromSource={onDownloadPatchesFromSource}
-          patchesSourceDownloading={patchesSourceDownloading}
-          patchesSourceLoading={patchesSourceLoading}
           patchesLocalFiles={patchesLocalFiles}
           patchesStableValue={PATCHES_REMOTE_STABLE_VALUE}
           patchesDevValue={PATCHES_REMOTE_DEV_VALUE}

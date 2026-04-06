@@ -14,9 +14,12 @@ export const useUiStore = create(
       activeNav: "build",
       locale: DEFAULT_LOCALE,
       setActiveNav: (activeNav) =>
-        set(() => ({
-          activeNav: String(activeNav || "").trim() === "history" ? "history" : "build",
-        })),
+        set(() => {
+          const value = String(activeNav || "").trim()
+          if (value === "history") return { activeNav: "history" }
+          if (value === "assets") return { activeNav: "assets" }
+          return { activeNav: "build" }
+        }),
       setLocale: (locale) =>
         set(() => ({
           locale: normalizeLocale(locale),
@@ -32,4 +35,3 @@ export const useUiStore = create(
     },
   ),
 )
-
