@@ -79,14 +79,6 @@ export async function openTaskArtifactDir(taskId, relativePath) {
   })
 }
 
-export async function probeMorpheCliSource(options) {
-  return requestIpc("probeMorpheCliSource", options || {})
-}
-
-export async function probePatchesSource(options) {
-  return requestIpc("probePatchesSource", options || {})
-}
-
 export async function fetchAppCompatibleVersions(configPath, app) {
   return requestIpc("fetchAppCompatibleVersions", {
     configPath: String(configPath || "config.toml"),
@@ -144,8 +136,4 @@ export async function deleteSourceFile(type, relativePath) {
     type: String(type || ""),
     relativePath: String(relativePath || ""),
   })
-}
-
-export async function deleteAllSourceFiles(type) {
-  return requestIpc("deleteAllSourceFiles", { type: String(type || "") })
 }

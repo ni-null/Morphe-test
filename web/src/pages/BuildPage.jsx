@@ -1,0 +1,227 @@
+import {
+  Check,
+  Code2,
+  FileText,
+  Hammer,
+  Loader2,
+  Package,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  Settings2,
+  Smartphone,
+  Square,
+} from "lucide-react"
+import { Button } from "../components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Label } from "../components/ui/label"
+import { Textarea } from "../components/ui/textarea"
+import { cn } from "../lib/utils"
+
+export default function BuildPage({
+  t,
+  isBuildRunning,
+  buildLaunchPending,
+  isBuildStopping,
+  liveLastLine,
+  setLogDialogOpen,
+  liveTaskId,
+  onStopBuildTask,
+  onBuildPrimaryAction,
+  rawOverrideMode,
+  onToggleRawMode,
+  isBusy,
+  setConfigPathDialogOpen,
+  loadConfig,
+  setRawConfigInput,
+  generatedToml,
+  rawConfigInput,
+  setRawConfigInputValue,
+  setMorpheSettingsOpen,
+  setPatchesSettingsOpen,
+  appendApp,
+  appTemplateLoading,
+  apps,
+  updateApp,
+  getPackageIcon,
+  hasText,
+  setAppSettingsId,
+  setAppSettingsOpen,
+}) {
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className='flex items-center gap-2'>
+            <Hammer className='h-5 w-5' />
+            {t("build.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          <div className='space-y-2 rounded-md bg-background p-3'>
+            {isBuildRunning || buildLaunchPending || isBuildStopping ? (
+              <div className='flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm'>
+                <div className='min-w-0 flex items-center gap-2'>
+                  <Loader2 className='h-5 w-5 animate-spin text-primary' />
+                  <span className='font-medium text-primary'>{t("build.progress")}</span>
+                  <span className='text-muted-foreground'>|</span>
+                  <span className='text-muted-foreground break-all'>{liveLastLine || t("build.waiting")}</span>
+                </div>
+                <div className='flex items-center gap-2'>
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    onClick={() => setLogDialogOpen(true)}
+                    disabled={!liveTaskId}
+                    aria-label={t("build.openCurrentLog")}
+                    title={t("build.openCurrentLog")}>
+                    <FileText className='h-5 w-5' />
+                  </Button>
+                  <Button
+                    variant='outline'
+                    onClick={onStopBuildTask}
+                    disabled={!liveTaskId || (!isBuildRunning && !isBuildStopping)}
+                    className='border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700'>
+                    <Square className='h-5 w-5' />
+                    {isBuildStopping ? t("build.stopping") : t("build.stop")}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {!isBuildRunning && !isBuildStopping && !buildLaunchPending ? (
+              <Button className='w-full' variant='default' onClick={onBuildPrimaryAction}>
+                <Play className='h-5 w-5' />
+                {t("build.start")}
+              </Button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className='space-y-3'>
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div>
+              <CardTitle className='flex items-center gap-2'>
+                <Settings2 className='h-5 w-5' />
+                {t("settings.title")}
+              </CardTitle>
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              <Button variant={rawOverrideMode ? "default" : "outline"} onClick={onToggleRawMode} disabled={isBusy}>
+                <Code2 className='h-5 w-5' />
+                {t("settings.raw")}
+              </Button>
+              <Button
+                variant='outline'
+                onClick={() => setConfigPathDialogOpen(true)}
+                disabled={isBusy}
+                aria-label={t("dialog.configPathTitle")}
+                title={t("dialog.configPathTitle")}>
+                <Pencil className='h-5 w-5' />
+                {t("settings.path")}
+              </Button>
+              <Button variant='outline' onClick={loadConfig} disabled={isBusy}>
+                <RefreshCw className='h-5 w-5' />
+                {t("settings.reload")}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className='space-y-4'>
+          {rawOverrideMode ? (
+            <div className='space-y-2'>
+              <div className='flex flex-wrap items-center justify-between gap-2'>
+                <Label htmlFor='raw-toml'>{t("settings.rawInput")}</Label>
+                <Button variant='outline' onClick={() => setRawConfigInput(generatedToml)} disabled={isBusy}>
+                  {t("settings.applyForm")}
+                </Button>
+              </div>
+              <Textarea
+                id='raw-toml'
+                className='min-h-[340px] font-mono text-xs'
+                value={rawConfigInput}
+                onChange={(event) => setRawConfigInputValue(event.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          ) : (
+            <div className='space-y-4'>
+              <section className='space-y-2'>
+                <h3 className='text-base font-semibold'>{t("settings.source")}</h3>
+                <div className='flex flex-wrap gap-2'>
+                  <Button variant='outline' className='h-11 px-5 text-base' onClick={() => setMorpheSettingsOpen(true)} disabled={isBusy}>
+                    <Settings2 className='h-6 w-6' />
+                    morphe-cli
+                  </Button>
+                  <Button variant='outline' className='h-11 px-5 text-base' onClick={() => setPatchesSettingsOpen(true)} disabled={isBusy}>
+                    <Package className='h-6 w-6' />
+                    patches
+                  </Button>
+                </div>
+              </section>
+
+              <section className='space-y-3 pt-1'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <h3 className='text-base font-semibold'>{t("settings.apps")}</h3>
+                  <Button variant='outline' className='h-11 px-5 text-base' onClick={appendApp} disabled={isBusy || appTemplateLoading}>
+                    {appTemplateLoading ? <Loader2 className='h-6 w-6 animate-spin' /> : <Plus className='h-6 w-6' />}
+                    {t("settings.loadTemplate")}
+                  </Button>
+                </div>
+
+                <div className='flex flex-wrap gap-2'>
+                  {apps.map((app) => (
+                    <Card key={app.id} className='border-0 shadow-none bg-transparent'>
+                      <div
+                        role='button'
+                        tabIndex={0}
+                        className='inline-flex min-h-20 items-center gap-5 rounded-md px-5 py-4 cursor-pointer bg-muted/35 hover:bg-accent/35'
+                        onClick={() => updateApp(app.id, { mode: app.mode === "false" ? "remote" : "false" })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            updateApp(app.id, { mode: app.mode === "false" ? "remote" : "false" })
+                          }
+                        }}>
+                        <span
+                          className={cn(
+                            "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                            app.mode !== "false" ? "bg-emerald-100 text-emerald-700" : "bg-muted/60 text-slate-400",
+                          )}>
+                          {app.mode !== "false" ? <Check className='h-6 w-6' /> : null}
+                        </span>
+                        <div className='flex items-center gap-2'>
+                          {hasText(getPackageIcon(app.packageName)) ? (
+                            <img src={getPackageIcon(app.packageName)} alt={app.displayName || app.name || "app"} className='h-8 w-8 rounded-sm object-contain' />
+                          ) : (
+                            <Smartphone className='h-8 w-8 text-muted-foreground' />
+                          )}
+                          <span className='text-lg font-medium whitespace-nowrap'>{app.displayName || app.name || "app-name"}</span>
+                        </div>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          className='h-11 w-11'
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setAppSettingsId(app.id)
+                            setAppSettingsOpen(true)
+                          }}>
+                          <Pencil className='h-6 w-6' />
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+

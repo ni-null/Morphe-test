@@ -362,7 +362,7 @@ class TaskService {
     this.versionsCacheDir = path.join(this.cacheDir, "compatible-versions");
     this.patchEntriesCacheDir = path.join(this.cacheDir, "patch-entries");
     this.templatesCacheDir = path.join(this.cacheDir, "app-templates");
-    this.patchEntriesParserVersion = "v4";
+    this.patchEntriesParserVersion = "v5";
     this.tasks = new Map();
   }
 
@@ -412,21 +412,6 @@ class TaskService {
     const withOptionsEntries = mpp.parsePatchEntries(withOptions);
     const defaultEntries = mpp.parsePatchEntries(defaults);
     return mpp.mergePatchEntries(withOptionsEntries, defaultEntries);
-  }
-
-  createProbeContext() {
-    const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
-      cacheDir: this.workspacePaths.cache,
-      logStep: () => {},
-    });
-    return {
-      hasValue,
-      pickFirstValue,
-      runCurl: runtime.runCurl,
-      logInfo: () => {},
-      defaultPatchesRepo: DEFAULT_MORPHE_PATCHES_REPO,
-    };
   }
 
   createTaskContext(runtime) {
@@ -535,34 +520,6 @@ class TaskService {
     };
   }
 
-  async probeMorpheCliSource(options) {
-    const mode = String(options && options.mode ? options.mode : "stable").trim().toLowerCase();
-    if (mode === "local") {
-      throw new Error("morphe-cli 測試僅支援 stable/dev 模式。");
-    }
-    const ctx = this.createProbeContext();
-    const morpheCliCfg = {
-      mode,
-      patches_repo: String(options && options.patchesRepo ? options.patchesRepo : "").trim(),
-      ver: String(options && options.version ? options.version : "").trim(),
-    };
-    return morpheCli.probeMorpheCliJar({ morpheCliCfg, ctx });
-  }
-
-  async probePatchesSource(options) {
-    const mode = String(options && options.mode ? options.mode : "stable").trim().toLowerCase();
-    if (mode === "local") {
-      throw new Error("patches 測試僅支援 stable/dev 模式。");
-    }
-    const ctx = this.createProbeContext();
-    const patchesCfg = {
-      mode,
-      patches_repo: String(options && options.patchesRepo ? options.patchesRepo : "").trim(),
-      ver: String(options && options.version ? options.version : "").trim(),
-    };
-    return mpp.probePatchBundle({ patchesCfg, ctx });
-  }
-
   async listSourceFiles(type) {
     const spec = getSourceSpec(type);
     const targetDir = this.workspacePaths[spec.folderKey];
@@ -663,6 +620,7 @@ class TaskService {
     const releases = await fetchGitHubReleases(repo, runtime);
     const ext = spec.ext.toLowerCase();
     const versions = [];
+    const seenFileNames = new Set();
     for (const release of releases) {
       if (release && release.draft) continue;
       const assets = Array.isArray(release.assets) ? release.assets : [];
@@ -671,6 +629,9 @@ class TaskService {
         const url = String(asset && asset.browser_download_url ? asset.browser_download_url : "").trim();
         if (!name || !url) continue;
         if (!name.toLowerCase().endsWith(ext)) continue;
+        const key = name.toLowerCase();
+        if (seenFileNames.has(key)) continue;
+        seenFileNames.add(key);
         versions.push({
           fileName: name,
           tag: String(release && release.tag_name ? release.tag_name : ""),
@@ -738,21 +699,6 @@ class TaskService {
       fileName: path.basename(fullPath),
       relativePath: path.relative(targetDir, fullPath),
       fullPath,
-    };
-  }
-
-  async deleteAllSourceFiles(type) {
-    const spec = getSourceSpec(type);
-    const targetDir = this.workspacePaths[spec.folderKey];
-    const existing = await collectSourceFilesRecursive(targetDir, spec.ext).catch(() => []);
-    const count = Array.isArray(existing) ? existing.length : 0;
-    await fsp.rm(targetDir, { recursive: true, force: true });
-    await fsp.mkdir(targetDir, { recursive: true });
-    return {
-      type: spec.type,
-      deleted: true,
-      count,
-      dir: targetDir,
     };
   }
 

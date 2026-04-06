@@ -10,7 +10,7 @@
     "desktop:dev": "npm --prefix ./desktop run dev",
     "desktop:start": "npm run web:build && npm --prefix ./desktop run start",
     "desktop:pack": "npm run web:build && npm --prefix ./desktop run pack",
-    "i18n:patches:zh-TW": "node scripts/i18n/sync-patch-translations.js --locale zh-TW"
+    "i18n:patches:zh-TW": "npm --prefix ./web run i18n:patches:zh-TW"
   },
   "dependencies": {
     "chalk": "^4.1.2"

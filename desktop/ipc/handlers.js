@@ -149,22 +149,6 @@ function createInvokeHandler(projectRoot) {
       return await taskService.openTaskArtifactDir(taskId, payload.relativePath);
     }
 
-    if (method === "probeMorpheCliSource") {
-      return await taskService.probeMorpheCliSource({
-        mode: payload.mode,
-        patchesRepo: payload.patchesRepo,
-        version: payload.version,
-      });
-    }
-
-    if (method === "probePatchesSource") {
-      return await taskService.probePatchesSource({
-        mode: payload.mode,
-        patchesRepo: payload.patchesRepo,
-        version: payload.version,
-      });
-    }
-
     if (method === "fetchAppCompatibleVersions") {
       return await taskService.getAppCompatibleVersions({
         configPath: payload.configPath,
@@ -226,10 +210,6 @@ function createInvokeHandler(projectRoot) {
         fileName: payload.fileName,
         relativePath: payload.relativePath,
       });
-    }
-
-    if (method === "deleteAllSourceFiles") {
-      return await taskService.deleteAllSourceFiles(payload.type);
     }
 
     throw new Error(`Unknown IPC method: ${method}`);

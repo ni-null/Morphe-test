@@ -718,7 +718,7 @@ async function listPatchEntries(params) {
   const { app, appName, jarPath, patchPath, ctx } = params;
   const configuredPackage = getConfiguredPackageName(app, appName, ctx);
   const withOptionsOutput = await listPatchesWithOptionsRawOutput(jarPath, patchPath, configuredPackage, ctx);
-  const defaultsOutput = await listPatchesRawOutput(jarPath, patchPath, null, ctx);
+  const defaultsOutput = await listPatchesRawOutput(jarPath, patchPath, configuredPackage, ctx);
   const entries = mergePatchEntries(parsePatchEntries(withOptionsOutput), parsePatchEntries(defaultsOutput));
   if (entries.length === 0) {
     throw new Error(`[${appName}] No patch entries parsed from list-patches output.`);
@@ -733,7 +733,7 @@ async function listPatchEntriesRaw(params) {
   const { app, appName, jarPath, patchPath, ctx } = params;
   const configuredPackage = getConfiguredPackageName(app, appName, ctx);
   const withOptionsOutput = await listPatchesWithOptionsRawOutput(jarPath, patchPath, configuredPackage, ctx);
-  const defaultsOutput = await listPatchesRawOutput(jarPath, patchPath, null, ctx);
+  const defaultsOutput = await listPatchesRawOutput(jarPath, patchPath, configuredPackage, ctx);
   return {
     appName,
     packageName: configuredPackage || null,

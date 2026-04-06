@@ -261,7 +261,8 @@ function getDefaultCacheDir() {
 }
 
 function getDefaultOutputPath() {
-  return path.join(process.cwd(), "web", "src", "patch-translations.json");
+  const webRoot = path.resolve(__dirname, "..", "..");
+  return path.join(webRoot, "src", "patch-translations.json");
 }
 
 async function readJsonSafe(filePath) {

@@ -63,6 +63,13 @@ mode = "remote" # remote / local / false
 - 溝通層：`desktop/preload.js` + `desktop/ipc/handlers.js`
 - 核心流程：仍由 `main.js` CLI 執行
 
+前端結構（維持適度拆分，不過度切碎）：
+- `web/src/App.jsx`：流程協調（狀態與動作串接）
+- `web/src/pages/*`：頁面層 UI
+- `web/src/features/*`：較大的功能區塊 / 對話框
+- `web/src/services/*`：IPC 呼叫封裝
+- `web/src/stores/*`：共享 UI 狀態（`uiStore`、`dialogStore`）
+
 指令：
 - `npm run web:build`
 - `npm run desktop:install`（只安裝 `desktop/` 內 Electron 依賴）
