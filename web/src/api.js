@@ -1,189 +1,151 @@
-const JSON_HEADERS = {
-  "Content-Type": "application/json",
-};
-
-async function requestJson(path, options = {}) {
-  const response = await fetch(path, options);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.ok) {
-    throw new Error(payload.error || `Request failed: ${response.status}`);
+function getDesktopBridge() {
+  const bridge = window.morpheDesktop
+  if (!bridge || typeof bridge.invoke !== "function") {
+    throw new Error("Desktop IPC bridge unavailable. Please launch via Electron desktop app.")
   }
-  return payload.data;
+  return bridge
+}
+
+async function requestIpc(method, payload = {}) {
+  const bridge = getDesktopBridge()
+  return bridge.invoke(method, payload)
 }
 
 export async function fetchConfig(configPath = "config.toml") {
-  const encoded = encodeURIComponent(configPath);
-  return requestJson(`/api/config?path=${encoded}`);
+  return requestIpc("fetchConfig", { configPath })
 }
 
 export async function fetchPackageMap() {
-  return requestJson("/api/package-map");
+  return requestIpc("fetchPackageMap")
 }
 
 export async function saveConfig({ path, content }) {
-  return requestJson("/api/config", {
-    method: "PUT",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ path, content }),
-  });
+  return requestIpc("saveConfig", { path, content })
 }
 
 export async function listTasks(limit = 50) {
-  return requestJson(`/api/tasks?limit=${limit}`);
+  return requestIpc("listTasks", { limit })
 }
 
 export async function startTask(options) {
-  return requestJson("/api/tasks", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(options || {}),
-  });
-}
-
-export async function fetchManualOptions(configPath) {
-  return requestJson("/api/manual/options", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      configPath: String(configPath || "config.toml"),
-    }),
-  });
+  return requestIpc("startTask", options || {})
 }
 
 export async function fetchAppTemplates(configPath) {
-  return requestJson("/api/app-templates", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      configPath: String(configPath || "config.toml"),
-    }),
-  });
+  return requestIpc("fetchAppTemplates", {
+    configPath: String(configPath || "config.toml"),
+  })
 }
 
 export async function fetchTask(taskId) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}`);
+  return requestIpc("fetchTask", { taskId: String(taskId || "") })
 }
 
 export async function deleteTask(taskId) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}`, {
-    method: "DELETE",
-    headers: JSON_HEADERS,
-    body: "{}",
-  });
+  return requestIpc("deleteTask", { taskId: String(taskId || "") })
 }
 
 export async function deleteAllTasks() {
-  return requestJson("/api/tasks", {
-    method: "DELETE",
-    headers: JSON_HEADERS,
-    body: "{}",
-  });
+  return requestIpc("deleteAllTasks")
 }
 
 export async function clearAllCache() {
-  return requestJson("/api/cache", {
-    method: "DELETE",
-    headers: JSON_HEADERS,
-    body: "{}",
-  });
+  return requestIpc("clearAllCache")
 }
 
 export async function stopTask(taskId) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}/stop`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: "{}",
-  });
+  return requestIpc("stopTask", { taskId: String(taskId || "") })
 }
 
 export async function fetchTaskLog(taskId, tail = 300) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}/log?tail=${tail}`);
+  return requestIpc("fetchTaskLog", {
+    taskId: String(taskId || ""),
+    tail,
+  })
 }
 
 export async function fetchTaskArtifacts(taskId) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}/artifacts`);
+  return requestIpc("fetchTaskArtifacts", { taskId: String(taskId || "") })
 }
 
 export async function openTaskOutputDir(taskId) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}/open-output`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: "{}",
-  });
+  return requestIpc("openTaskOutputDir", { taskId: String(taskId || "") })
 }
 
 export async function openTaskArtifactDir(taskId, relativePath) {
-  return requestJson(`/api/tasks/${encodeURIComponent(taskId)}/open-artifact-dir`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      relativePath: String(relativePath || ""),
-    }),
-  });
+  return requestIpc("openTaskArtifactDir", {
+    taskId: String(taskId || ""),
+    relativePath: String(relativePath || ""),
+  })
 }
 
 export async function probeMorpheCliSource(options) {
-  return requestJson("/api/probe/morphe-cli", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(options || {}),
-  });
+  return requestIpc("probeMorpheCliSource", options || {})
 }
 
 export async function probePatchesSource(options) {
-  return requestJson("/api/probe/patches", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(options || {}),
-  });
+  return requestIpc("probePatchesSource", options || {})
 }
 
 export async function fetchAppCompatibleVersions(configPath, app) {
-  return requestJson("/api/apps/compatible-versions", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      configPath: String(configPath || "config.toml"),
-      app: app && typeof app === "object" ? app : {},
-    }),
-  });
+  return requestIpc("fetchAppCompatibleVersions", {
+    configPath: String(configPath || "config.toml"),
+    app: app && typeof app === "object" ? app : {},
+  })
+}
+
+export async function fetchAppPatchOptions(configPath, app) {
+  const safeConfigPath = String(configPath || "config.toml")
+  const safeApp = app && typeof app === "object" ? app : {}
+  try {
+    return await requestIpc("fetchAppPatchOptions", {
+      configPath: safeConfigPath,
+      app: safeApp,
+    })
+  } catch (error) {
+    const text = String(error?.message || error || "")
+    if (!text.includes("Unknown IPC method: fetchAppPatchOptions")) {
+      throw error
+    }
+    throw new Error("Desktop 主程式版本過舊，請完全重啟桌面端（含 Electron 主程序）後再查詢補丁。")
+  }
 }
 
 export async function listSourceFiles(type) {
-  return requestJson(`/api/source-files?type=${encodeURIComponent(String(type || ""))}`);
+  return requestIpc("listSourceFiles", { type: String(type || "") })
 }
 
 export async function fetchAndSaveSource(options) {
-  return requestJson("/api/source/fetch-save", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(options || {}),
-  });
+  return requestIpc("fetchAndSaveSource", options || {})
 }
 
 export async function fetchSourceVersions(options) {
-  return requestJson("/api/source/versions", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(options || {}),
-  });
+  return requestIpc("fetchSourceVersions", options || {})
+}
+
+export async function listDownloadedApks() {
+  try {
+    return await requestIpc("listDownloadedApks")
+  } catch (error) {
+    const text = String(error?.message || error || "")
+    if (!text.includes("Unknown IPC method: listDownloadedApks")) {
+      throw error
+    }
+    throw new Error("Desktop 主程式版本過舊，請完全重啟桌面端（含 Electron 主程序）後再試。")
+  }
+}
+
+export async function browseLocalApkPath(defaultPath = "") {
+  return requestIpc("browseLocalApkPath", { defaultPath: String(defaultPath || "") })
 }
 
 export async function deleteSourceFile(type, relativePath) {
-  return requestJson("/api/source/file", {
-    method: "DELETE",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      type: String(type || ""),
-      relativePath: String(relativePath || ""),
-    }),
-  });
+  return requestIpc("deleteSourceFile", {
+    type: String(type || ""),
+    relativePath: String(relativePath || ""),
+  })
 }
 
 export async function deleteAllSourceFiles(type) {
-  return requestJson(`/api/source-files?type=${encodeURIComponent(String(type || ""))}`, {
-    method: "DELETE",
-    headers: JSON_HEADERS,
-    body: "{}",
-  });
+  return requestIpc("deleteAllSourceFiles", { type: String(type || "") })
 }

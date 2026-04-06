@@ -4,7 +4,6 @@
 const fsp = require("fs").promises;
 const path = require("path");
 const { spawn } = require("child_process");
-const readline = require("readline");
 const { StringDecoder } = require("string_decoder");
 const morpheCli = require("./scripts/morphe-cli");
 const mpp = require("./scripts/mpp");
@@ -65,186 +64,10 @@ function createTaskId(now = new Date()) {
   return `task-${y}${m}${d}-${hh}${mm}${ss}-${process.pid}`;
 }
 
-function createManualPrompt() {
-  return readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-}
-
-function askPrompt(rl, question) {
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => resolve(String(answer || "").trim()));
-  });
-}
-
 function uniqueValues(values) {
   return Array.from(new Set(values));
 }
 
-function normalizeVersionCandidates(candidates) {
-  return uniqueValues(
-    (candidates || [])
-      .map((item) => (item && hasValue(item.version) ? String(item.version).trim() : ""))
-      .filter((value) => value.length > 0),
-  );
-}
-
-function parsePatchIndexInput(rawText) {
-  const text = String(rawText || "").trim();
-  if (!text) return [];
-  const tokens = text.split(",").map((token) => token.trim()).filter(Boolean);
-  const values = [];
-  for (const token of tokens) {
-    const rangeMatch = token.match(/^(\d+)\s*-\s*(\d+)$/u);
-    if (rangeMatch) {
-      const start = Number.parseInt(rangeMatch[1], 10);
-      const end = Number.parseInt(rangeMatch[2], 10);
-      const min = Math.min(start, end);
-      const max = Math.max(start, end);
-      for (let i = min; i <= max; i += 1) {
-        values.push(i);
-      }
-      continue;
-    }
-    if (!/^\d+$/u.test(token)) {
-      throw new Error(`Invalid patch index token: ${token}`);
-    }
-    values.push(Number.parseInt(token, 10));
-  }
-  return uniqueValues(values);
-}
-
-function loadManualPlan(options) {
-  if (options && hasValue(options.manualPlanPath)) {
-    const planPath = resolveAbsolutePath(String(options.manualPlanPath).trim(), process.cwd());
-    const raw = require("fs").readFileSync(planPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      throw new Error("Invalid manual plan JSON: root object required.");
-    }
-    return parsed;
-  }
-
-  const rawB64 = String(process.env.MORPHE_MANUAL_PLAN_B64 || "").trim();
-  if (!rawB64) return null;
-  try {
-    const rawJson = Buffer.from(rawB64, "base64").toString("utf8");
-    const parsed = JSON.parse(rawJson);
-    if (!parsed || typeof parsed !== "object") {
-      throw new Error("root object required");
-    }
-    return parsed;
-  } catch (err) {
-    throw new Error(`Failed to parse MORPHE_MANUAL_PLAN_B64: ${formatError(err)}`);
-  }
-}
-
-function getAppManualSelection(manualPlan, appName) {
-  if (!manualPlan || typeof manualPlan !== "object") return null;
-  const apps = manualPlan.apps;
-  if (!apps || typeof apps !== "object") return null;
-  const direct = apps[appName];
-  if (direct && typeof direct === "object") return direct;
-  const lower = String(appName).toLowerCase();
-  for (const [name, value] of Object.entries(apps)) {
-    if (String(name).toLowerCase() === lower && value && typeof value === "object") {
-      return value;
-    }
-  }
-  return null;
-}
-
-async function askManualVersionSelection(rl, appName, versionCandidates) {
-  const versions = normalizeVersionCandidates(versionCandidates);
-  if (versions.length > 0) {
-    console.log(`\n[${appName}] Compatible APK versions:`);
-    versions.forEach((version, idx) => {
-      console.log(`  ${idx + 1}. ${version}`);
-    });
-    console.log("  0. provider default (auto)");
-  } else {
-    console.log(`\n[${appName}] No strict compatibility list found.`);
-    console.log("  0. provider default (auto)");
-  }
-
-  while (true) {
-    const answer = await askPrompt(rl, `[${appName}] Select APK version (number or custom text, default 0): `);
-    if (!answer || answer === "0") {
-      return { version: null, strictVersion: false, source: "manual-auto" };
-    }
-    if (/^\d+$/u.test(answer)) {
-      const index = Number.parseInt(answer, 10) - 1;
-      if (index >= 0 && index < versions.length) {
-        return { version: versions[index], strictVersion: true, source: "manual-compatibility-list" };
-      }
-      console.log("Invalid index. Please retry.");
-      continue;
-    }
-    return { version: answer, strictVersion: true, source: "manual-custom" };
-  }
-}
-
-async function askManualPatchSelection(rl, appName, patchEntries) {
-  if (!Array.isArray(patchEntries) || patchEntries.length === 0) {
-    return null;
-  }
-
-  console.log(`\n[${appName}] Available patches:`);
-  patchEntries.forEach((item) => {
-    const flag = item.enabled ? "[default:on]" : "[default:off]";
-    console.log(`  ${item.index}. ${item.name} ${flag}`);
-  });
-  console.log("  Input rules: empty=use default set, *=enable all, 1,2,9-12=custom indices");
-
-  const allowed = new Set(patchEntries.map((item) => item.index));
-  while (true) {
-    const answer = await askPrompt(rl, `[${appName}] Select patch indices: `);
-    if (!answer) {
-      return null;
-    }
-    if (answer === "*") {
-      return { exclusive: true, indices: patchEntries.map((item) => item.index) };
-    }
-
-    let indices = [];
-    try {
-      indices = parsePatchIndexInput(answer);
-    } catch (err) {
-      console.log(formatError(err));
-      continue;
-    }
-    const invalid = indices.filter((index) => !allowed.has(index));
-    if (invalid.length > 0) {
-      console.log(`Invalid indices: ${invalid.join(", ")}.`);
-      continue;
-    }
-    return { exclusive: true, indices };
-  }
-}
-
-function runWebMode(projectRoot) {
-  return new Promise((resolve, reject) => {
-    const launcherPath = path.join(projectRoot, "scripts", "web", "start-dev.js");
-    const child = spawn(process.execPath, [launcherPath], {
-      cwd: projectRoot,
-      stdio: "inherit",
-      shell: false,
-    });
-
-    child.on("error", (err) => {
-      reject(new Error(`Failed to start web mode: ${err.message}`));
-    });
-
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`Web mode exited with code ${code}`));
-    });
-  });
-}
 
 function runJavaPatch(jarPath, patchPath, apkPath, outputDir, appName, signingConfig, patchSelection) {
   return new Promise((resolve, reject) => {
@@ -437,6 +260,73 @@ function buildContext(runtime) {
   };
 }
 
+function parseConfiguredPatchNames(value) {
+  if (Array.isArray(value)) {
+    return uniqueValues(
+      value
+        .map((item) => String(item || "").trim())
+        .filter((item) => item.length > 0),
+    );
+  }
+  const text = String(value || "").trim();
+  if (!text) return [];
+  return uniqueValues(
+    text
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0),
+  );
+}
+
+async function resolveConfiguredPatchSelection(params) {
+  const { app, appName, jarPath, patchPath, ctx } = params;
+  const patchMode = String(pickFirstValue(app, ["patches_mode", "patches-mode"]) || "default")
+    .trim()
+    .toLowerCase();
+  if (patchMode !== "custom") return null;
+
+  const selectedPatchNames = parseConfiguredPatchNames(pickFirstValue(app, ["patches"]));
+  if (selectedPatchNames.length === 0) {
+    logWarn(`[${appName}] patches_mode=custom but patches is empty, fallback to default enabled set.`);
+    return null;
+  }
+
+  const patchInfo = await mpp.listPatchEntries({
+    app,
+    appName,
+    jarPath,
+    patchPath,
+    ctx,
+  });
+  const indexByLowerName = new Map(
+    patchInfo.entries.map((entry) => [String(entry.name || "").trim().toLowerCase(), entry.index]),
+  );
+  const matchedIndices = [];
+  const missingNames = [];
+  for (const name of selectedPatchNames) {
+    const key = name.toLowerCase();
+    if (!indexByLowerName.has(key)) {
+      missingNames.push(name);
+      continue;
+    }
+    matchedIndices.push(indexByLowerName.get(key));
+  }
+
+  if (matchedIndices.length === 0) {
+    logWarn(
+      `[${appName}] patches_mode=custom but no patch names matched current patch bundle. ` +
+        `Configured: ${selectedPatchNames.join(", ")}. Fallback to default enabled set.`,
+    );
+    return null;
+  }
+  if (missingNames.length > 0) {
+    logWarn(`[${appName}] custom patches not found in current patch bundle: ${missingNames.join(", ")}`);
+  }
+
+  const deduped = uniqueValues(matchedIndices).sort((a, b) => a - b);
+  return { exclusive: true, indices: deduped };
+}
+
 function assertNoRemovedAppKeys(config, appNames) {
   for (const appName of appNames) {
     const app = config[appName] || {};
@@ -463,44 +353,15 @@ async function run() {
     printUsage();
     return;
   }
-  const manualPlan = loadManualPlan(options);
-  const manualActive = !!(options.manual || manualPlan);
-  const exclusiveModes = [options.web, options.morpheCliOnly, options.downloadOnly, options.patchesOnly].filter(Boolean).length;
+  const exclusiveModes = [options.morpheCliOnly, options.downloadOnly, options.patchesOnly].filter(Boolean).length;
   if (exclusiveModes > 1) {
-    throw new Error("Options --web, --morphe-cli, --download-only and --patches-only cannot be used together.");
-  }
-  if (manualActive && (options.web || options.morpheCliOnly || options.downloadOnly || options.patchesOnly)) {
-    throw new Error("Option --manual cannot be used with --web, --morphe-cli, --download-only or --patches-only.");
-  }
-  if (options.manual && !manualPlan && !process.stdin.isTTY) {
-    throw new Error("Option --manual requires an interactive terminal (TTY).");
-  }
-  if (options.web && (options.dryRun || options.force)) {
-    throw new Error("Option --web cannot be used with --dry-run or --force.");
+    throw new Error("Options --morphe-cli, --download-only and --patches-only cannot be used together.");
   }
   const onlyClearCache =
     options.clearCache &&
-    !options.web &&
-    !manualActive &&
     !options.morpheCliOnly &&
     !options.downloadOnly &&
     !options.patchesOnly;
-  if (options.web) {
-    if (options.clearCache) {
-      const webWorkspaceRoot = resolveWorkspaceRoot({
-        cliWorkspace: options.workspacePath,
-        envWorkspace: process.env.MORPHE_WORKSPACE,
-        cwd: process.cwd(),
-        env: process.env,
-      });
-      const webWorkspacePaths = buildWorkspacePaths(webWorkspaceRoot);
-      await clearWorkspaceCache(webWorkspacePaths);
-      logInfo(`Workspace cache cleared: ${webWorkspacePaths.cache}`);
-    }
-    logInfo("Starting web console (web-api + web-ui)...");
-    await runWebMode(process.cwd());
-    return;
-  }
 
   const configFull = resolveAbsolutePath(options.configPath, process.cwd());
   const configDir = path.dirname(configFull);
@@ -583,7 +444,6 @@ async function run() {
         morpheCliOnly: !!options.morpheCliOnly,
         downloadOnly: !!options.downloadOnly,
         patchesOnly: !!options.patchesOnly,
-        manual: manualActive,
         dryRun: !!options.dryRun,
         force: !!options.force,
       },
@@ -671,9 +531,7 @@ async function run() {
       }
     : null;
 
-  const manualPrompt = options.manual && !manualPlan ? createManualPrompt() : null;
-  try {
-    for (const appName of appNames) {
+  for (const appName of appNames) {
       const app = config[appName] || {};
       const appModeText = String(app.mode || "").trim().toLowerCase();
       if (app.mode === false || appModeText === "false") {
@@ -726,7 +584,10 @@ async function run() {
         ];
       } else if (options.downloadOnly) {
         versionCandidates = hasValue(app.ver)
-          ? [{ version: String(app.ver).trim(), strictVersion: true, source: "config.ver" }]
+          ? [
+              { version: String(app.ver).trim(), strictVersion: true, source: "config.ver" },
+              { version: null, strictVersion: false, source: "download-only-provider-default" },
+            ]
           : [{ version: null, strictVersion: false, source: "download-only-provider-default" }];
       } else {
         versionCandidates = await mpp.resolveVersionCandidates({
@@ -737,27 +598,6 @@ async function run() {
           dryRun: options.dryRun,
           ctx,
         });
-      }
-
-      if (manualActive && !isLocalMode) {
-        const appManual = getAppManualSelection(manualPlan, appName);
-        if (appManual && Object.prototype.hasOwnProperty.call(appManual, "version")) {
-          const selectedValue = hasValue(appManual.version) ? String(appManual.version).trim() : null;
-          versionCandidates = [{ version: selectedValue, strictVersion: !!selectedValue, source: "manual-plan" }];
-          logInfo(
-            hasValue(selectedValue)
-              ? `[${appName}] Manual plan version selected: ${selectedValue}`
-              : `[${appName}] Manual plan version selected: provider default`,
-          );
-        } else if (manualPrompt) {
-          const selectedVersion = await askManualVersionSelection(manualPrompt, appName, versionCandidates);
-          versionCandidates = [selectedVersion];
-          if (hasValue(selectedVersion.version)) {
-            logInfo(`[${appName}] Manual version selected: ${selectedVersion.version}`);
-          } else {
-            logInfo(`[${appName}] Manual version selected: provider default`);
-          }
-        }
       }
 
       const apkResult = await downloader.resolveApk({
@@ -786,34 +626,17 @@ async function run() {
         continue;
       }
 
-      let patchSelection = null;
-      if (manualActive && patchPath) {
-        const patchInfo = await mpp.listPatchEntries({
-          app,
-          appName,
-          jarPath,
-          patchPath,
-          ctx,
-        });
-        const appManual = getAppManualSelection(manualPlan, appName);
-        if (appManual && Array.isArray(appManual.patchIndices)) {
-          const allowed = new Set(patchInfo.entries.map((entry) => entry.index));
-          const filtered = Array.from(
-            new Set(
-              appManual.patchIndices
-                .map((value) => Number.parseInt(String(value), 10))
-                .filter((value) => Number.isInteger(value) && allowed.has(value)),
-            ),
-          );
-          patchSelection = { exclusive: true, indices: filtered };
-        } else if (manualPrompt) {
-          patchSelection = await askManualPatchSelection(manualPrompt, appName, patchInfo.entries);
-        }
-        if (patchSelection && patchSelection.exclusive) {
-          logInfo(`[${appName}] Manual patch selection indices: ${patchSelection.indices.join(", ")}`);
-        } else {
-          logInfo(`[${appName}] Manual patch selection: use default enabled set`);
-        }
+      const patchSelection = patchPath
+        ? await resolveConfiguredPatchSelection({
+            app,
+            appName,
+            jarPath,
+            patchPath,
+            ctx,
+          })
+        : null;
+      if (patchSelection && patchSelection.exclusive) {
+        logInfo(`[${appName}] Custom patch selection indices: ${patchSelection.indices.join(", ")}`);
       }
 
       const outputApkPath = await runPatchFlow({
@@ -844,11 +667,6 @@ async function run() {
       await fsp.writeFile(metadataPath, `${JSON.stringify(releaseMetadata, null, 2)}\n`, "utf8");
       logInfo(`Release metadata saved: ${metadataPath}`);
     }
-  } finally {
-    if (manualPrompt) {
-      manualPrompt.close();
-    }
-  }
 
   logInfo(TASK_STATUS_COMPLETED_MARKER);
   console.log("\nAll tasks finished.");

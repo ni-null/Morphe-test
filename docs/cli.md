@@ -11,7 +11,6 @@ node ./main.js [options]
 | 參數 | 說明 |
 | --- | --- |
 | `-c, --config <path>` | 指定設定檔路徑，預設 `./config.toml` |
-| `--web` | 啟動 Web Console（`web-api + web-ui`） |
 | `--morphe-cli` | 只測試/準備 `morphe-cli` jar，跳過 APK 與 patches 流程 |
 | `--download-only` | 只處理 APK 下載，跳過 patches 與 patch 打包流程 |
 | `--patches-only` | 只處理 patches 檔案，跳過 APK 下載與 patch 打包流程 |
@@ -23,7 +22,6 @@ node ./main.js [options]
 
 以下模式一次只能使用一個：
 
-- `--web`
 - `--morphe-cli`
 - `--download-only`
 - `--patches-only`
@@ -38,9 +36,6 @@ node ./main.js
 
 # 指定設定檔
 node ./main.js --config ./config.toml
-
-# 啟動 Web Console
-node ./main.js --web
 
 # 只下載 APK（不 patch）
 node ./main.js --download-only

@@ -35,14 +35,94 @@ function stripInlineComment(rawValue) {
 
 function parseTomlScalar(rawValue) {
   const value = rawValue.trim();
+  if (/^\[.*\]$/u.test(value)) {
+    const inner = value.slice(1, -1).trim();
+    if (!inner) return [];
+    return inner
+      .split(",")
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .map((item) => {
+        if (item.startsWith('"') && item.endsWith('"') && item.length >= 2) {
+          const unquoted = item.slice(1, -1);
+          let output = "";
+          for (let i = 0; i < unquoted.length; i += 1) {
+            const ch = unquoted[i];
+            if (ch !== "\\") {
+              output += ch;
+              continue;
+            }
+            const next = unquoted[i + 1];
+            if (!next) {
+              output += "\\";
+              break;
+            }
+            i += 1;
+            if (next === "n") {
+              output += "\n";
+              continue;
+            }
+            if (next === "r") {
+              output += "\r";
+              continue;
+            }
+            if (next === "t") {
+              output += "\t";
+              continue;
+            }
+            if (next === '"') {
+              output += '"';
+              continue;
+            }
+            if (next === "\\") {
+              output += "\\";
+              continue;
+            }
+            output += next;
+          }
+          return output;
+        }
+        return item;
+      });
+  }
   if (/^".*"$/.test(value)) {
     const inner = value.slice(1, -1);
-    return inner
-      .replace(/\\n/g, "\n")
-      .replace(/\\r/g, "\r")
-      .replace(/\\t/g, "\t")
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, "\\");
+    let output = "";
+    for (let i = 0; i < inner.length; i += 1) {
+      const ch = inner[i];
+      if (ch !== "\\") {
+        output += ch;
+        continue;
+      }
+      const next = inner[i + 1];
+      if (!next) {
+        output += "\\";
+        break;
+      }
+      i += 1;
+      if (next === "n") {
+        output += "\n";
+        continue;
+      }
+      if (next === "r") {
+        output += "\r";
+        continue;
+      }
+      if (next === "t") {
+        output += "\t";
+        continue;
+      }
+      if (next === '"') {
+        output += '"';
+        continue;
+      }
+      if (next === "\\") {
+        output += "\\";
+        continue;
+      }
+      output += next;
+    }
+    return output;
   }
   if (/^'.*'$/.test(value)) {
     return value.slice(1, -1);

@@ -4,13 +4,9 @@ function printUsage() {
   console.log(`
 Usage:
   node ./main.js [options]
-  node ./scripts/run-auto-patch.js [options]
 
 Options:
   -c, --config <path>  config.toml path (default: ./config.toml)
-      --web            start web console stack (web-api + web-ui)
-      --manual         interactive CLI flow: choose APK version and patch set per app
-      --manual-plan <path>  non-interactive manual plan JSON path
       --morphe-cli     test morphe-cli jar module only (skip APK/patches flow)
       --download-only  test APK module only (skip patches module)
       --patches-only   test patches module only (skip APK/patch flow)
@@ -27,9 +23,6 @@ Options:
 function parseArgs(argv) {
   const options = {
     configPath: "./config.toml",
-    web: false,
-    manual: false,
-    manualPlanPath: "",
     morpheCliOnly: false,
     downloadOnly: false,
     patchesOnly: false,
@@ -55,23 +48,6 @@ function parseArgs(argv) {
     }
     if (arg === "--download-only") {
       options.downloadOnly = true;
-      continue;
-    }
-    if (arg === "--web") {
-      options.web = true;
-      continue;
-    }
-    if (arg === "--manual") {
-      options.manual = true;
-      continue;
-    }
-    if (arg === "--manual-plan") {
-      const value = argv[i + 1];
-      if (!value) {
-        throw new Error(`Missing value for ${arg}`);
-      }
-      options.manualPlanPath = value;
-      i += 1;
       continue;
     }
     if (arg === "--morphe-cli") {

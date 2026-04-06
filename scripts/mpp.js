@@ -137,10 +137,10 @@ async function resolvePatchFile(params) {
     ctx,
   } = params;
 
+  // NOTE: [app].patches_mode is reserved for patch selection behavior (default/custom),
+  // not for patch source channel. Source mode must come from [patches].mode.
   const mode = normalizePatchMode(
-    ctx.pickFirstValue(app, ["patches_mode", "patches-mode"]) ||
-      ctx.pickFirstValue(patchesCfg || {}, ["mode"]) ||
-      "stable",
+    ctx.pickFirstValue(patchesCfg || {}, ["mode"]) || "stable",
   );
   const localPathRaw =
     ctx.pickFirstValue(app, ["patches_path", "patches-path", "path"]) ||
@@ -316,6 +316,39 @@ function dedupeAndSortVersions(versions) {
   return unique;
 }
 
+function resolveCompatibleVersionsFromRaw(rawText, appName, configuredPackageName) {
+  const packageVersions = parseListPatchesCompatibility(rawText);
+
+  let packageName = configuredPackageName || null;
+  if (!packageName) {
+    packageName = inferPackageNameFromList(appName, packageVersions);
+  }
+
+  if (!packageName) {
+    const choices = Array.from(packageVersions.keys()).filter((name) => name !== "__unknown__");
+    throw new Error(
+      `[${appName}] Cannot infer package name for compatibility lookup. ` +
+        `Set package_name in config. Available packages: ${choices.join(", ")}`,
+    );
+  }
+
+  let versions = [];
+  if (packageVersions.has(packageName)) {
+    versions = Array.from(packageVersions.get(packageName));
+  } else if (packageVersions.has("__unknown__")) {
+    versions = Array.from(packageVersions.get("__unknown__"));
+  }
+
+  if (versions.length === 0) {
+    throw new Error(`[${appName}] No compatible versions found in patch file for package ${packageName}.`);
+  }
+  if (versions.some((value) => /^any$/iu.test(String(value)))) {
+    return { packageName, versions: [], any: true };
+  }
+
+  return { packageName, versions: dedupeAndSortVersions(versions), any: false };
+}
+
 function parseListPatchesCompatibility(rawText) {
   const packageVersions = new Map();
   const UNKNOWN_PACKAGE = "__unknown__";
@@ -400,6 +433,8 @@ function parsePatchEntries(rawText) {
         index: current.index,
         name: current.name,
         enabled: current.enabled !== false,
+        description: current.description || "",
+        hasCompatiblePackages: !!current.hasCompatiblePackages,
       });
     }
     current = null;
@@ -407,27 +442,56 @@ function parsePatchEntries(rawText) {
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (!line) {
-      flushCurrent();
-      continue;
-    }
 
     const indexMatch = line.match(/^Index\s*:\s*(\d+)\s*$/iu);
     if (indexMatch) {
       flushCurrent();
-      current = { index: Number.parseInt(indexMatch[1], 10), name: "", enabled: true };
+      current = {
+        index: Number.parseInt(indexMatch[1], 10),
+        name: "",
+        enabled: true,
+        description: "",
+        inOptions: false,
+        hasCompatiblePackages: false,
+      };
+      continue;
+    }
+    if (!current) {
       continue;
     }
 
     const nameMatch = line.match(/^Name\s*:\s*(.+)$/iu);
-    if (nameMatch && current) {
+    if (nameMatch) {
       current.name = nameMatch[1].trim();
       continue;
     }
 
+    if (/^Options\s*:\s*$/iu.test(line)) {
+      current.inOptions = true;
+      continue;
+    }
+    if (/^(Compatible packages|Compatible versions)\s*:\s*$/iu.test(line)) {
+      if (/^Compatible packages\s*:\s*$/iu.test(line)) {
+        current.hasCompatiblePackages = true;
+      }
+      current.inOptions = false;
+      continue;
+    }
+
     const enabledMatch = line.match(/^Enabled\s*:\s*(true|false)\s*$/iu);
-    if (enabledMatch && current) {
+    if (enabledMatch) {
       current.enabled = /^true$/iu.test(enabledMatch[1]);
+      continue;
+    }
+
+    const descriptionMatch = line.match(/^Description\s*:\s*(.+)$/iu);
+    if (descriptionMatch) {
+      if (current.inOptions) {
+        continue;
+      }
+      if (!current.description) {
+        current.description = descriptionMatch[1].trim();
+      }
       continue;
     }
   }
@@ -441,15 +505,61 @@ function parsePatchEntries(rawText) {
   const rowMatches = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    const row = line.match(/^(\d+)\s{2,}(.+?)\s{2,}(true|false)\s*$/iu);
+    const row = line.match(/^(\d+)\s{2,}(.+?)\s{2,}(true|false)(?:\s{2,}(.+))?\s*$/iu);
     if (!row) continue;
     rowMatches.push({
       index: Number.parseInt(row[1], 10),
       name: row[2].trim(),
       enabled: /^true$/iu.test(row[3]),
+      description: String(row[4] || "").trim(),
     });
   }
   return rowMatches;
+}
+
+function mergePatchEntries(withOptionsEntries, baseEntries) {
+  const optionsList = Array.isArray(withOptionsEntries) ? withOptionsEntries : [];
+  const baseList = Array.isArray(baseEntries) ? baseEntries : [];
+  const byIndex = new Map(baseList.map((entry) => [Number(entry.index), entry]));
+  const byName = new Map(
+    baseList.map((entry) => [String(entry.name || "").trim().toLowerCase(), entry]),
+  );
+  const merged = [];
+  const seen = new Set();
+
+  for (const entry of optionsList) {
+    const index = Number(entry.index);
+    const name = String(entry.name || "").trim();
+    const key = `${index}|${name.toLowerCase()}`;
+    seen.add(key);
+    const fromBase = byIndex.get(index) || byName.get(name.toLowerCase()) || null;
+    merged.push({
+      index,
+      name,
+      enabled: fromBase ? fromBase.enabled !== false : entry.enabled !== false,
+      description: String(entry.description || "").trim(),
+      hasCompatiblePackages:
+        (fromBase && fromBase.hasCompatiblePackages === true) ||
+        entry.hasCompatiblePackages === true,
+    });
+  }
+
+  for (const entry of baseList) {
+    const index = Number(entry.index);
+    const name = String(entry.name || "").trim();
+    const key = `${index}|${name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    merged.push({
+      index,
+      name,
+      enabled: entry.enabled !== false,
+      description: String(entry.description || "").trim(),
+      hasCompatiblePackages: entry.hasCompatiblePackages === true,
+    });
+  }
+
+  merged.sort((a, b) => a.index - b.index);
+  return merged;
 }
 
 function getConfiguredPackageName(app, appName, ctx) {
@@ -527,42 +637,60 @@ async function listPatchesRawOutput(jarPath, patchPath, packageName, ctx) {
   throw new Error(`Failed to list patch versions: ${lastError}`);
 }
 
+async function listPatchesWithOptionsRawOutput(jarPath, patchPath, packageName, ctx) {
+  const commands = [];
+  if (packageName) {
+    commands.push([
+      "-jar",
+      jarPath,
+      "list-patches",
+      "--patches",
+      patchPath,
+      "-f",
+      packageName,
+      "--with-versions",
+      "--with-packages",
+      "--with-options",
+    ]);
+    commands.push([
+      "-jar",
+      jarPath,
+      "list-patches",
+      "-p",
+      patchPath,
+      "--filter-package-name",
+      packageName,
+      "--versions",
+      "--packages",
+      "--with-options",
+      "-b",
+    ]);
+  } else {
+    commands.push(["-jar", jarPath, "list-patches", "--patches", patchPath, "--with-versions", "--with-packages", "--with-options"]);
+    commands.push(["-jar", jarPath, "list-patches", "-p", patchPath, "--versions", "--packages", "--with-options", "-b"]);
+  }
+
+  let lastError = "unknown error";
+  for (const args of commands) {
+    const result = await ctx.runCommandCapture("java", args);
+    const combined = `${result.stdout}\n${result.stderr}`.trim();
+    if (result.code === 0) {
+      return combined;
+    }
+    lastError = combined || `exit code ${result.code}`;
+  }
+
+  throw new Error(`Failed to list patch entries with options: ${lastError}`);
+}
+
 async function resolvePatchCompatibleVersions(jarPath, patchPath, appName, app, ctx) {
   const configuredPackage = getConfiguredPackageName(app, appName, ctx);
   const listOutput = await listPatchesRawOutput(jarPath, patchPath, configuredPackage, ctx);
-  const packageVersions = parseListPatchesCompatibility(listOutput);
-
-  let packageName = configuredPackage;
-  if (!packageName) {
-    packageName = inferPackageNameFromList(appName, packageVersions);
-    if (packageName) {
-      ctx.logInfo(`[${appName}] Inferred package_name from patches: ${packageName}`);
-    }
+  const compatibility = resolveCompatibleVersionsFromRaw(listOutput, appName, configuredPackage);
+  if (!configuredPackage && compatibility.packageName) {
+    ctx.logInfo(`[${appName}] Inferred package_name from patches: ${compatibility.packageName}`);
   }
-
-  if (!packageName) {
-    const choices = Array.from(packageVersions.keys()).filter((name) => name !== "__unknown__");
-    throw new Error(
-      `[${appName}] Cannot infer package name for compatibility lookup. ` +
-        `Set package_name in config. Available packages: ${choices.join(", ")}`,
-    );
-  }
-
-  let versions = [];
-  if (packageVersions.has(packageName)) {
-    versions = Array.from(packageVersions.get(packageName));
-  } else if (packageVersions.has("__unknown__")) {
-    versions = Array.from(packageVersions.get("__unknown__"));
-  }
-
-  if (versions.length === 0) {
-    throw new Error(`[${appName}] No compatible versions found in patch file for package ${packageName}.`);
-  }
-  if (versions.some((value) => /^any$/iu.test(String(value)))) {
-    return { packageName, versions: [], any: true };
-  }
-
-  return { packageName, versions: dedupeAndSortVersions(versions), any: false };
+  return compatibility;
 }
 
 async function listCompatibleVersions(params) {
@@ -575,18 +703,44 @@ async function listCompatibleVersions(params) {
   };
 }
 
+async function listCompatibleVersionsRaw(params) {
+  const { app, appName, jarPath, patchPath, ctx } = params;
+  const configuredPackage = getConfiguredPackageName(app, appName, ctx);
+  const rawOutput = await listPatchesRawOutput(jarPath, patchPath, configuredPackage, ctx);
+  return {
+    appName,
+    packageName: configuredPackage || null,
+    rawOutput,
+  };
+}
+
 async function listPatchEntries(params) {
   const { app, appName, jarPath, patchPath, ctx } = params;
   const configuredPackage = getConfiguredPackageName(app, appName, ctx);
-  const listOutput = await listPatchesRawOutput(jarPath, patchPath, configuredPackage, ctx);
-  const entries = parsePatchEntries(listOutput);
+  const withOptionsOutput = await listPatchesWithOptionsRawOutput(jarPath, patchPath, configuredPackage, ctx);
+  const defaultsOutput = await listPatchesRawOutput(jarPath, patchPath, null, ctx);
+  const entries = mergePatchEntries(parsePatchEntries(withOptionsOutput), parsePatchEntries(defaultsOutput));
   if (entries.length === 0) {
     throw new Error(`[${appName}] No patch entries parsed from list-patches output.`);
   }
-  entries.sort((a, b) => a.index - b.index);
   return {
     packageName: configuredPackage || null,
     entries,
+  };
+}
+
+async function listPatchEntriesRaw(params) {
+  const { app, appName, jarPath, patchPath, ctx } = params;
+  const configuredPackage = getConfiguredPackageName(app, appName, ctx);
+  const withOptionsOutput = await listPatchesWithOptionsRawOutput(jarPath, patchPath, configuredPackage, ctx);
+  const defaultsOutput = await listPatchesRawOutput(jarPath, patchPath, null, ctx);
+  return {
+    appName,
+    packageName: configuredPackage || null,
+    rawOutput: {
+      withOptions: withOptionsOutput,
+      defaults: defaultsOutput,
+    },
   };
 }
 
@@ -669,7 +823,12 @@ module.exports = {
   resolvePatchFile,
   probePatchBundle,
   listCompatibleVersions,
+  listCompatibleVersionsRaw,
   listPatchEntries,
+  listPatchEntriesRaw,
   listSupportedPackages,
   resolveVersionCandidates,
+  parsePatchEntries,
+  mergePatchEntries,
+  resolveCompatibleVersionsFromRaw,
 };

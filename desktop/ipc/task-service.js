@@ -6,15 +6,14 @@ const path = require("path");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
 const { spawnCliTask } = require("./cli-connector");
-const { createRuntime } = require("../utils/runtime");
-const { hasValue, pickFirstValue, resolveAbsolutePath, safeFileName, formatError } = require("../utils/common");
-const { readTomlFile } = require("../utils/toml");
-const { toAbsoluteUrl, getHrefMatches, selectBestByVersion } = require("../utils/url");
-const morpheCli = require("../scripts/morphe-cli");
-const mpp = require("../scripts/mpp");
-const downloader = require("../scripts/download");
-const { resolveWorkspaceRoot, buildWorkspacePaths } = require("../utils/workspace");
-const PACKAGE_NAME_MAP = require("../utils/package-name-map.json");
+const { createRuntime } = require("../../utils/runtime");
+const { hasValue, pickFirstValue, resolveAbsolutePath, safeFileName, formatError } = require("../../utils/common");
+const { readTomlFile } = require("../../utils/toml");
+const { toAbsoluteUrl, getHrefMatches, selectBestByVersion } = require("../../utils/url");
+const morpheCli = require("../../scripts/morphe-cli");
+const mpp = require("../../scripts/mpp");
+const { resolveWorkspaceRoot, buildWorkspacePaths } = require("../../utils/workspace");
+const PACKAGE_NAME_MAP = require("../../utils/package-name-map.json");
 
 const MAX_IN_MEMORY_LINES = 2000;
 const TASK_STATUS_COMPLETED_MARKER = "__TASK_STATUS__:completed";
@@ -361,8 +360,9 @@ class TaskService {
     this.outputDir = this.workspacePaths.output;
     this.cacheDir = this.workspacePaths.cache;
     this.versionsCacheDir = path.join(this.cacheDir, "compatible-versions");
+    this.patchEntriesCacheDir = path.join(this.cacheDir, "patch-entries");
     this.templatesCacheDir = path.join(this.cacheDir, "app-templates");
-    this.manualOptionsCacheDir = path.join(this.cacheDir, "manual-options");
+    this.patchEntriesParserVersion = "v4";
     this.tasks = new Map();
   }
 
@@ -400,6 +400,20 @@ class TaskService {
     return crypto.createHash("sha1").update(JSON.stringify(payload)).digest("hex");
   }
 
+  parsePatchEntriesFromRawPayload(rawPayload) {
+    if (typeof rawPayload === "string") {
+      return mpp.parsePatchEntries(rawPayload).sort((a, b) => a.index - b.index);
+    }
+    if (!rawPayload || typeof rawPayload !== "object") {
+      return [];
+    }
+    const withOptions = typeof rawPayload.withOptions === "string" ? rawPayload.withOptions : "";
+    const defaults = typeof rawPayload.defaults === "string" ? rawPayload.defaults : "";
+    const withOptionsEntries = mpp.parsePatchEntries(withOptions);
+    const defaultEntries = mpp.parsePatchEntries(defaults);
+    return mpp.mergePatchEntries(withOptionsEntries, defaultEntries);
+  }
+
   createProbeContext() {
     const runtime = createRuntime({
       cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
@@ -435,152 +449,6 @@ class TaskService {
       logWarn: () => {},
       logStep: () => {},
       defaultPatchesRepo: DEFAULT_MORPHE_PATCHES_REPO,
-    };
-  }
-
-  async getManualOptions(configPathInput) {
-    const configPath = resolveInsideProject(this.projectRoot, configPathInput, "config.toml");
-    const configDir = path.dirname(configPath);
-    const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
-      cacheDir: this.workspacePaths.cache,
-      logStep: () => {},
-    });
-    const config = await readTomlFile(configPath, runtime.fileExists);
-    let morpheCliCfg = await resolveMorpheCliCfgForApiReads(
-      config["morphe-cli"] || config.morphe_cli || {},
-      configDir,
-      runtime.fileExists,
-    );
-    let patchesCfg = resolvePatchesCfgForApiReads(config.patches || {});
-    const ctx = this.createTaskContext(runtime);
-
-    const appNames = Object.keys(config).filter((name) => !RESERVED_SECTIONS.has(String(name).toLowerCase()));
-    if (appNames.length === 0) {
-      return {
-        configPath,
-        apps: [],
-      };
-    }
-
-    const jarPath = await morpheCli.resolveMorpheCliJar({
-      configDir,
-      workspaceDir: this.workspacePaths.root,
-      morpheCliCfg,
-      dryRun: false,
-      force: false,
-      ctx,
-    });
-    const jarFp = await this.getFileFingerprint(jarPath);
-
-    const apps = [];
-    for (const appName of appNames) {
-      const app = config[appName] || {};
-      const appModeText = String(app.mode || "").trim().toLowerCase();
-      if (app.mode === false || appModeText === "false") {
-        continue;
-      }
-      const apkSource = downloader.resolveApkSource(app.mode, appName);
-      if (apkSource.mode === "skip") {
-        continue;
-      }
-
-      const item = {
-        appName,
-        appMode: apkSource.mode,
-        versions: [],
-        defaultVersion: "",
-        patches: [],
-        defaultPatchIndices: [],
-        error: "",
-      };
-
-      try {
-        const patchPath = await mpp.resolvePatchFile({
-          app,
-          appName,
-          configDir,
-          workspaceDir: this.workspacePaths.root,
-          patchesCfg,
-          dryRun: false,
-          force: false,
-          ctx,
-        });
-        const patchFp = await this.getFileFingerprint(patchPath);
-        const cacheKey = this.buildCacheKey({
-          type: "manual-options-app",
-          jar: jarFp,
-          patch: patchFp,
-          appName: String(appName),
-          appMode: String(apkSource.mode),
-          packageName: String(app.package_name || app["package-name"] || "").trim().toLowerCase(),
-        });
-        const cached = await this.readCacheJson(this.manualOptionsCacheDir, cacheKey);
-
-        if (cached && Array.isArray(cached.versions) && Array.isArray(cached.patches)) {
-          item.versions = cached.versions;
-          item.patches = cached.patches;
-          item.defaultPatchIndices = cached.defaultPatchIndices || [];
-        } else {
-          const versionCandidates = apkSource.mode === "local"
-            ? [{ version: hasValue(app.ver) ? String(app.ver).trim() : null }]
-            : await mpp.resolveVersionCandidates({
-                app,
-                appName,
-                jarPath,
-                patchPath,
-                dryRun: false,
-                ctx,
-              });
-          const versions = Array.from(
-            new Set(
-              (versionCandidates || [])
-                .map((candidate) => (candidate && hasValue(candidate.version) ? String(candidate.version).trim() : ""))
-                .filter((value) => value.length > 0),
-            ),
-          );
-          const patchInfo = await mpp.listPatchEntries({
-            app,
-            appName,
-            jarPath,
-            patchPath,
-            ctx,
-          });
-          const defaultPatchIndices = patchInfo.entries.filter((entry) => entry.enabled).map((entry) => entry.index);
-          item.versions = versions;
-          item.patches = patchInfo.entries;
-          item.defaultPatchIndices = defaultPatchIndices;
-
-          await this.writeCacheJson(this.manualOptionsCacheDir, cacheKey, {
-            savedAt: new Date().toISOString(),
-            cacheType: "manual-options-app",
-            key: cacheKey,
-            jar: jarFp,
-            patch: patchFp,
-            appName: String(appName),
-            appMode: String(apkSource.mode),
-            versions,
-            patches: patchInfo.entries,
-            defaultPatchIndices,
-          });
-        }
-
-        item.defaultVersion = hasValue(app.ver)
-          ? String(app.ver).trim()
-          : (Array.isArray(item.versions) && item.versions.length > 0 ? String(item.versions[0]) : "");
-        if (!hasValue(item.defaultVersion) && Array.isArray(item.versions) && item.versions.length > 0) {
-          item.defaultVersion = String(item.versions[0]);
-        }
-      } catch (err) {
-        item.error = formatError(err);
-      }
-
-      apps.push(item);
-    }
-
-    return {
-      configPath,
-      apps,
     };
   }
 
@@ -818,6 +686,35 @@ class TaskService {
     };
   }
 
+  async listDownloadedApks() {
+    const targetDir = this.workspacePaths.downloads;
+    const legacyDir = path.join(this.projectRoot, "downloads");
+    await fsp.mkdir(targetDir, { recursive: true });
+    const primary = await collectApkFilesRecursive(targetDir).catch(() => []);
+    const legacy = path.resolve(legacyDir) === path.resolve(targetDir)
+      ? []
+      : await collectApkFilesRecursive(legacyDir).catch(() => []);
+    const seen = new Set();
+    const files = [...primary, ...legacy].filter((item) => {
+      const key = String(item.fullPath || "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return {
+      dir: targetDir,
+      legacyDir,
+      files: files.map((item) => ({
+        name: item.fileName,
+        fileName: item.fileName,
+        fullPath: item.fullPath,
+        relativePath: path.relative(targetDir, item.fullPath),
+        sizeBytes: item.sizeBytes,
+        modifiedAt: item.modifiedAt,
+      })),
+    };
+  }
+
   async deleteSourceFile(options) {
     const spec = getSourceSpec(options && options.type);
     const relativePath = String(
@@ -910,33 +807,16 @@ class TaskService {
       });
     }
 
-    let patchPath = "";
-    try {
-      patchPath = await mpp.resolvePatchFile({
-        app,
-        appName,
-        configDir,
-        workspaceDir: this.workspacePaths.root,
-        patchesCfg,
-        dryRun: false,
-        force: false,
-        ctx,
-      });
-    } catch (err) {
-      const mode = String(pickFirstValue(patchesCfg, ["mode"]) || "").trim().toLowerCase();
-      if (mode !== "local") throw err;
-      patchesCfg = { ...patchesCfg, mode: "stable" };
-      patchPath = await mpp.resolvePatchFile({
-        app,
-        appName,
-        configDir,
-        workspaceDir: this.workspacePaths.root,
-        patchesCfg,
-        dryRun: false,
-        force: false,
-        ctx,
-      });
-    }
+    const patchPath = await mpp.resolvePatchFile({
+      app,
+      appName,
+      configDir,
+      workspaceDir: this.workspacePaths.root,
+      patchesCfg,
+      dryRun: false,
+      force: false,
+      ctx,
+    });
 
     const packageName = String(app.package_name || "").trim().toLowerCase();
     const jarFp = await this.getFileFingerprint(jarPath);
@@ -948,29 +828,38 @@ class TaskService {
       packageName,
     });
     const versionsCached = await this.readCacheJson(this.versionsCacheDir, versionsCacheKey);
-    if (versionsCached && Array.isArray(versionsCached.versions)) {
+    const cachedRaw = versionsCached && typeof versionsCached.rawOutput === "string" ? versionsCached.rawOutput : "";
+    if (cachedRaw.length > 0) {
+      const compatibility = mpp.resolveCompatibleVersionsFromRaw(cachedRaw, appName, versionsCached.packageName || app.package_name || null);
       return {
         configPath,
         appName,
-        packageName: versionsCached.packageName || app.package_name || "",
-        any: !!versionsCached.any,
-        versions: versionsCached.versions,
+        packageName: compatibility.packageName || app.package_name || "",
+        patchFileName: versionsCached.patchFileName || path.basename(patchPath),
+        any: !!compatibility.any,
+        versions: Array.isArray(compatibility.versions) ? compatibility.versions : [],
         cache: { hit: true, key: versionsCacheKey },
       };
     }
 
-    const compatibility = await mpp.listCompatibleVersions({
+    const rawResult = await mpp.listCompatibleVersionsRaw({
       app,
       appName,
       jarPath,
       patchPath,
       ctx,
     });
+    const compatibility = mpp.resolveCompatibleVersionsFromRaw(
+      rawResult.rawOutput,
+      appName,
+      rawResult.packageName || app.package_name || null,
+    );
 
     const result = {
       configPath,
       appName,
       packageName: compatibility.packageName || app.package_name || "",
+      patchFileName: path.basename(patchPath),
       any: !!compatibility.any,
       versions: Array.isArray(compatibility.versions) ? compatibility.versions : [],
       cache: { hit: false, key: versionsCacheKey },
@@ -982,12 +871,127 @@ class TaskService {
       key: versionsCacheKey,
       jar: jarFp,
       patch: patchFp,
-      packageName: result.packageName,
-      any: result.any,
-      versions: result.versions,
+      patchFileName: result.patchFileName,
+      packageName: rawResult.packageName || result.packageName || "",
+      rawOutput: rawResult.rawOutput,
     });
 
     return result;
+  }
+
+  async getAppPatchEntries(options) {
+    const configPath = resolveInsideProject(
+      this.projectRoot,
+      options && options.configPath ? options.configPath : "config.toml",
+      "config.toml",
+    );
+    const configDir = path.dirname(configPath);
+    const runtime = createRuntime({
+      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
+      cacheDir: this.workspacePaths.cache,
+      logStep: () => {},
+    });
+    const config = await readTomlFile(configPath, runtime.fileExists);
+    let morpheCliCfg = await resolveMorpheCliCfgForApiReads(
+      config["morphe-cli"] || config.morphe_cli || {},
+      configDir,
+      runtime.fileExists,
+    );
+    let patchesCfg = resolvePatchesCfgForApiReads(config.patches || {});
+    const appInput = options && typeof options.app === "object" ? options.app : {};
+    const appName = String(appInput.name || "").trim() || "__app__";
+    const app = {
+      package_name: String(appInput.packageName || "").trim(),
+      mode: String(appInput.mode || "").trim(),
+    };
+    const ctx = this.createTaskContext(runtime);
+
+    let jarPath = "";
+    try {
+      jarPath = await morpheCli.resolveMorpheCliJar({
+        configDir,
+        workspaceDir: this.workspacePaths.root,
+        morpheCliCfg,
+        dryRun: false,
+        force: false,
+        ctx,
+      });
+    } catch (err) {
+      const mode = String(pickFirstValue(morpheCliCfg, ["mode"]) || "").trim().toLowerCase();
+      if (mode !== "local") throw err;
+      morpheCliCfg = { ...morpheCliCfg, mode: "stable" };
+      jarPath = await morpheCli.resolveMorpheCliJar({
+        configDir,
+        workspaceDir: this.workspacePaths.root,
+        morpheCliCfg,
+        dryRun: false,
+        force: false,
+        ctx,
+      });
+    }
+
+    const patchPath = await mpp.resolvePatchFile({
+      app,
+      appName,
+      configDir,
+      workspaceDir: this.workspacePaths.root,
+      patchesCfg,
+      dryRun: false,
+      force: false,
+      ctx,
+    });
+
+    const packageName = String(app.package_name || "").trim().toLowerCase();
+    const jarFp = await this.getFileFingerprint(jarPath);
+    const patchFp = await this.getFileFingerprint(patchPath);
+    const cacheKey = this.buildCacheKey({
+      type: "patch-entries",
+      jar: jarFp,
+      patch: patchFp,
+      packageName,
+      parser: this.patchEntriesParserVersion,
+    });
+    const cached = await this.readCacheJson(this.patchEntriesCacheDir, cacheKey);
+    const cachedRaw = cached ? cached.rawOutput : null;
+    const cachedEntries = this.parsePatchEntriesFromRawPayload(cachedRaw);
+    if (cachedEntries.length > 0) {
+      return {
+        configPath,
+        appName,
+        packageName: cached.packageName || app.package_name || "",
+        patchFileName: cached.patchFileName || path.basename(patchPath),
+        entries: cachedEntries,
+        cache: { hit: true, key: cacheKey },
+      };
+    }
+
+    const rawResult = await mpp.listPatchEntriesRaw({
+      app,
+      appName,
+      jarPath,
+      patchPath,
+      ctx,
+    });
+    const entries = this.parsePatchEntriesFromRawPayload(rawResult.rawOutput);
+    await this.writeCacheJson(this.patchEntriesCacheDir, cacheKey, {
+      savedAt: new Date().toISOString(),
+      cacheType: "patch-entries",
+      key: cacheKey,
+      jar: jarFp,
+      patch: patchFp,
+      parser: this.patchEntriesParserVersion,
+      patchFileName: path.basename(patchPath),
+      packageName: String(rawResult.packageName || app.package_name || ""),
+      rawOutput: rawResult.rawOutput,
+    });
+    return {
+      configPath,
+      appName,
+      packageName: String(rawResult.packageName || app.package_name || ""),
+      patchFileName: path.basename(patchPath),
+      entries,
+      cache: { hit: false, key: cacheKey },
+    };
   }
 
   appendTaskLine(task, stream, line) {
@@ -1414,7 +1418,6 @@ class TaskService {
       patchesOnly: !!(options && options.patchesOnly),
       dryRun: !!(options && options.dryRun),
       force: !!(options && options.force),
-      manual: !!(options && options.manual),
     };
     const persistLogs = options && Object.prototype.hasOwnProperty.call(options, "persistLogs")
       ? !!options.persistLogs
@@ -1429,7 +1432,6 @@ class TaskService {
       workspacePath,
       migrateWorkspace,
       ...modes,
-      manualPlan: options && options.manualPlan ? options.manualPlan : null,
       noTaskLog: !persistLogs,
     }, {
       onLine: ({ stream, line }) => {

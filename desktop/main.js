@@ -2,23 +2,18 @@
 
 const path = require("path");
 const fs = require("fs");
-const http = require("http");
-const { spawn } = require("child_process");
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
+const { registerIpcHandlers } = require("./ipc/handlers");
 
 const APP_CONTENT_ROOT = app.isPackaged
   ? path.join(process.resourcesPath, "app.asar")
   : path.resolve(__dirname, "..");
-const API_ENTRY = path.join(APP_CONTENT_ROOT, "web-api", "server.js");
 const WEB_DIST_DIR = path.join(APP_CONTENT_ROOT, "web", "dist");
-const API_CWD = app.isPackaged ? process.resourcesPath : APP_CONTENT_ROOT;
-const API_HOST = process.env.WEB_API_HOST || "127.0.0.1";
-const API_PORT = Number.parseInt(process.env.WEB_API_PORT || "8787", 10);
-const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
+const PRELOAD_PATH = path.join(__dirname, "preload.js");
 const DESKTOP_DEV = String(process.env.DESKTOP_DEV || "") === "1";
 const VITE_DEV_URL = process.env.VITE_DEV_URL || "http://127.0.0.1:5173";
 
-let apiProcess = null;
+let unregisterIpcHandlers = null;
 
 function fileExists(targetPath) {
   try {
@@ -27,89 +22,6 @@ function fileExists(targetPath) {
   } catch {
     return false;
   }
-}
-
-function terminateProcessTree(child) {
-  if (!child || child.killed || !child.pid) {
-    return;
-  }
-
-  if (process.platform === "win32") {
-    try {
-      spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
-        stdio: "ignore",
-        shell: false,
-      });
-      return;
-    } catch {
-      // Fallback below.
-    }
-  }
-
-  try {
-    child.kill("SIGTERM");
-  } catch {
-    // ignore
-  }
-}
-
-function startApiServer() {
-  if (!fileExists(API_ENTRY)) {
-    throw new Error(`web-api entry not found: ${API_ENTRY}`);
-  }
-  apiProcess = spawn(process.execPath, [API_ENTRY], {
-    cwd: API_CWD,
-    stdio: "inherit",
-    shell: false,
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: "1",
-      WEB_API_HOST: API_HOST,
-      WEB_API_PORT: String(API_PORT),
-      WEB_STATIC_DIR: WEB_DIST_DIR,
-    },
-  });
-
-  apiProcess.on("exit", (code) => {
-    if (code !== 0) {
-      dialog.showErrorBox("Web API Exited", `web-api process exited with code ${code}`);
-    }
-  });
-
-  apiProcess.on("error", (err) => {
-    dialog.showErrorBox("Web API Failed", `Failed to start web-api: ${err.message}`);
-  });
-}
-
-function waitForApiReady(timeoutMs = 20000) {
-  const startedAt = Date.now();
-
-  return new Promise((resolve, reject) => {
-    function probe() {
-      const req = http.get(`${API_BASE_URL}/api/health`, (res) => {
-        res.resume();
-        if (res.statusCode === 200) {
-          resolve();
-          return;
-        }
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error(`web-api health check timeout (status=${res.statusCode})`));
-          return;
-        }
-        setTimeout(probe, 300);
-      });
-
-      req.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error("web-api health check timeout"));
-          return;
-        }
-        setTimeout(probe, 300);
-      });
-    }
-
-    probe();
-  });
 }
 
 async function createMainWindow() {
@@ -122,17 +34,6 @@ async function createMainWindow() {
       app.quit();
       return;
     }
-    if (!fileExists(API_ENTRY)) {
-      dialog.showErrorBox(
-        "Missing Web API Entry",
-        `web-api/server.js not found at:\n${API_ENTRY}`,
-      );
-      app.quit();
-      return;
-    }
-
-    startApiServer();
-    await waitForApiReady();
   }
 
   const win = new BrowserWindow({
@@ -144,11 +45,46 @@ async function createMainWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      preload: PRELOAD_PATH,
+      sandbox: false,
     },
   });
 
-  await win.loadURL(DESKTOP_DEV ? VITE_DEV_URL : API_BASE_URL);
+  // DevTools shortcuts for desktop UI debugging (browser-like inspect workflow).
+  win.webContents.on("before-input-event", (_event, input) => {
+    const key = String(input.key || "").toLowerCase();
+    const withCmdOrCtrl = !!(input.control || input.meta);
+    const withShift = !!input.shift;
+    const toggleDevTools = key === "f12" || (withCmdOrCtrl && withShift && key === "i");
+    if (!toggleDevTools) return;
+    if (win.webContents.isDevToolsOpened()) {
+      win.webContents.closeDevTools();
+    } else {
+      win.webContents.openDevTools({ mode: "detach" });
+    }
+  });
+
+  win.webContents.on("context-menu", (_event, params) => {
+    const menu = Menu.buildFromTemplate([
+      {
+        label: "Inspect Element",
+        click: () => {
+          if (!win.webContents.isDevToolsOpened()) {
+            win.webContents.openDevTools({ mode: "detach" });
+          }
+          win.webContents.inspectElement(params.x, params.y);
+        },
+      },
+    ]);
+    menu.popup({ window: win });
+  });
+
+  if (DESKTOP_DEV) {
+    await win.loadURL(VITE_DEV_URL);
+    return;
+  }
+
+  await win.loadFile(path.join(WEB_DIST_DIR, "index.html"));
 }
 
 app.on("window-all-closed", () => {
@@ -158,10 +94,14 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  terminateProcessTree(apiProcess);
+  if (typeof unregisterIpcHandlers === "function") {
+    unregisterIpcHandlers();
+    unregisterIpcHandlers = null;
+  }
 });
 
 app.whenReady().then(() => {
+  unregisterIpcHandlers = registerIpcHandlers(ipcMain, APP_CONTENT_ROOT);
   createMainWindow().catch((err) => {
     dialog.showErrorBox("Desktop Startup Failed", err.message || String(err));
     app.quit();

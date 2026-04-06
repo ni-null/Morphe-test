@@ -11,7 +11,6 @@ function buildCliArgs(projectRoot, options) {
   const args = [path.join(projectRoot, "main.js"), "--config", configPath];
 
   if (options && options.morpheCliOnly) args.push("--morphe-cli");
-  if (options && options.manual) args.push("--manual");
   if (options && options.downloadOnly) args.push("--download-only");
   if (options && options.patchesOnly) args.push("--patches-only");
   if (options && options.dryRun) args.push("--dry-run");
@@ -25,17 +24,15 @@ function buildCliArgs(projectRoot, options) {
 
 function buildCliEnv(options) {
   const env = { ...process.env };
-  if (options && options.manualPlan) {
-    const raw = JSON.stringify(options.manualPlan);
-    env.MORPHE_MANUAL_PLAN_B64 = Buffer.from(raw, "utf8").toString("base64");
-  } else {
-    delete env.MORPHE_MANUAL_PLAN_B64;
-  }
+  // When desktop main process is Electron, force spawned CLI child to run in Node mode.
+  // Otherwise the child may finish script logic but keep Electron process alive, causing
+  // task status to remain "running" on the UI side.
+  env.ELECTRON_RUN_AS_NODE = "1";
   return env;
 }
 
-function createWebTaskId(now = Date.now()) {
-  return `web-${now}-${Math.random().toString(16).slice(2, 8)}`;
+function createDesktopTaskId(now = Date.now()) {
+  return `desktop-${now}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
 function wireStream(streamName, childStream, hooks) {
@@ -73,7 +70,7 @@ function wireStream(streamName, childStream, hooks) {
 }
 
 function spawnCliTask(projectRoot, options, handlers) {
-  const taskId = createWebTaskId();
+  const taskId = createDesktopTaskId();
   const args = buildCliArgs(projectRoot, options);
   const child = spawn(process.execPath, args, {
     cwd: projectRoot,

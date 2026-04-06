@@ -57,23 +57,20 @@ mode = "remote" # remote / local / false
 - Manual build and release: `.github/workflows/release.yml`
 - Scheduled build and release: `.github/workflows/scheduled-build.yml`
 
-## Optional Web Console
-This project includes an optional low-coupling web tool:
-- Frontend: `web/` (Vite + React)
-- API bridge: `web-api/` (calls CLI `main.js`, does not import patch internals)
+## Desktop App (IPC)
+Desktop UI is now Electron-only and communicates through IPC (no standalone web-api server):
+- Renderer: `web/` (Vite + React)
+- Bridge: `desktop/preload.js` + `desktop/ipc/handlers.js`
+- Core execution: still `main.js` CLI child process
 
 Commands:
-- `node ./main.js --web`
-- `npm run web:api`
-- `npm run web:ui`
-- `npm run web:dev`
 - `npm run web:build`
 - `npm run desktop:install` (install Electron-only dependencies under `desktop/`)
-- `npm run desktop:dev` (desktop dev mode: web-ui + web-api + electron, with hot reload)
+- `npm run desktop:dev` (desktop dev mode: web-ui + electron, with hot reload)
 - `npm run desktop:start` (build UI + open Electron desktop app)
 - `npm run desktop:pack` (build Windows portable exe via electron-builder)
 
-Detailed architecture: [docs/web.md](./docs/web.md)
+Detailed architecture: [docs/desktop.md](./docs/desktop.md)
 
 ## CI/CD Flow
 ```mermaid
