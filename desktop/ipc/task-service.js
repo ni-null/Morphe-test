@@ -399,6 +399,95 @@ class TaskService {
     return buildPackageMetaMap();
   }
 
+  async checkJavaVersion() {
+    return await new Promise((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      const child = spawn("java", ["-version"], {
+        shell: false,
+      });
+
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk.toString("utf8");
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString("utf8");
+      });
+
+      child.on("error", (error) => {
+        resolve({
+          nodeVersion: String(process.version || "").trim(),
+          installed: false,
+          version: "",
+          raw: "",
+          error: error && error.message ? String(error.message) : String(error || "java not found"),
+        });
+      });
+
+      child.on("close", (code) => {
+        const raw = `${stderr}${stdout}`.trim();
+        const firstLine = String(raw || "")
+          .split(/\r?\n/u)
+          .map((line) => line.trim())
+          .find(Boolean) || "";
+        const quoted = firstLine.match(/version\s+"([^"]+)"/iu);
+        const plain = firstLine.match(/openjdk\s+([0-9][^\s]*)/iu);
+        const version = quoted ? String(quoted[1] || "").trim() : plain ? String(plain[1] || "").trim() : "";
+        const installed = code === 0 && (Boolean(version) || Boolean(firstLine));
+        resolve({
+          nodeVersion: String(process.version || "").trim(),
+          installed,
+          version,
+          raw,
+          error: installed ? "" : `java exited with code ${typeof code === "number" ? code : "unknown"}`,
+        });
+      });
+    });
+  }
+
+  async openAssetsDir(kind) {
+    const key = String(kind || "").trim().toLowerCase();
+    let targetDir = "";
+    if (key === "morphe-cli") targetDir = this.workspacePaths.morpheCli;
+    if (key === "patches") targetDir = this.workspacePaths.patches;
+    if (key === "downloads" || key === "apk") targetDir = this.workspacePaths.downloads;
+    if (!targetDir) {
+      throw new Error(`Unsupported assets dir kind: ${kind}`);
+    }
+
+    await fsp.mkdir(targetDir, { recursive: true });
+
+    let command = "";
+    let args = [];
+    if (process.platform === "win32") {
+      command = "explorer";
+      args = [targetDir];
+    } else if (process.platform === "darwin") {
+      command = "open";
+      args = [targetDir];
+    } else {
+      command = "xdg-open";
+      args = [targetDir];
+    }
+
+    await new Promise((resolve, reject) => {
+      const child = spawn(command, args, {
+        stdio: "ignore",
+        detached: true,
+        shell: false,
+      });
+      child.on("error", (err) => reject(err));
+      child.unref();
+      resolve();
+    });
+
+    return {
+      opened: true,
+      kind: key,
+      path: targetDir,
+    };
+  }
+
   async readCacheJson(cacheDir, cacheKey) {
     const filePath = path.join(cacheDir, `${cacheKey}.json`);
     if (!(await fileExists(filePath))) return null;
@@ -782,6 +871,33 @@ class TaskService {
         sizeBytes: item.sizeBytes,
         modifiedAt: item.modifiedAt,
       })),
+    };
+  }
+
+  async deleteDownloadedApk(options) {
+    const fullPathRaw = String(options && options.fullPath ? options.fullPath : "").trim();
+    if (!fullPathRaw) {
+      throw new Error("fullPath is required.");
+    }
+    const fullPath = path.resolve(fullPathRaw);
+    if (!fullPath.toLowerCase().endsWith(".apk")) {
+      throw new Error("Only .apk files are supported.");
+    }
+
+    const primaryDir = path.resolve(this.workspacePaths.downloads);
+    const legacyDir = path.resolve(path.join(this.projectRoot, "downloads"));
+    const isInsidePrimary = fullPath.startsWith(`${primaryDir}${path.sep}`);
+    const isInsideLegacy = fullPath.startsWith(`${legacyDir}${path.sep}`);
+    if (!isInsidePrimary && !isInsideLegacy) {
+      throw new Error("APK path is outside downloads directory.");
+    }
+
+    await fsp.rm(fullPath, { force: true });
+    return {
+      deleted: true,
+      fullPath,
+      fileName: path.basename(fullPath),
+      dirType: isInsidePrimary ? "downloads" : "legacy-downloads",
     };
   }
 

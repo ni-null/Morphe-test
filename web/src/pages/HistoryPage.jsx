@@ -1,4 +1,4 @@
-import { Loader2, RefreshCw, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp, FolderOpen, Loader2, RefreshCw, Trash2 } from "lucide-react"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
@@ -14,11 +14,17 @@ export default function HistoryPage({
   tasks,
   selectedTaskId,
   setSelectedTaskId,
-  setTaskDetailDialogOpen,
+  taskLogs,
   formatTaskLabel,
   statusVariant,
   deletingTaskId,
+  onOpenTaskOutputDir,
+  openingTaskFolder,
 }) {
+  const toggleTaskLog = (taskId) => {
+    setSelectedTaskId(selectedTaskId === taskId ? "" : taskId)
+  }
+
   return (
     <div className='space-y-4'>
       <Card>
@@ -54,44 +60,62 @@ export default function HistoryPage({
         </CardHeader>
         <CardContent>
           <div className='grid gap-2 max-h-[520px] overflow-auto'>
-            {tasks.map((task) => (
-              <div
-                role='button'
-                tabIndex={0}
-                key={task.id}
-                className={cn("w-full rounded-md border px-3 py-2 text-left transition hover:bg-accent", selectedTaskId === task.id && "border-primary bg-primary/5")}
-                onClick={() => {
-                  setSelectedTaskId(task.id)
-                  setTaskDetailDialogOpen(true)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault()
-                    setSelectedTaskId(task.id)
-                    setTaskDetailDialogOpen(true)
-                  }
-                }}>
-                <div className='flex items-center justify-between gap-2'>
-                  <span className='text-sm'>{formatTaskLabel(task)}</span>
-                  <div className='flex items-center gap-2'>
-                    <Badge variant={statusVariant(task.status)}>{task.status || "unknown"}</Badge>
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        openConfirmDialog("delete-task", t("confirm.deleteTaskTitle"), t("confirm.deleteTaskDesc", { id: task.id }), task.id)
-                      }}
-                      disabled={deletingTaskId === task.id}
-                      title={t("history.deleteTask")}
-                      aria-label={t("history.deleteTask")}
-                      className='h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700'>
-                      {deletingTaskId === task.id ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
-                    </Button>
+            {tasks.map((task) => {
+              const isExpanded = selectedTaskId === task.id
+              const log = taskLogs[task.id] || ""
+              return (
+                <div key={task.id} className='w-full'>
+                  <div className='rounded-md border px-3 py-2'>
+                    <div className='flex items-center justify-between gap-2'>
+                      <span className='text-sm flex-1 min-w-0 break-all'>{formatTaskLabel(task)}</span>
+                      <div className='flex items-center gap-1 shrink-0'>
+                        <Badge variant={statusVariant(task.status)} className='text-xs'>{task.status || "unknown"}</Badge>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={() => toggleTaskLog(task.id)}
+                          disabled={!task.taskLogPath}
+                          title={isExpanded ? t("dialog.hideTaskLog") : t("dialog.viewTaskLog")}
+                          aria-label={isExpanded ? t("dialog.hideTaskLog") : t("dialog.viewTaskLog")}
+                          className='h-7 w-7 text-muted-foreground hover:text-foreground'>
+                          {isExpanded ? <ChevronUp className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
+                        </Button>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={() => onOpenTaskOutputDir(task.id)}
+                          disabled={openingTaskFolder}
+                          title={t("dialog.openTaskOutput")}
+                          aria-label={t("dialog.openTaskOutput")}
+                          className='h-7 w-7 text-muted-foreground hover:text-foreground'>
+                          {openingTaskFolder ? <Loader2 className='h-4 w-4 animate-spin' /> : <FolderOpen className='h-4 w-4' />}
+                        </Button>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openConfirmDialog("delete-task", t("confirm.deleteTaskTitle"), t("confirm.deleteTaskDesc", { id: task.id }), task.id)
+                          }}
+                          disabled={deletingTaskId === task.id}
+                          title={t("history.deleteTask")}
+                          aria-label={t("history.deleteTask")}
+                          className='h-7 w-7 p-0 text-red-600 hover:bg-red-50 hover:text-red-700'>
+                          {deletingTaskId === task.id ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
+                  {isExpanded && (
+                    <div className='rounded-md border border-t-0 bg-muted/30 -mt-px px-3 py-2'>
+                      <pre className='mono-box max-h-[300px] overflow-auto text-xs'>
+                        {log || t("dialog.noLog")}
+                      </pre>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </CardContent>
       </Card>

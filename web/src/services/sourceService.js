@@ -3,8 +3,10 @@ import {
   fetchAndSaveSource,
   fetchSourceVersions,
   listDownloadedApks,
+  deleteDownloadedApk,
   browseLocalApkPath,
   deleteSourceFile,
+  openAssetsDir,
 } from "../api"
 
 export {
@@ -12,7 +14,8 @@ export {
   fetchAndSaveSource,
   fetchSourceVersions,
   listDownloadedApks,
+  deleteDownloadedApk,
   browseLocalApkPath,
   deleteSourceFile,
+  openAssetsDir,
 }
-

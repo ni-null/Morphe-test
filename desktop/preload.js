@@ -1,7 +1,7 @@
 "use strict";
 
 const { contextBridge, ipcRenderer } = require("electron");
-const IPC_CHANNEL = "morphe:invoke";
+const { IPC_CHANNEL } = require("./ipc/constants");
 
 contextBridge.exposeInMainWorld("morpheDesktop", {
   invoke(method, payload) {

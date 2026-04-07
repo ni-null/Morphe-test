@@ -37,7 +37,7 @@ export default function BuildPage({
 }) {
   return (
     <>
-      <Card>
+      <Card className='border-0 shadow-sm'>
         <CardHeader>
           <CardTitle className='flex items-center gap-2'>
             <Hammer className='h-5 w-5' />
@@ -55,8 +55,8 @@ export default function BuildPage({
                       key={`build-app-enable-${app.id}`}
                       type='button'
                       className={cn(
-                        "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
-                        enabled ? "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100",
+                        "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                        enabled ? "bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "bg-white text-slate-600 hover:bg-slate-100",
                       )}
                       onClick={() => updateApp(app.id, { mode: enabled ? "false" : "remote" })}>
                       {hasText(getPackageIcon(app.packageName)) ? (
@@ -78,17 +78,16 @@ export default function BuildPage({
             </div>
 
             {isBuildRunning || buildLaunchPending || isBuildStopping ? (
-              <div className='flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm'>
+              <div className='flex items-center justify-between gap-2 rounded-md bg-primary/5 px-3 py-2 text-sm'>
                 <div className='min-w-0 flex items-center gap-2'>
                   <Loader2 className='h-5 w-5 animate-spin text-primary' />
-                  <span className='font-medium text-primary'>{t("build.progress")}</span>
-                  <span className='text-muted-foreground'>|</span>
-                  <span className='text-muted-foreground break-all'>{liveLastLine || t("build.waiting")}</span>
+                  <span className='min-w-0 truncate text-muted-foreground'>{liveLastLine || t("build.waiting")}</span>
                 </div>
                 <div className='flex items-center gap-2'>
                   <Button
-                    variant='outline'
+                    variant='ghost'
                     size='icon'
+                    className='border-0 bg-white/70 hover:bg-white'
                     onClick={() => setLogDialogOpen(true)}
                     disabled={!liveTaskId}
                     aria-label={t("build.openCurrentLog")}
@@ -96,10 +95,10 @@ export default function BuildPage({
                     <FileText className='h-5 w-5' />
                   </Button>
                   <Button
-                    variant='outline'
+                    variant='ghost'
                     onClick={onStopBuildTask}
                     disabled={!liveTaskId || (!isBuildRunning && !isBuildStopping)}
-                    className='border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700'>
+                    className='border-0 bg-white/70 text-red-600 hover:bg-red-50 hover:text-red-700'>
                     <Square className='h-5 w-5' />
                     {isBuildStopping ? t("build.stopping") : t("build.stop")}
                   </Button>
@@ -116,7 +115,7 @@ export default function BuildPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className='border-0 shadow-sm'>
         <CardHeader className='space-y-3'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <div>
@@ -160,7 +159,7 @@ export default function BuildPage({
             <div className='space-y-2'>
               <div className='flex flex-wrap items-center justify-between gap-2'>
                 <Label htmlFor='raw-toml'>{t("settings.rawInput")}</Label>
-                <Button variant='outline' onClick={() => setRawConfigInput(generatedToml)} disabled={isBusy}>
+                <Button variant='ghost' className='border-0 bg-slate-100 text-slate-800 hover:bg-slate-200' onClick={() => setRawConfigInput(generatedToml)} disabled={isBusy}>
                   {t("settings.applyForm")}
                 </Button>
               </div>
@@ -177,11 +176,11 @@ export default function BuildPage({
               <section className='space-y-2'>
                 <h3 className='text-base font-semibold'>{t("settings.source")}</h3>
                 <div className='flex flex-wrap gap-2'>
-                  <Button variant='outline' className='h-11 px-5 text-base' onClick={() => setMorpheSettingsOpen(true)} disabled={isBusy}>
+                  <Button variant='ghost' className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200' onClick={() => setMorpheSettingsOpen(true)} disabled={isBusy}>
                     <Settings2 className='h-6 w-6' />
                     morphe-cli
                   </Button>
-                  <Button variant='outline' className='h-11 px-5 text-base' onClick={() => setPatchesSettingsOpen(true)} disabled={isBusy}>
+                  <Button variant='ghost' className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200' onClick={() => setPatchesSettingsOpen(true)} disabled={isBusy}>
                     <Package className='h-6 w-6' />
                     patches
                   </Button>
@@ -191,7 +190,7 @@ export default function BuildPage({
               <section className='space-y-3 pt-1'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <h3 className='text-base font-semibold'>{t("settings.apps")}</h3>
-                  <Button variant='outline' className='h-11 px-5 text-base' onClick={appendApp} disabled={isBusy || appTemplateLoading}>
+                  <Button variant='ghost' className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200' onClick={appendApp} disabled={isBusy || appTemplateLoading}>
                     {appTemplateLoading ? <Loader2 className='h-6 w-6 animate-spin' /> : <Plus className='h-6 w-6' />}
                     {t("settings.loadTemplate")}
                   </Button>

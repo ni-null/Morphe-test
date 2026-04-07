@@ -821,8 +821,6 @@ async function resolveVersionCandidates(params) {
 
 module.exports = {
   resolvePatchFile,
-  probePatchBundle,
-  listCompatibleVersions,
   listCompatibleVersionsRaw,
   listPatchEntries,
   listPatchEntriesRaw,

@@ -11,6 +11,17 @@ function hasValue(value) {
 
 function getDefaultWorkspaceRoot(env = process.env) {
   const appName = "MorphePatcher";
+
+  // Portable mode: use relative workspace folder next to executable/source
+  const isPortable = env.MORPHE_PORTABLE === "1" ||
+    env.PORTABLE_EXECUTABLE_DIR ||
+    env.DESKTOP_DEV ||
+    (process.resourcesPath && process.resourcesPath);
+  if (isPortable) {
+    const exeDir = env.PORTABLE_EXECUTABLE_DIR || process.cwd();
+    return path.resolve(exeDir, "workspace");
+  }
+
   if (process.platform === "win32") {
     const base = hasValue(env.LOCALAPPDATA)
       ? String(env.LOCALAPPDATA).trim()

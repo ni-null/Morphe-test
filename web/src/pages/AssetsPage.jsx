@@ -1,8 +1,8 @@
-import { Check, Download, FolderGit2, Loader2, Package, Settings2, Trash2 } from "lucide-react"
+import { Check, ChevronDown, Download, FolderGit2, FolderOpen, Loader2, Package, Settings2, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "../components/ui/select"
@@ -141,6 +141,7 @@ export default function AssetsPage({
   setMorpheSourceRepoDraft,
   onSelectMorpheSourceRepo,
   onAddMorpheSourceRepo,
+  onDeleteMorpheSourceRepo,
   morpheSourceVersion,
   setMorpheSourceVersion,
   morpheSourceVersions,
@@ -158,6 +159,7 @@ export default function AssetsPage({
   setPatchesSourceRepoDraft,
   onSelectPatchesSourceRepo,
   onAddPatchesSourceRepo,
+  onDeletePatchesSourceRepo,
   patchesSourceVersion,
   setPatchesSourceVersion,
   patchesSourceVersions,
@@ -172,10 +174,14 @@ export default function AssetsPage({
   downloadedApkDir,
   downloadedApkLoading,
   loadDownloadedApkFiles,
+  onOpenAssetsDir,
+  apkDeletePath,
 }) {
   const [addRepoDialogType, setAddRepoDialogType] = useState("")
-  const [morpheRepoMode, setMorpheRepoMode] = useState("remote")
-  const [patchesRepoMode, setPatchesRepoMode] = useState("remote")
+  const [addRepoBusy, setAddRepoBusy] = useState(false)
+  const [apkExpandedByGroup, setApkExpandedByGroup] = useState({})
+  const [morpheRepoMode, setMorpheRepoMode] = useState("local")
+  const [patchesRepoMode, setPatchesRepoMode] = useState("local")
   const apkGroups = groupApksByPackage(downloadedApkFiles)
   const sectionMetaMap = buildSectionToPackageMetaMap(packageNameMetaMap)
   const addRepoOpen = addRepoDialogType === "morphe" || addRepoDialogType === "patches"
@@ -192,21 +198,36 @@ export default function AssetsPage({
   )
   const morpheMixedItems = buildSourceMixedItems(morpheSourceVersions, morpheLocalFiles, morpheSourceRepo)
   const patchesMixedItems = buildSourceMixedItems(patchesSourceVersions, patchesLocalFiles, patchesSourceRepo)
+  const manageRepoOptions = addRepoDialogType === "patches" ? patchesSourceRepoOptions : morpheSourceRepoOptions
+  const isPatchesManageDialog = addRepoDialogType === "patches"
+  const defaultRepo = isPatchesManageDialog ? "MorpheApp/morphe-patches" : "MorpheApp/morphe-cli"
 
-  function onConfirmAddRepo() {
+  async function onConfirmAddRepo() {
+    if (addRepoBusy) return
+    setAddRepoBusy(true)
     if (addRepoDialogType === "morphe") {
-      onAddMorpheSourceRepo()
-      if (hasText(morpheSourceRepoDraft)) {
+      const ok = await onAddMorpheSourceRepo()
+      if (ok) {
         setAddRepoDialogType("")
       }
+      setAddRepoBusy(false)
       return
     }
     if (addRepoDialogType === "patches") {
-      onAddPatchesSourceRepo()
-      if (hasText(patchesSourceRepoDraft)) {
+      const ok = await onAddPatchesSourceRepo()
+      if (ok) {
         setAddRepoDialogType("")
       }
     }
+    setAddRepoBusy(false)
+  }
+
+  function onDeleteManagedRepo(repo) {
+    if (isPatchesManageDialog) {
+      onDeletePatchesSourceRepo(repo)
+      return
+    }
+    onDeleteMorpheSourceRepo(repo)
   }
 
   function onChangeMorpheRepo(value) {
@@ -253,19 +274,23 @@ export default function AssetsPage({
 
   return (
     <div className='space-y-4'>
-      <Card>
+      <Card className='border-0 bg-white shadow-sm'>
             <CardHeader className='py-3'>
-              <CardTitle className='text-base flex items-center gap-2'>
+              <CardTitle className='text-base flex items-center justify-between gap-2'>
                 <span className='inline-flex items-center gap-2'>
                   <Settings2 className='h-4 w-4' />
                   {t("assets.cli")}
                 </span>
+                <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("morphe-cli")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+                  <FolderOpen className='h-4 w-4' />
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-3'>
-              <div className='space-y-1'>
+              <div className='flex items-center gap-2'>
+                  <div className='min-w-0 flex-1'>
                   <Select value={morpheRepoMode === "local" ? MORPHE_LOCAL_SOURCE_VALUE : hasText(morpheSourceRepo) ? morpheSourceRepo : "MorpheApp/morphe-cli"} onValueChange={onChangeMorpheRepo}>
-                    <SelectTrigger>
+                    <SelectTrigger className='border-0 bg-slate-50 hover:bg-slate-50'>
                       <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
                         <FolderGit2 className='h-3.5 w-3.5' />
                         {t("source.repo")}
@@ -277,15 +302,16 @@ export default function AssetsPage({
                       <SelectSeparator />
                       {morpheSourceRepoOptions.map((repo) => (
                         <SelectItem key={`assets-morphe-repo-${repo}`} value={repo} className='h-8'>
-                          {repo}
+                          <span className='min-w-0 truncate'>{repo}</span>
                         </SelectItem>
                       ))}
                       <SelectSeparator />
                       <SelectItem value={MORPHE_ADD_CUSTOM_REPO_VALUE} className='h-8'>
-                        + {t("source.addCustomRepo")}
+                        + {t("source.manageRepo")}
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  </div>
               </div>
               {morpheRepoMode === "local" ? (
                 <div className='space-y-2'>
@@ -294,7 +320,7 @@ export default function AssetsPage({
                   ) : (
                     <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
                       {morpheLocalFiles.map((file) => (
-                        <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1'>
+                        <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1'>
                           <div className='min-w-0'>
                             <div className='flex min-w-0 items-center gap-2 text-sm'>
                               <span className='shrink-0 font-medium'>{file.name}</span>
@@ -328,7 +354,7 @@ export default function AssetsPage({
                         return (
                           <div
                             key={`assets-morphe-mixed-${item.key}`}
-                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/60" : ""}`}
+                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/70" : ""}`}
                             onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : undefined}>
                             <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                               {item.hasLocal ? (
@@ -354,19 +380,23 @@ export default function AssetsPage({
             </CardContent>
       </Card>
 
-      <Card>
+      <Card className='border-0 bg-white shadow-sm'>
             <CardHeader className='py-3'>
-              <CardTitle className='text-base flex items-center gap-2'>
+              <CardTitle className='text-base flex items-center justify-between gap-2'>
                 <span className='inline-flex items-center gap-2'>
                   <Package className='h-4 w-4' />
                   {t("assets.patches")}
                 </span>
+                <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("patches")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+                  <FolderOpen className='h-4 w-4' />
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-3'>
-              <div className='space-y-1'>
+              <div className='flex items-center gap-2'>
+                  <div className='min-w-0 flex-1'>
                   <Select value={patchesRepoMode === "local" ? PATCHES_LOCAL_SOURCE_VALUE : hasText(patchesSourceRepo) ? patchesSourceRepo : "MorpheApp/morphe-patches"} onValueChange={onChangePatchesRepo}>
-                    <SelectTrigger>
+                    <SelectTrigger className='border-0 bg-slate-50 hover:bg-slate-50'>
                       <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
                         <FolderGit2 className='h-3.5 w-3.5' />
                         {t("source.repo")}
@@ -378,15 +408,16 @@ export default function AssetsPage({
                       <SelectSeparator />
                       {patchesSourceRepoOptions.map((repo) => (
                         <SelectItem key={`assets-patches-repo-${repo}`} value={repo} className='h-8'>
-                          {repo}
+                          <span className='min-w-0 truncate'>{repo}</span>
                         </SelectItem>
                       ))}
                       <SelectSeparator />
                       <SelectItem value={PATCHES_ADD_CUSTOM_REPO_VALUE} className='h-8'>
-                        + {t("source.addCustomRepo")}
+                        + {t("source.manageRepo")}
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  </div>
               </div>
               {patchesRepoMode === "local" ? (
                 <div className='space-y-2'>
@@ -395,7 +426,7 @@ export default function AssetsPage({
                   ) : (
                     <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
                       {patchesLocalFiles.map((file) => (
-                        <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1'>
+                        <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1'>
                           <div className='min-w-0'>
                             <div className='flex min-w-0 items-center gap-2 text-sm'>
                               <span className='shrink-0 font-medium'>{file.name}</span>
@@ -429,7 +460,7 @@ export default function AssetsPage({
                         return (
                           <div
                             key={`assets-patches-mixed-${item.key}`}
-                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/60" : ""}`}
+                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/70" : ""}`}
                             onClick={canDownload ? () => onDownloadPatchesItem(item.fileName) : undefined}>
                             <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                               {item.hasLocal ? (
@@ -455,15 +486,17 @@ export default function AssetsPage({
             </CardContent>
       </Card>
 
-      <Card>
+      <Card className='border-0 bg-white shadow-sm'>
             <CardHeader className='py-3'>
               <CardTitle className='text-base flex items-center justify-between gap-2'>
                 <span className='inline-flex items-center gap-2'>
                   <Package className='h-4 w-4' />
                   {t("assets.apk")}
                 </span>
+                <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("downloads")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+                  <FolderOpen className='h-4 w-4' />
+                </Button>
               </CardTitle>
-              <p className='text-xs text-muted-foreground break-all'>{downloadedApkDir}</p>
             </CardHeader>
             <CardContent className='space-y-3'>
               {apkGroups.length === 0 ? (
@@ -475,24 +508,48 @@ export default function AssetsPage({
                     const icon = hasText(meta?.icon) ? String(meta.icon) : ""
                     const packageName = hasText(meta?.packageName) ? String(meta.packageName) : t("assets.unknownPackage")
                     const title = hasText(meta?.label) ? String(meta.label) : `[${groupKey}]`
+                    const key = String(groupKey || "__unknown__")
+                    const expanded = apkExpandedByGroup[key] === true
                     return (
-                      <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-md border bg-background p-3'>
-                        <div className='flex items-center gap-2'>
-                          {hasText(icon) ? <img src={icon} alt={title} className='h-6 w-6 rounded-sm object-contain' /> : null}
-                          <p className='text-sm font-semibold break-all'>{title}</p>
-                        </div>
-                        <p className='text-xs text-muted-foreground break-all'>{packageName}</p>
-                        <div className='space-y-1'>
-                          {files.map((file) => (
-                            <div key={`apk-file-${file.fullPath}`} className='flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2'>
-                              <div className='flex min-w-0 items-center gap-2 text-sm'>
-                                <span className='shrink-0'>{file.name}</span>
-                                <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{file.relativePath}</span>
+                      <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-md bg-slate-50 p-2'>
+                        <button
+                          type='button'
+                          className='flex h-10 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left hover:bg-slate-100'
+                          onClick={() => {
+                            setApkExpandedByGroup((prev) => ({
+                              ...prev,
+                              [key]: !expanded,
+                            }))
+                          }}>
+                          {hasText(icon) ? <img src={icon} alt={title} className='h-5 w-5 rounded-sm object-contain' /> : null}
+                          <span className='min-w-0 truncate text-sm font-semibold'>{title}</span>
+                          <span className='min-w-0 truncate text-sm text-muted-foreground'>{packageName}</span>
+                          <span className='ml-auto shrink-0 text-xs text-muted-foreground'>{t("assets.versionCount", { count: files.length })}</span>
+                          <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+                        </button>
+                        {expanded ? (
+                          <div className='space-y-1'>
+                            {files.map((file) => (
+                              <div key={`apk-file-${file.fullPath}`} className='flex items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5'>
+                                <span className='min-w-0 flex-1 truncate text-sm'>{file.name}</span>
+                                <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
+                                <button
+                                  type='button'
+                                  className='inline-flex h-5 w-5 items-center justify-center rounded-sm text-red-600 hover:bg-red-50 hover:text-red-700'
+                                  onClick={() => openConfirmDialog("delete-apk-file", t("confirm.deleteApkTitle"), t("confirm.deleteApkDesc", { path: file.relativePath }), file)}
+                                  aria-label={t("confirm.deleteApkTitle")}
+                                  title={t("confirm.deleteApkTitle")}
+                                  disabled={String(apkDeletePath || "") === String(file.fullPath || "")}>
+                                  {String(apkDeletePath || "") === String(file.fullPath || "") ? (
+                                    <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                                  ) : (
+                                    <Trash2 className='h-3.5 w-3.5' />
+                                  )}
+                                </button>
                               </div>
-                              <span className='whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     )
                   })}
@@ -504,36 +561,62 @@ export default function AssetsPage({
       <Dialog open={addRepoOpen} onOpenChange={(open) => (!open ? setAddRepoDialogType("") : null)}>
         <DialogContent className='max-w-md'>
           <DialogHeader>
-            <DialogTitle>{t("source.addCustomRepo")}</DialogTitle>
+            <DialogTitle>{t("source.manageRepo")}</DialogTitle>
           </DialogHeader>
-          <div className='space-y-2'>
-            <Label htmlFor='assets-add-repo-input'>{t("source.repo")}</Label>
-            <Input
-              id='assets-add-repo-input'
-              placeholder={t("source.customRepoPlaceholder")}
-              value={addRepoDraft}
-              onChange={(event) => {
-                if (addRepoDialogType === "patches") {
-                  setPatchesSourceRepoDraft(event.target.value)
-                } else {
-                  setMorpheSourceRepoDraft(event.target.value)
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return
-                event.preventDefault()
-                onConfirmAddRepo()
-              }}
-            />
+          <div className='space-y-3'>
+            <div className='space-y-2'>
+              <Label>{t("source.customRepos")}</Label>
+              <div className='assets-scroll max-h-40 space-y-2 overflow-y-auto pr-1'>
+                {manageRepoOptions.map((repo) => {
+                  const isDefault = String(repo || "").trim().toLowerCase() === String(defaultRepo || "").trim().toLowerCase()
+                  return (
+                    <div key={`assets-manage-repo-${repo}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1'>
+                      <span className='min-w-0 truncate text-sm'>{repo}</span>
+                      {isDefault ? null : (
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          className='h-6 w-6 shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700'
+                          onClick={() => onDeleteManagedRepo(repo)}
+                          aria-label={t("source.deleteCustomRepo")}
+                          title={t("source.deleteCustomRepo")}>
+                          <Trash2 className='h-3.5 w-3.5' />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='assets-add-repo-input'>{t("source.addCustomRepo")}</Label>
+              <div className='flex items-center gap-2'>
+                <Input
+                  id='assets-add-repo-input'
+                  className='flex-1'
+                  placeholder={t("source.customRepoPlaceholder")}
+                  value={addRepoDraft}
+                  disabled={addRepoBusy}
+                  onChange={(event) => {
+                    if (addRepoDialogType === "patches") {
+                      setPatchesSourceRepoDraft(event.target.value)
+                    } else {
+                      setMorpheSourceRepoDraft(event.target.value)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return
+                    event.preventDefault()
+                    onConfirmAddRepo()
+                  }}
+                />
+                <Button onClick={onConfirmAddRepo} disabled={!hasText(addRepoDraft) || addRepoBusy} className='shrink-0'>
+                  {addRepoBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
+                  {t("action.add")}
+                </Button>
+              </div>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setAddRepoDialogType("")}>
-              {t("action.cancel")}
-            </Button>
-            <Button onClick={onConfirmAddRepo} disabled={!hasText(addRepoDraft)}>
-              {t("action.add")}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

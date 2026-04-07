@@ -6,8 +6,6 @@ function resolveNext(prev, next) {
 
 export const useDialogStore = create((set) => ({
   logDialogOpen: false,
-  historyLogDialogOpen: false,
-  taskDetailDialogOpen: false,
   configPathDialogOpen: false,
   appSettingsOpen: false,
   appSettingsId: "",
@@ -24,8 +22,6 @@ export const useDialogStore = create((set) => ({
   confirmDialogBusy: false,
 
   setLogDialogOpen: (value) => set((state) => ({ logDialogOpen: resolveNext(state.logDialogOpen, value) })),
-  setHistoryLogDialogOpen: (value) => set((state) => ({ historyLogDialogOpen: resolveNext(state.historyLogDialogOpen, value) })),
-  setTaskDetailDialogOpen: (value) => set((state) => ({ taskDetailDialogOpen: resolveNext(state.taskDetailDialogOpen, value) })),
   setConfigPathDialogOpen: (value) => set((state) => ({ configPathDialogOpen: resolveNext(state.configPathDialogOpen, value) })),
   setAppSettingsOpen: (value) => set((state) => ({ appSettingsOpen: resolveNext(state.appSettingsOpen, value) })),
   setAppSettingsId: (value) => set((state) => ({ appSettingsId: resolveNext(state.appSettingsId, value) })),

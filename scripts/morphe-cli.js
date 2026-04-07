@@ -256,5 +256,4 @@ async function probeMorpheCliJar(params) {
 
 module.exports = {
   resolveMorpheCliJar,
-  probeMorpheCliJar,
 };

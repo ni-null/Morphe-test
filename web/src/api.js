@@ -19,6 +19,10 @@ export async function fetchPackageMap() {
   return requestIpc("fetchPackageMap")
 }
 
+export async function checkJavaVersion() {
+  return requestIpc("checkJavaVersion")
+}
+
 export async function saveConfig({ path, content }) {
   return requestIpc("saveConfig", { path, content })
 }
@@ -125,6 +129,14 @@ export async function listDownloadedApks() {
     }
     throw new Error("Desktop 主程式版本過舊，請完全重啟桌面端（含 Electron 主程序）後再試。")
   }
+}
+
+export async function deleteDownloadedApk(fullPath) {
+  return requestIpc("deleteDownloadedApk", { fullPath: String(fullPath || "") })
+}
+
+export async function openAssetsDir(kind) {
+  return requestIpc("openAssetsDir", { kind: String(kind || "") })
 }
 
 export async function browseLocalApkPath(defaultPath = "") {

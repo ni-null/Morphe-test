@@ -10,6 +10,7 @@ import {
   deleteTask,
   deleteAllTasks,
   clearAllCache,
+  checkJavaVersion,
 } from "../api"
 
 export {
@@ -24,5 +25,5 @@ export {
   deleteTask,
   deleteAllTasks,
   clearAllCache,
+  checkJavaVersion,
 }
-

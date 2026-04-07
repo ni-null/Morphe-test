@@ -1,15 +1,15 @@
 [morphe-cli]
 mode = "stable"
 patches_repo = "MorpheApp/morphe-cli"
-repo_options = ["MorpheApp/morphe-cli", "1212"]
+repo_options = ["MorpheApp/morphe-cli"]
 
 [patches]
 mode = "local"
-path = "C:\\Users\\S00129\\AppData\\Local\\MorphePatcher\\workspace\\patches\\MorpheApp@morphe-patches\\patches-1.23.0-dev.3.mpp"
+path = "C:\\Users\\S00129\\Desktop\\code\\yt-patcher-apk-builder\\workspace\\patches\\MorpheApp@morphe-patches\\patches-1.23.0-dev.8.mpp"
 repo_options = ["MorpheApp/morphe-patches"]
 
 [youtube]
-mode = "remote"
+mode = false
 package_name = "com.google.android.youtube"
 patches_mode = "custom"
 patches = ["Hide ads", "Video ads", "Copy video URL", "Remove viewer discretion dialog", "Disable double tap actions", "Double tap to seek", "Downloads", "Disable haptic feedback", "Loop video", "Reload video", "Seekbar", "Swipe controls", "Custom branding", "Change header", "Hide video action buttons", "Navigation bar", "Hide player overlay buttons", "Captions", "Disable layout updates", "Change form factor", "Ambient mode", "Hide autoplay preview", "Hide end screen cards", "Hide end screen suggested video", "Hide layout components", "Hide info cards", "Hide player flyout menu components", "Disable player popup panels", "Hide related video overlay", "Hide related videos", "Disable rolling number animations", "Hide Shorts components", "Disable sign in to TV popup", "Hide timestamp", "Miniplayer", "Override YouTube Music actions", "Exit fullscreen mode", "Open videos fullscreen", "Custom player overlay opacity", "Return YouTube Dislike", "Shorts autoplay", "Disable Shorts resuming on startup", "Open Shorts in regular player", "SponsorBlock", "Spoof app version", "Change start page", "Theme", "Alternative thumbnails", "Bypass image region restrictions", "Remove background playback restrictions", "Enable debugging", "Spoof device dimensions", "Check watch history domain name resolution", "GmsCore support", "Bypass URL redirects", "Open links externally", "Sanitize sharing links", "Disable QUIC protocol", "Open system share sheet", "Disable DRC audio", "Force original audio", "Disable video codecs", "Video quality", "Playback speed"]
@@ -22,7 +22,13 @@ mode = false
 package_name = "com.google.android.apps.youtube.music"
 patches_mode = "custom"
 patches = ["Hide music video ads", "Permanent repeat", "Custom branding", "Change header", "Hide buttons", "Hide category bar", "Change miniplayer color", "Enable forced miniplayer", "Miniplayer previous and next buttons", "Navigation bar", "Hide 'Get Music Premium'", "Change start page", "Theme", "Bypass certificate checks", "Disable DRC audio", "Enable exclusive audio playback", "Force original audio", "Remove background playback restrictions", "Enable debugging", "Check watch history domain name resolution", "GmsCore support", "Sanitize sharing links", "Disable QUIC protocol"]
+apkmirror-dlurl = "https://www.apkmirror.com/apk/google-inc/youtube-music"
+uptodown-dlurl = "https://youtube-music.en.uptodown.com/android"
+archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.google.android.apps.youtube.music/"
 
 [reddit]
-mode = false
+mode = "remote"
 package_name = "com.reddit.frontpage"
+apkmirror-dlurl = "https://www.apkmirror.com/apk/redditinc/reddit/"
+uptodown-dlurl = "https://reddit-official-app.en.uptodown.com/android"
+archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.reddit.frontpage/"

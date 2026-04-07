@@ -4,8 +4,7 @@ const fsp = require("fs").promises;
 const path = require("path");
 const { BrowserWindow, dialog } = require("electron");
 const { TaskService } = require("./task-service");
-
-const IPC_CHANNEL = "morphe:invoke";
+const { IPC_CHANNEL } = require("./constants");
 
 function resolveProjectPath(projectRoot, maybeRelativePath, fallbackRelative) {
   const selected = maybeRelativePath && String(maybeRelativePath).trim()
@@ -43,6 +42,10 @@ function createInvokeHandler(projectRoot) {
 
     if (method === "fetchPackageMap") {
       return { map: taskService.getPackageMetaMap() };
+    }
+
+    if (method === "checkJavaVersion") {
+      return await taskService.checkJavaVersion();
     }
 
     if (method === "saveConfig") {
@@ -186,6 +189,16 @@ function createInvokeHandler(projectRoot) {
 
     if (method === "listDownloadedApks") {
       return await taskService.listDownloadedApks();
+    }
+
+    if (method === "deleteDownloadedApk") {
+      return await taskService.deleteDownloadedApk({
+        fullPath: payload.fullPath,
+      });
+    }
+
+    if (method === "openAssetsDir") {
+      return await taskService.openAssetsDir(payload.kind);
     }
 
     if (method === "browseLocalApkPath") {

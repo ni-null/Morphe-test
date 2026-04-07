@@ -1,0 +1,80 @@
+.background {
+  position: relative;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* 暈染容器，使用 blur 柔化所有色塊 */
+.blobs {
+  position: absolute;
+  inset: 0;
+  filter: blur(60px);
+  opacity: 0.85;
+}
+
+/* 淡藍色 blob */
+.blob-blue {
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #c8d8f8 0%,
+    transparent 70%
+  );
+  top: -80px;
+  left: -60px;
+  animation: blob1 9s ease-in-out infinite;
+}
+
+/* 淡紫色 blob */
+.blob-purple {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #d8c8f4 0%,
+    transparent 70%
+  );
+  top: -40px;
+  right: -50px;
+  animation: blob2 11s ease-in-out infinite;
+}
+
+/* 淡紅/粉色 blob */
+.blob-red {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #f8c8d0 0%,
+    transparent 70%
+  );
+  bottom: -60px;
+  left: 20%;
+  animation: blob3 8s ease-in-out infinite;
+}
+
+/* ---- Keyframe 動畫 ---- */
+@keyframes blob1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(40px, -30px) scale(1.1); }
+  66%       { transform: translate(-20px, 20px) scale(0.95); }
+}
+
+@keyframes blob2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(-50px, 20px) scale(1.05); }
+  66%       { transform: translate(30px, -40px) scale(1.1); }
+}
+
+@keyframes blob3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(20px, 40px) scale(0.9); }
+  66%       { transform: translate(-30px, -20px) scale(1.08); }
+}

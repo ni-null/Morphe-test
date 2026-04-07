@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Archive, Database, Globe, Hammer } from "lucide-react"
 import { fetchConfig, fetchPackageMap, saveConfig, fetchAppTemplates } from "./services/configService"
 import { fetchAppCompatibleVersions, fetchAppPatchOptions } from "./services/appService"
-import { deleteSourceFile, fetchAndSaveSource, fetchSourceVersions, listDownloadedApks, browseLocalApkPath, listSourceFiles } from "./services/sourceService"
-import { clearAllCache, deleteAllTasks, deleteTask, fetchTask, fetchTaskLog, fetchTaskArtifacts, listTasks, openTaskArtifactDir, openTaskOutputDir, startTask, stopTask } from "./services/taskService"
+import { deleteSourceFile, deleteDownloadedApk, fetchAndSaveSource, fetchSourceVersions, listDownloadedApks, browseLocalApkPath, listSourceFiles, openAssetsDir } from "./services/sourceService"
+import { checkJavaVersion, clearAllCache, deleteAllTasks, deleteTask, fetchTask, fetchTaskLog, fetchTaskArtifacts, listTasks, openTaskArtifactDir, openTaskOutputDir, startTask, stopTask } from "./services/taskService"
 import { Button } from "./components/ui/button"
 import { Label } from "./components/ui/label"
 import { Separator } from "./components/ui/separator"
@@ -669,10 +669,6 @@ function App() {
   const setLocale = useUiStore((state) => state.setLocale)
   const logDialogOpen = useDialogStore((state) => state.logDialogOpen)
   const setLogDialogOpen = useDialogStore((state) => state.setLogDialogOpen)
-  const historyLogDialogOpen = useDialogStore((state) => state.historyLogDialogOpen)
-  const setHistoryLogDialogOpen = useDialogStore((state) => state.setHistoryLogDialogOpen)
-  const taskDetailDialogOpen = useDialogStore((state) => state.taskDetailDialogOpen)
-  const setTaskDetailDialogOpen = useDialogStore((state) => state.setTaskDetailDialogOpen)
   const configPathDialogOpen = useDialogStore((state) => state.configPathDialogOpen)
   const setConfigPathDialogOpen = useDialogStore((state) => state.setConfigPathDialogOpen)
   const appSettingsOpen = useDialogStore((state) => state.appSettingsOpen)
@@ -698,7 +694,7 @@ function App() {
   const [tasks, setTasks] = useState([])
   const [selectedTaskId, setSelectedTaskId] = useState("")
   const [selectedTask, setSelectedTask] = useState(null)
-  const [taskLog, setTaskLog] = useState("")
+  const [taskLogs, setTaskLogs] = useState({})
   const [taskArtifacts, setTaskArtifacts] = useState([])
   const [taskOutputDir, setTaskOutputDir] = useState("")
   const [deletingAllTasks, setDeletingAllTasks] = useState(false)
@@ -762,7 +758,15 @@ function App() {
   const [downloadedApkFiles, setDownloadedApkFiles] = useState([])
   const [downloadedApkDir, setDownloadedApkDir] = useState("")
   const [downloadedApkLoading, setDownloadedApkLoading] = useState(false)
+  const [apkDeletePath, setApkDeletePath] = useState("")
   const [packageMetaMap, setPackageMetaMap] = useState(() => (defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}))
+  const [javaEnv, setJavaEnv] = useState({
+    loading: false,
+    nodeVersion: "",
+    installed: null,
+    version: "",
+    error: "",
+  })
 
   const [isBusy, setIsBusy] = useState(false)
   const [message, setSidebarMessage] = useState("")
@@ -1077,6 +1081,17 @@ function App() {
     }
   }
 
+  async function onOpenAssetsDir(kind) {
+    const target = String(kind || "").trim()
+    if (!target) return
+    try {
+      const data = await openAssetsDir(target)
+      setMessage(t("msg.opened", { path: data?.path || target }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    }
+  }
+
   async function onBrowseAppLocalApkPath(app) {
     if (!app || !app.id) return
     try {
@@ -1144,6 +1159,28 @@ async function refreshTasks() {
       setMessage(error.message || String(error))
     } finally {
       setIsBusy(false)
+    }
+  }
+
+  async function loadJavaEnvironment() {
+    setJavaEnv((prev) => ({ ...prev, loading: true, error: "" }))
+    try {
+      const data = await checkJavaVersion()
+      setJavaEnv({
+        loading: false,
+        nodeVersion: String(data?.nodeVersion || "").trim(),
+        installed: data?.installed === true,
+        version: String(data?.version || "").trim(),
+        error: String(data?.error || "").trim(),
+      })
+    } catch (error) {
+      setJavaEnv({
+        loading: false,
+        nodeVersion: "",
+        installed: false,
+        version: "",
+        error: error?.message || String(error),
+      })
     }
   }
 
@@ -1216,15 +1253,34 @@ async function refreshTasks() {
     }
   }
 
-  function onAddMorpheSourceRepo() {
+  async function validateSourceRepoExists(type, repo) {
+    const targetType = String(type || "").trim()
+    const targetRepo = String(repo || "").trim()
+    if (!targetType || !targetRepo) return false
+    try {
+      await fetchSourceVersions({
+        type: targetType,
+        repo: targetRepo,
+      })
+      return true
+    } catch (error) {
+      setMessage(error.message || String(error))
+      return false
+    }
+  }
+
+  async function onAddMorpheSourceRepo() {
     const repo = String(morpheSourceRepoDraft || "").trim()
-    if (!repo) return
+    if (!repo) return false
+    const exists = await validateSourceRepoExists("morphe-cli", repo)
+    if (!exists) return false
     const nextOptions = mergeRepoOptions(morpheSourceRepoOptions, repo, DEFAULT_MORPHE_SOURCE_REPO)
     setMorpheSourceRepoOptions(nextOptions)
     setMorpheSourceRepo(repo)
     updateConfigSection("morpheCli", { repoOptions: nextOptions })
     loadMorpheSourceVersions(repo)
     setMorpheSourceRepoDraft("")
+    return true
   }
 
   function onSelectMorpheSourceRepo(value) {
@@ -1287,15 +1343,18 @@ async function refreshTasks() {
     }
   }
 
-  function onAddPatchesSourceRepo() {
+  async function onAddPatchesSourceRepo() {
     const repo = String(patchesSourceRepoDraft || "").trim()
-    if (!repo) return
+    if (!repo) return false
+    const exists = await validateSourceRepoExists("patches", repo)
+    if (!exists) return false
     const nextOptions = mergeRepoOptions(patchesSourceRepoOptions, repo, DEFAULT_PATCHES_SOURCE_REPO)
     setPatchesSourceRepoOptions(nextOptions)
     setPatchesSourceRepo(repo)
     updateConfigSection("patches", { repoOptions: nextOptions })
     loadPatchesSourceVersions(repo)
     setPatchesSourceRepoDraft("")
+    return true
   }
 
   function onSelectPatchesSourceRepo(value) {
@@ -1386,6 +1445,21 @@ async function refreshTasks() {
       setMessage(error.message || String(error))
     } finally {
       setPatchesDeleteName("")
+    }
+  }
+
+  async function onDeleteDownloadedApkFile(file) {
+    const fullPath = String(file?.fullPath || "").trim()
+    if (!fullPath) return
+    setApkDeletePath(fullPath)
+    try {
+      await deleteDownloadedApk(fullPath)
+      await loadDownloadedApkFiles()
+      setMessage(t("msg.deleted", { name: String(file?.name || file?.fileName || fullPath) }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setApkDeletePath("")
     }
   }
 
@@ -1585,7 +1659,11 @@ async function refreshTasks() {
           if (!selected) {
             setSelectedTaskId("")
             setSelectedTask(null)
-            setTaskLog("")
+            setTaskLogs((prev) => {
+              const next = { ...prev }
+              delete next[selectedTaskId]
+              return next
+            })
             setTaskArtifacts([])
             setTaskOutputDir("")
             return
@@ -1594,7 +1672,11 @@ async function refreshTasks() {
         } else if (isNotFoundError(taskRes.reason)) {
           setSelectedTaskId("")
           setSelectedTask(null)
-          setTaskLog("")
+          setTaskLogs((prev) => {
+            const next = { ...prev }
+            delete next[selectedTaskId]
+            return next
+          })
           setTaskArtifacts([])
           setTaskOutputDir("")
           return
@@ -1603,7 +1685,7 @@ async function refreshTasks() {
         }
 
         if (logRes.status === "fulfilled") {
-          setTaskLog(String(logRes.value?.content || ""))
+          setTaskLogs((prev) => ({ ...prev, [selectedTaskId]: String(logRes.value?.content || "") }))
         }
         if (artifactsRes.status === "fulfilled") {
           setTaskArtifacts(Array.isArray(artifactsRes.value?.artifacts) ? artifactsRes.value.artifacts : [])
@@ -1614,7 +1696,11 @@ async function refreshTasks() {
         if (isNotFoundError(error)) {
           setSelectedTaskId("")
           setSelectedTask(null)
-          setTaskLog("")
+          setTaskLogs((prev) => {
+            const next = { ...prev }
+            delete next[selectedTaskId]
+            return next
+          })
           setTaskArtifacts([])
           setTaskOutputDir("")
           return
@@ -1768,6 +1854,8 @@ async function refreshTasks() {
         await onDeleteMorpheFile(payload)
       } else if (action === "delete-patches-file") {
         await onDeletePatchesFile(payload)
+      } else if (action === "delete-apk-file") {
+        await onDeleteDownloadedApkFile(payload)
       } else if (action === "delete-task") {
         await onDeleteTask(String(payload || ""))
       } else if (action === "delete-all-tasks") {
@@ -1864,6 +1952,10 @@ async function refreshTasks() {
     loadAppLocalApkFiles(editingApp)
   }, [appSettingsOpen, editingApp?.id, editingApp?.mode])
 
+  useEffect(() => {
+    loadJavaEnvironment()
+  }, [])
+
   const navItems = [
     { key: NAV_BUILD, label: t("nav.build"), icon: Hammer },
     { key: NAV_ASSETS, label: t("nav.assets"), icon: Database },
@@ -1899,7 +1991,7 @@ async function refreshTasks() {
 
   return (
     <div className='shell-layout'>
-      <aside className='left-panel space-y-4'>
+      <aside className='left-panel flex flex-col gap-4'>
         <div>
           <h1 className='text-lg font-semibold'>Morphe Console</h1>
           <p className='text-sm text-muted-foreground'>{t("sidebar.subtitle")}</p>
@@ -1924,28 +2016,38 @@ async function refreshTasks() {
           })}
         </nav>
 
-        <Separator />
-        <div className='space-y-2'>
-          <Label className='text-xs text-muted-foreground inline-flex items-center gap-1.5'>
-            <Globe className='h-3.5 w-3.5' />
-            {t("sidebar.language")}
-          </Label>
-          <Select value={locale} onValueChange={setLocale}>
-            <SelectTrigger className='h-9'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SUPPORTED_LOCALES.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className='mt-auto space-y-3'>
+          <Separator />
+          <div className='space-y-2 rounded-md bg-slate-100/80 p-2.5'>
+            <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='inline-flex items-center gap-1.5 text-muted-foreground'>
+                <span className={`h-2 w-2 rounded-full ${javaEnv.loading ? "bg-slate-300" : javaEnv.installed ? "bg-emerald-400/80" : "bg-red-400/80"}`} />
+                {t("sidebar.javaVersion")}
+              </span>
+              <span className='font-medium'>
+                {javaEnv.loading ? t("sidebar.checking") : javaEnv.installed ? hasText(javaEnv.version) ? javaEnv.version : "OK" : t("sidebar.notInstalled")}
+              </span>
+            </div>
+          </div>
+          <div className='space-y-1'>
+            <Select value={locale} onValueChange={setLocale}>
+              <SelectTrigger className='h-9'>
+                <span className='inline-flex items-center gap-2 text-xs text-muted-foreground'>
+                  <Globe className='h-3.5 w-3.5' />
+                </span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUPPORTED_LOCALES.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {hasText(message) ? <p className='text-xs text-muted-foreground break-words'>{message}</p> : null}
         </div>
-
-        <Separator />
-        {hasText(message) ? <p className='text-xs text-muted-foreground break-words'>{message}</p> : null}
       </aside>
 
       <main className='main-panel space-y-4'>
@@ -1993,6 +2095,7 @@ async function refreshTasks() {
             setMorpheSourceRepoDraft={setMorpheSourceRepoDraft}
             onSelectMorpheSourceRepo={onSelectMorpheSourceRepo}
             onAddMorpheSourceRepo={onAddMorpheSourceRepo}
+            onDeleteMorpheSourceRepo={onDeleteMorpheSourceRepo}
             morpheSourceVersion={morpheSourceVersion}
             setMorpheSourceVersion={setMorpheSourceVersion}
             morpheSourceVersions={morpheSourceVersions}
@@ -2010,6 +2113,7 @@ async function refreshTasks() {
             setPatchesSourceRepoDraft={setPatchesSourceRepoDraft}
             onSelectPatchesSourceRepo={onSelectPatchesSourceRepo}
             onAddPatchesSourceRepo={onAddPatchesSourceRepo}
+            onDeletePatchesSourceRepo={onDeletePatchesSourceRepo}
             patchesSourceVersion={patchesSourceVersion}
             setPatchesSourceVersion={setPatchesSourceVersion}
             patchesSourceVersions={patchesSourceVersions}
@@ -2024,6 +2128,8 @@ async function refreshTasks() {
             downloadedApkDir={downloadedApkDir}
             downloadedApkLoading={downloadedApkLoading}
             loadDownloadedApkFiles={loadDownloadedApkFiles}
+            onOpenAssetsDir={onOpenAssetsDir}
+            apkDeletePath={apkDeletePath}
           />
         ) : null}
 
@@ -2038,10 +2144,12 @@ async function refreshTasks() {
             tasks={tasks}
             selectedTaskId={selectedTaskId}
             setSelectedTaskId={setSelectedTaskId}
-            setTaskDetailDialogOpen={setTaskDetailDialogOpen}
+            taskLogs={taskLogs}
             formatTaskLabel={formatTaskLabel}
             statusVariant={statusVariant}
             deletingTaskId={deletingTaskId}
+            onOpenTaskOutputDir={onOpenSelectedTaskOutputDir}
+            openingTaskFolder={openingTaskFolder}
           />
         ) : null}
 
@@ -2054,20 +2162,6 @@ async function refreshTasks() {
           statusVariant={statusVariant}
           liveLastLine={liveLastLine}
           liveTaskLog={liveTaskLog}
-          historyLogDialogOpen={historyLogDialogOpen}
-          setHistoryLogDialogOpen={setHistoryLogDialogOpen}
-          selectedTaskId={selectedTaskId}
-          taskLog={taskLog}
-          taskDetailDialogOpen={taskDetailDialogOpen}
-          setTaskDetailDialogOpen={setTaskDetailDialogOpen}
-          taskOutputDir={taskOutputDir}
-          selectedTask={selectedTask}
-          onOpenSelectedTaskOutputDir={onOpenSelectedTaskOutputDir}
-          openingTaskFolder={openingTaskFolder}
-          taskArtifacts={taskArtifacts}
-          formatBytes={formatBytes}
-          onOpenArtifactDir={onOpenArtifactDir}
-          openingArtifactPath={openingArtifactPath}
         />
 
         <ConfigPathDialog open={configPathDialogOpen} onOpenChange={setConfigPathDialogOpen} t={t} configPath={configPath} setConfigPath={setConfigPath} />

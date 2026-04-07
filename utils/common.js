@@ -15,12 +15,6 @@ function pickFirstValue(table, keys) {
   return null;
 }
 
-function assertRequiredField(table, fieldName, contextName) {
-  if (!table || !hasValue(table[fieldName])) {
-    throw new Error(`[${contextName}] missing required field: ${fieldName}`);
-  }
-}
-
 function resolveAbsolutePath(pathValue, baseDir) {
   if (!pathValue || !String(pathValue).trim()) {
     throw new Error("Path value is empty.");
@@ -42,7 +36,6 @@ function formatError(err) {
 module.exports = {
   hasValue,
   pickFirstValue,
-  assertRequiredField,
   resolveAbsolutePath,
   safeFileName,
   formatError,
