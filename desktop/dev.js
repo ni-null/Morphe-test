@@ -45,12 +45,35 @@ function shutdown(signal) {
   shuttingDown = true;
   // eslint-disable-next-line no-console
   console.log(`\nReceived ${signal}, shutting down desktop dev stack...`);
-  if (desktop && !desktop.killed) desktop.kill("SIGTERM");
-  if (ui && !ui.killed) ui.kill("SIGTERM");
+  
+  const killProcess = (proc) => {
+    if (!proc || proc.killed) return;
+    try {
+      if (process.platform === "win32") {
+        // On Windows, use taskkill to ensure child processes are also terminated
+        const { execSync } = require("child_process");
+        execSync(`taskkill /pid ${proc.pid} /t /f`, { stdio: "ignore" });
+      } else {
+        proc.kill("SIGTERM");
+      }
+    } catch (err) {
+      // Process may already be dead
+    }
+  };
+  
+  if (desktop) killProcess(desktop);
+  if (ui) killProcess(ui);
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("exit", () => {
+  if (!shuttingDown) {
+    // Emergency cleanup if process exits unexpectedly
+    if (desktop && !desktop.killed) desktop.kill("SIGKILL");
+    if (ui && !ui.killed) ui.kill("SIGKILL");
+  }
+});
 
 for (const [label, child] of [["web-ui", ui], ["desktop", desktop]]) {
   child.on("exit", (code) => {

@@ -30,7 +30,6 @@ export default function BuildPage({
   setMorpheSettingsOpen,
   setPatchesSettingsOpen,
   appendApp,
-  appTemplateLoading,
   apps,
   updateApp,
   getPackageIcon,
@@ -181,9 +180,9 @@ export default function BuildPage({
                 <Pencil className='h-4 w-4' />
                 {t("settings.path")}
               </Button>
-              <Button variant='ghost' className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200' onClick={loadConfig} disabled={isBusy}>
-                <RefreshCw className='h-4 w-4' />
-                {t("settings.reload")}
+              <Button variant='ghost' className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200' onClick={appendApp} disabled={isBusy}>
+                <Plus className='h-6 w-6' />
+                {t("settings.loadPresets")}
               </Button>
             </div>
           </div>
@@ -225,10 +224,6 @@ export default function BuildPage({
               <section className='space-y-3 pt-1'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <h3 className='text-base font-semibold'>{t("settings.apps")}</h3>
-                  <Button variant='ghost' className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200' onClick={appendApp} disabled={isBusy || appTemplateLoading}>
-                    {appTemplateLoading ? <Loader2 className='h-6 w-6 animate-spin' /> : <Plus className='h-6 w-6' />}
-                    {t("settings.loadTemplate")}
-                  </Button>
                 </div>
 
                 <div className='flex flex-wrap gap-2'>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Archive, Database, Globe, Hammer } from "lucide-react"
-import { fetchConfig, fetchPackageMap, saveConfig, fetchAppTemplates } from "./services/configService"
+import { fetchConfig, fetchPackageMap, saveConfig } from "./services/configService"
 import { fetchAppCompatibleVersions, fetchAppPatchOptions } from "./services/appService"
 import { deleteSourceFile, deleteDownloadedApk, fetchAndSaveSource, fetchSourceVersions, listDownloadedApks, browseLocalApkPath, listSourceFiles, openAssetsDir } from "./services/sourceService"
 import { checkJavaVersion, clearAllCache, deleteAllTasks, deleteTask, fetchTask, fetchTaskLog, fetchTaskArtifacts, listTasks, openTaskArtifactDir, openTaskOutputDir, startTask, stopTask } from "./services/taskService"
@@ -16,6 +16,7 @@ import BuildPage from "./pages/BuildPage"
 import HistoryPage from "./pages/HistoryPage"
 import AssetsPage from "./pages/AssetsPage"
 import defaultPackageMetaMap from "../json/package-name-meta.json"
+import appPresets from "../json/app-presets.json"
 import AppSettingsDialog from "./features/app/AppSettingsDialog"
 import ConfigPathDialog from "./features/dialogs/ConfigPathDialog"
 import ConfirmActionDialog from "./features/dialogs/ConfirmActionDialog"
@@ -786,7 +787,6 @@ function App() {
   const [patchesSourceVersion, setPatchesSourceVersion] = useState("")
   const [patchesSourceLoading, setPatchesSourceLoading] = useState(false)
   const [patchesSourceDownloading, setPatchesSourceDownloading] = useState(false)
-  const [appTemplateLoading, setAppTemplateLoading] = useState(false)
   const [appVersionOptions, setAppVersionOptions] = useState({})
   const [appVersionLoadingId, setAppVersionLoadingId] = useState("")
   const [appPatchOptions, setAppPatchOptions] = useState({})
@@ -801,6 +801,7 @@ function App() {
   const [downloadedApkDir, setDownloadedApkDir] = useState("")
   const [downloadedApkLoading, setDownloadedApkLoading] = useState(false)
   const [apkDeletePath, setApkDeletePath] = useState("")
+  const [pendingOverwriteApps, setPendingOverwriteApps] = useState([])
   const [packageMetaMap, setPackageMetaMap] = useState(() => (defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}))
   const [javaEnv, setJavaEnv] = useState({
     loading: false,
@@ -863,95 +864,153 @@ function App() {
     }))
   }
 
-  async function appendApp() {
-    setAppTemplateLoading(true)
+  function appendApp() {
     try {
-      const data = await fetchAppTemplates(configPath)
-      const templates = Array.isArray(data?.templates) ? data.templates : []
+      const templates = Array.isArray(appPresets) ? appPresets : []
       if (templates.length === 0) {
         setMessage(t("msg.noTemplates"))
         return
       }
 
-      let addedCount = 0
-      let renamedCount = 0
-      setConfigForm((prev) => {
-        const existingSections = new Set(
-          prev.apps
-            .map((app) =>
-              String(app.name || "")
-                .trim()
-                .toLowerCase(),
-            )
-            .filter(Boolean),
-        )
-        const existingPackages = new Set(
-          prev.apps
-            .map((app) =>
-              String(app.packageName || "")
-                .trim()
-                .toLowerCase(),
-            )
-            .filter(Boolean),
-        )
-        const packageIndexByKey = new Map(
-          prev.apps
-            .map((app, index) => [
-              String(app.packageName || "")
-                .trim()
-                .toLowerCase(),
-              index,
-            ])
-            .filter(([key]) => key.length > 0),
-        )
-        const nextApps = [...prev.apps]
+      const existingPackages = new Map(
+        configForm.apps
+          .map((app, index) => [
+            String(app.packageName || "")
+              .trim()
+              .toLowerCase(),
+            index,
+          ])
+          .filter(([key]) => key.length > 0),
+      )
 
-        for (const template of templates) {
-          const packageName = normalizeTemplatePackageName(template)
-          const section = hasText(template?.section) ? String(template.section).trim() : packageToSectionName(packageName)
-          const label = hasText(template?.label) ? String(template.label).trim() : resolveDisplayName(packageName, section)
-          const packageKey = packageName.toLowerCase()
-          const sectionKey = section.toLowerCase()
+      const overwriteApps = []
+      const newAppNames = []
 
-          const existingIndex = packageIndexByKey.get(packageKey)
-          if (Number.isInteger(existingIndex)) {
-            const existingApp = nextApps[existingIndex]
-            const currentSection = String(existingApp?.name || "").trim()
-            const currentSectionKey = currentSection.toLowerCase()
-            if (hasText(section) && currentSectionKey !== sectionKey && !existingSections.has(sectionKey)) {
-              nextApps[existingIndex] = {
-                ...existingApp,
-                name: section,
-                displayName: hasText(label) ? label : existingApp.displayName,
-              }
-              existingSections.delete(currentSectionKey)
-              existingSections.add(sectionKey)
-              renamedCount += 1
-            }
-            continue
-          }
-          if (existingSections.has(sectionKey)) {
-            continue
-          }
-          nextApps.push(createEmptyApp(section, { packageName, displayName: label }))
-          packageIndexByKey.set(packageKey, nextApps.length - 1)
-          existingPackages.add(packageKey)
-          existingSections.add(sectionKey)
-          addedCount += 1
+      for (const template of templates) {
+        const packageName = String(template?.packageName || "").trim()
+        const packageKey = packageName.toLowerCase()
+        const label = hasText(template?.displayName) ? String(template.displayName).trim() : resolveDisplayName(packageName, "")
+
+        if (existingPackages.has(packageKey)) {
+          overwriteApps.push({ template, label })
+        } else {
+          newAppNames.push(label)
         }
+      }
 
-        return addedCount > 0 || renamedCount > 0 ? { ...prev, apps: nextApps } : prev
-      })
-
-      if (addedCount > 0 || renamedCount > 0) {
-        setMessage(t("msg.templatesLoaded", { added: addedCount, renamed: renamedCount }))
+      if (overwriteApps.length > 0) {
+        const appNames = overwriteApps.map((item) => item.label).join(", ")
+        setPendingOverwriteApps(overwriteApps)
+        openConfirmDialog(
+          "overwrite-preset-apps",
+          t("dialog.overwriteApps"),
+          `${t("msg.appsExistConfirm", { apps: appNames })}`,
+        )
       } else {
-        setMessage(t("msg.allTemplatesLoaded"))
+        // Only new apps, add them directly
+        doAppendNewApps(templates)
       }
     } catch (error) {
       setMessage(error.message || String(error))
-    } finally {
-      setAppTemplateLoading(false)
+    }
+  }
+
+  function doAppendNewApps(templates) {
+    let addedCount = 0
+    setConfigForm((prev) => {
+      const existingSections = new Set(
+        prev.apps
+          .map((app) =>
+            String(app.name || "")
+              .trim()
+              .toLowerCase(),
+          )
+          .filter(Boolean),
+      )
+      const packageIndexByKey = new Map(
+        prev.apps
+          .map((app, index) => [
+            String(app.packageName || "")
+              .trim()
+              .toLowerCase(),
+            index,
+          ])
+          .filter(([key]) => key.length > 0),
+      )
+      const nextApps = [...prev.apps]
+
+      for (const template of templates) {
+        const packageName = String(template?.packageName || "").trim()
+        const section = hasText(template?.name) ? String(template.name).trim() : packageToSectionName(packageName)
+        const label = hasText(template?.displayName) ? String(template.displayName).trim() : resolveDisplayName(packageName, section)
+        const sectionKey = section.toLowerCase()
+        const packageKey = packageName.toLowerCase()
+
+        if (packageIndexByKey.has(packageKey)) continue
+        if (existingSections.has(sectionKey)) continue
+
+        const newApp = createEmptyApp(section, { packageName, displayName: label })
+        if (template?.mode) newApp.mode = String(template.mode)
+        if (template?.patches_mode) newApp.patchesMode = String(template.patches_mode).replace(/_/g, "-")
+        if (Array.isArray(template?.patches)) newApp.patches = template.patches
+        if (template?.apkmirror_dlurl) newApp.apkmirrorDlurl = String(template.apkmirror_dlurl)
+        if (template?.uptodown_dlurl) newApp.uptodownDlurl = String(template.uptodown_dlurl)
+        if (template?.archive_dlurl) newApp.archiveDlurl = String(template.archive_dlurl)
+        nextApps.push(newApp)
+        existingSections.add(sectionKey)
+        addedCount += 1
+      }
+
+      return addedCount > 0 ? { ...prev, apps: nextApps } : prev
+    })
+
+    if (addedCount > 0) {
+      setMessage(t("msg.templatesLoaded", { added: addedCount, renamed: 0 }))
+    } else {
+      setMessage(t("msg.allTemplatesLoaded"))
+    }
+  }
+
+  function doOverwriteApps() {
+    let updatedCount = 0
+    setConfigForm((prev) => {
+      const packageIndexByKey = new Map(
+        prev.apps
+          .map((app, index) => [
+            String(app.packageName || "")
+              .trim()
+              .toLowerCase(),
+            index,
+          ])
+          .filter(([key]) => key.length > 0),
+      )
+      const nextApps = [...prev.apps]
+
+      for (const { template } of pendingOverwriteApps) {
+        const packageName = String(template?.packageName || "").trim()
+        const packageKey = packageName.toLowerCase()
+        const existingIndex = packageIndexByKey.get(packageKey)
+
+        if (Number.isInteger(existingIndex)) {
+          const existingApp = nextApps[existingIndex]
+          const updatedApp = { ...existingApp }
+          if (template?.mode) updatedApp.mode = String(template.mode)
+          if (template?.patches_mode) updatedApp.patchesMode = String(template.patches_mode).replace(/_/g, "-")
+          if (Array.isArray(template?.patches) && template.patches.length > 0) updatedApp.patches = template.patches
+          if (template?.apkmirror_dlurl) updatedApp.apkmirrorDlurl = String(template.apkmirror_dlurl)
+          if (template?.uptodown_dlurl) updatedApp.uptodownDlurl = String(template.uptodown_dlurl)
+          if (template?.archive_dlurl) updatedApp.archiveDlurl = String(template.archive_dlurl)
+          nextApps[existingIndex] = updatedApp
+          updatedCount += 1
+        }
+      }
+
+      return updatedCount > 0 ? { ...prev, apps: nextApps } : prev
+    })
+
+    setPendingOverwriteApps([])
+    if (updatedCount > 0) {
+      setMessage(t("msg.appsOverwritten", { count: updatedCount }))
     }
   }
 
@@ -1904,6 +1963,8 @@ async function refreshTasks() {
         await onDeleteAllTasks()
       } else if (action === "clear-all-cache") {
         await onClearAllCache()
+      } else if (action === "overwrite-preset-apps") {
+        doOverwriteApps()
       }
       setConfirmDialog((prev) => ({ ...prev, open: false }))
     } finally {
@@ -2208,7 +2269,6 @@ async function refreshTasks() {
             setMorpheSettingsOpen={setMorpheSettingsOpen}
             setPatchesSettingsOpen={setPatchesSettingsOpen}
             appendApp={appendApp}
-            appTemplateLoading={appTemplateLoading}
             apps={configForm.apps}
             updateApp={updateApp}
             getPackageIcon={getPackageIcon}
