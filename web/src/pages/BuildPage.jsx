@@ -80,17 +80,16 @@ export default function BuildPage({
                       )}
                       onClick={() => updateApp(app.id, { mode: enabled ? "false" : "remote" })}>
                       {hasText(getPackageIcon(app.packageName)) ? (
-                        <img src={getPackageIcon(app.packageName)} alt={app.displayName || app.name || "app"} className='h-5 w-5 rounded-sm object-contain' />
+                        <img
+                          src={getPackageIcon(app.packageName)}
+                          alt={app.displayName || app.name || "app"}
+                          className='h-5 w-5 rounded-sm object-contain'
+                        />
                       ) : (
                         <Smartphone className='h-5 w-5 text-muted-foreground' />
                       )}
                       <span className='font-medium'>{app.displayName || app.name || "app-name"}</span>
-                      <span
-                        className={cn(
-                          "inline-block h-2.5 w-2.5 rounded-full",
-                          enabled ? "bg-emerald-500" : "bg-slate-300",
-                        )}
-                      />
+                      <span className={cn("inline-block h-2.5 w-2.5 rounded-full", enabled ? "bg-emerald-500" : "bg-slate-300")} />
                     </button>
                   )
                 })}
@@ -107,9 +106,7 @@ export default function BuildPage({
                       className={cn(
                         "h-3.5 w-3.5 cursor-help rounded-[3px] transition-colors",
                         stage.state === "active" && "bg-sky-500 animate-pulse [animation-duration:0.7s]",
-                        stage.state === "done"
-                          ? "bg-sky-200 hover:bg-sky-300"
-                          : "bg-slate-200 hover:bg-slate-300",
+                        stage.state === "done" ? "bg-sky-200 hover:bg-sky-300" : "bg-slate-200 hover:bg-slate-300",
                       )}
                     />
                   ))}
@@ -180,7 +177,11 @@ export default function BuildPage({
                 <Pencil className='h-4 w-4' />
                 {t("settings.path")}
               </Button>
-              <Button variant='ghost' className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200' onClick={appendApp} disabled={isBusy}>
+              <Button
+                variant='ghost'
+                className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200'
+                onClick={appendApp}
+                disabled={isBusy}>
                 <Plus className='h-6 w-6' />
                 {t("settings.loadPresets")}
               </Button>
@@ -193,7 +194,11 @@ export default function BuildPage({
             <div className='space-y-2'>
               <div className='flex flex-wrap items-center justify-between gap-2'>
                 <Label htmlFor='raw-toml'>{t("settings.rawInput")}</Label>
-                <Button variant='ghost' className='border-0 bg-slate-100 text-slate-800 hover:bg-slate-200' onClick={() => setRawConfigInput(generatedToml)} disabled={isBusy}>
+                <Button
+                  variant='ghost'
+                  className='border-0 bg-slate-100 text-slate-800 hover:bg-slate-200'
+                  onClick={() => setRawConfigInput(generatedToml)}
+                  disabled={isBusy}>
                   {t("settings.applyForm")}
                 </Button>
               </div>
@@ -210,11 +215,19 @@ export default function BuildPage({
               <section className='space-y-2'>
                 <h3 className='text-base font-semibold'>{t("settings.source")}</h3>
                 <div className='flex flex-wrap gap-2'>
-                  <Button variant='ghost' className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200' onClick={() => setMorpheSettingsOpen(true)} disabled={isBusy}>
+                  <Button
+                    variant='ghost'
+                    className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200'
+                    onClick={() => setMorpheSettingsOpen(true)}
+                    disabled={isBusy}>
                     <Settings2 className='h-6 w-6' />
                     morphe-cli
                   </Button>
-                  <Button variant='ghost' className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200' onClick={() => setPatchesSettingsOpen(true)} disabled={isBusy}>
+                  <Button
+                    variant='ghost'
+                    className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200'
+                    onClick={() => setPatchesSettingsOpen(true)}
+                    disabled={isBusy}>
                     <Package className='h-6 w-6' />
                     patches
                   </Button>

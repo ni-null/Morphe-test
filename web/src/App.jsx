@@ -2,8 +2,30 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Archive, Database, Globe, Hammer } from "lucide-react"
 import { fetchConfig, fetchPackageMap, saveConfig } from "./services/configService"
 import { fetchAppCompatibleVersions, fetchAppPatchOptions } from "./services/appService"
-import { deleteSourceFile, deleteDownloadedApk, fetchAndSaveSource, fetchSourceVersions, listDownloadedApks, browseLocalApkPath, listSourceFiles, openAssetsDir } from "./services/sourceService"
-import { checkJavaVersion, clearAllCache, deleteAllTasks, deleteTask, fetchTask, fetchTaskLog, fetchTaskArtifacts, listTasks, openTaskArtifactDir, openTaskOutputDir, startTask, stopTask } from "./services/taskService"
+import {
+  deleteSourceFile,
+  deleteDownloadedApk,
+  fetchAndSaveSource,
+  fetchSourceVersions,
+  listDownloadedApks,
+  browseLocalApkPath,
+  listSourceFiles,
+  openAssetsDir,
+} from "./services/sourceService"
+import {
+  checkJavaVersion,
+  clearAllCache,
+  deleteAllTasks,
+  deleteTask,
+  fetchTask,
+  fetchTaskLog,
+  fetchTaskArtifacts,
+  listTasks,
+  openTaskArtifactDir,
+  openTaskOutputDir,
+  startTask,
+  stopTask,
+} from "./services/taskService"
 import { Button } from "./components/ui/button"
 import { Label } from "./components/ui/label"
 import { Separator } from "./components/ui/separator"
@@ -47,10 +69,20 @@ const MORPHE_REMOTE_DEV_VALUE = "__MORPHE_REMOTE_DEV__"
 const PATCHES_REMOTE_STABLE_VALUE = "__PATCHES_REMOTE_STABLE__"
 const PATCHES_REMOTE_DEV_VALUE = "__PATCHES_REMOTE_DEV__"
 const PACKAGE_NAME_LABELS = Object.fromEntries(
-  Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [String(packageName || "").trim().toLowerCase(), String(meta?.label || "").trim()]),
+  Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [
+    String(packageName || "")
+      .trim()
+      .toLowerCase(),
+    String(meta?.label || "").trim(),
+  ]),
 )
 const PACKAGE_NAME_ICON_FALLBACKS = Object.fromEntries(
-  Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [String(packageName || "").trim().toLowerCase(), String(meta?.icon || "").trim()]),
+  Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [
+    String(packageName || "")
+      .trim()
+      .toLowerCase(),
+    String(meta?.icon || "").trim(),
+  ]),
 )
 const BUILD_STAGE_DEFINITIONS = [
   { key: "morpheCli", labelKey: "build.stage.morpheCli" },
@@ -72,9 +104,7 @@ function hasText(value) {
 
 function mergeRepoOptions(prev, candidate, baseRepo = "") {
   const list = Array.isArray(prev) ? prev : []
-  const merged = list
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
+  const merged = list.map((item) => String(item || "").trim()).filter(Boolean)
   const repo = String(candidate || "").trim()
   if (repo && !merged.some((item) => item.toLowerCase() === repo.toLowerCase())) {
     merged.push(repo)
@@ -95,7 +125,9 @@ function extractVersionPartsFromName(name) {
     .map((item) => Number(item))
     .map((item) => (Number.isFinite(item) ? item : 0))
   while (numbers.length < 5) numbers.push(0)
-  const tag = String(match[2] || "").trim().toLowerCase()
+  const tag = String(match[2] || "")
+    .trim()
+    .toLowerCase()
   const tagNum = Number(match[3] || 0)
   const tagRankMap = { dev: 1, alpha: 2, beta: 3, rc: 4 }
   const tagRank = tag ? tagRankMap[tag] || 0 : 5
@@ -423,20 +455,13 @@ function appFromToml(name, section) {
   if (Array.isArray(rawPatches)) {
     app.patches = rawPatches.map((item) => String(item || "").trim()).filter(Boolean)
   } else {
-  app.patches = String(rawPatches || "")
+    app.patches = String(rawPatches || "")
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean)
   }
 
-  app.localApkCustomPath = readTomlString(section, [
-    "local_apk",
-    "local-apk",
-    "source_apk",
-    "source-apk",
-    "apk_path",
-    "apk-path",
-  ])
+  app.localApkCustomPath = readTomlString(section, ["local_apk", "local-apk", "source_apk", "source-apk", "apk_path", "apk-path"])
   app.localApkSelectedPath = ""
 
   app.apkmirrorDlurl = readTomlString(section, ["apkmirror-dlurl", "apkmirror_dlurl"])
@@ -615,7 +640,10 @@ function getPatchTranslation(locale, name, description) {
   if (!hasText(rawName)) return { name: rawName, description: rawDescription }
 
   const entries = getPatchTranslationsForLocale(locale)
-  const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim()
+  const normalize = (value) =>
+    String(value || "")
+      .replace(/\s+/g, " ")
+      .trim()
   const normalizedName = normalize(rawName)
   const normalizedDescription = normalize(rawDescription)
   const exactKey = JSON.stringify([rawName, rawDescription])
@@ -675,7 +703,8 @@ function detectBuildStageIndexFromLine(line) {
     .toLowerCase()
   if (!text) return -1
 
-  const matchesJavaBuild = (text.includes("java") && (text.includes("-jar") || text.includes("list-patches") || text.includes("patch"))) || text.includes("running java")
+  const matchesJavaBuild =
+    (text.includes("java") && (text.includes("-jar") || text.includes("list-patches") || text.includes("patch"))) || text.includes("running java")
   if (matchesJavaBuild) return 3
 
   const matchesDownloadApk =
@@ -687,18 +716,11 @@ function detectBuildStageIndexFromLine(line) {
     text.includes("下載並保存成功")
   if (matchesDownloadApk) return 2
 
-  const matchesPatches =
-    text.includes("patch file") ||
-    text.includes("auto patch bundle") ||
-    text.includes("patches") ||
-    text.includes(" patch ")
+  const matchesPatches = text.includes("patch file") || text.includes("auto patch bundle") || text.includes("patches") || text.includes(" patch ")
   if (matchesPatches) return 1
 
   const matchesMorpheCli =
-    text.includes("morphe-cli") ||
-    text.includes("morphe cli") ||
-    text.includes("locked morphe-cli") ||
-    text.includes("auto morphe-cli")
+    text.includes("morphe-cli") || text.includes("morphe cli") || text.includes("locked morphe-cli") || text.includes("auto morphe-cli")
   if (matchesMorpheCli) return 0
 
   return -1
@@ -802,7 +824,9 @@ function App() {
   const [downloadedApkLoading, setDownloadedApkLoading] = useState(false)
   const [apkDeletePath, setApkDeletePath] = useState("")
   const [pendingOverwriteApps, setPendingOverwriteApps] = useState([])
-  const [packageMetaMap, setPackageMetaMap] = useState(() => (defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}))
+  const [packageMetaMap, setPackageMetaMap] = useState(() =>
+    defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {},
+  )
   const [javaEnv, setJavaEnv] = useState({
     loading: false,
     nodeVersion: "",
@@ -901,11 +925,7 @@ function App() {
       if (overwriteApps.length > 0) {
         const appNames = overwriteApps.map((item) => item.label).join(", ")
         setPendingOverwriteApps(overwriteApps)
-        openConfirmDialog(
-          "overwrite-preset-apps",
-          t("dialog.overwriteApps"),
-          `${t("msg.appsExistConfirm", { apps: appNames })}`,
-        )
+        openConfirmDialog("overwrite-preset-apps", t("dialog.overwriteApps"), `${t("msg.appsExistConfirm", { apps: appNames })}`)
       } else {
         // Only new apps, add them directly
         doAppendNewApps(templates)
@@ -1068,10 +1088,23 @@ function App() {
       })
       const entries = Array.isArray(data?.entries) ? data.entries : []
       const supportedNamesLower = new Set(
-        entries.map((entry) => String(entry?.name || "").trim().toLowerCase()).filter(Boolean),
+        entries
+          .map((entry) =>
+            String(entry?.name || "")
+              .trim()
+              .toLowerCase(),
+          )
+          .filter(Boolean),
       )
       const selectedNames = Array.isArray(app?.patches) ? app.patches.map((name) => String(name || "").trim()).filter(Boolean) : []
-      const unsupportedNames = selectedNames.filter((name) => !supportedNamesLower.has(String(name || "").trim().toLowerCase()))
+      const unsupportedNames = selectedNames.filter(
+        (name) =>
+          !supportedNamesLower.has(
+            String(name || "")
+              .trim()
+              .toLowerCase(),
+          ),
+      )
       setAppPatchOptions((prev) => ({
         ...prev,
         [appId]: {
@@ -1111,7 +1144,11 @@ function App() {
         const nextDefaultNames = explicitDefaultNames.length > 0 ? explicitDefaultNames : inferredDefaultNames
 
         if (nextDefaultNames.length === 0) {
-          setMessage(locale === "zh-TW" ? "目前 mpp 無可用預設補丁，保留目前勾選。" : "No usable default patches found in current mpp. Keeping current selections.")
+          setMessage(
+            locale === "zh-TW"
+              ? "目前 mpp 無可用預設補丁，保留目前勾選。"
+              : "No usable default patches found in current mpp. Keeping current selections.",
+          )
           return
         }
         updateApp(appId, {
@@ -1205,7 +1242,7 @@ function App() {
     }
   }
 
-async function refreshTasks() {
+  async function refreshTasks() {
     const data = await listTasks(80)
     const next = Array.isArray(data.tasks) ? data.tasks : []
     setTasks(next)
@@ -1337,11 +1374,20 @@ async function refreshTasks() {
       const versions = dedupeSourceVersions(data?.versions)
       const localFileNameSet = new Set(
         morpheLocalFiles
-          .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+          .map((file) =>
+            String(file?.name || file?.fileName || "")
+              .trim()
+              .toLowerCase(),
+          )
           .filter(Boolean),
       )
       const firstUndownloaded = versions.find(
-        (item) => !localFileNameSet.has(String(item?.fileName || "").trim().toLowerCase()),
+        (item) =>
+          !localFileNameSet.has(
+            String(item?.fileName || "")
+              .trim()
+              .toLowerCase(),
+          ),
       )
       setMorpheSourceVersions(versions)
       setMorpheSourceVersion(firstUndownloaded ? String(firstUndownloaded.fileName || "") : "")
@@ -1398,7 +1444,12 @@ async function refreshTasks() {
     if (!target) return
     if (target.toLowerCase() === DEFAULT_MORPHE_SOURCE_REPO.toLowerCase()) return
     const nextOptions = mergeRepoOptions(
-      morpheSourceRepoOptions.filter((item) => String(item || "").trim().toLowerCase() !== target.toLowerCase()),
+      morpheSourceRepoOptions.filter(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() !== target.toLowerCase(),
+      ),
       "",
       DEFAULT_MORPHE_SOURCE_REPO,
     )
@@ -1427,11 +1478,20 @@ async function refreshTasks() {
       const versions = dedupeSourceVersions(data?.versions)
       const localFileNameSet = new Set(
         patchesLocalFiles
-          .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+          .map((file) =>
+            String(file?.name || file?.fileName || "")
+              .trim()
+              .toLowerCase(),
+          )
           .filter(Boolean),
       )
       const firstUndownloaded = versions.find(
-        (item) => !localFileNameSet.has(String(item?.fileName || "").trim().toLowerCase()),
+        (item) =>
+          !localFileNameSet.has(
+            String(item?.fileName || "")
+              .trim()
+              .toLowerCase(),
+          ),
       )
       setPatchesSourceVersions(versions)
       setPatchesSourceVersion(firstUndownloaded ? String(firstUndownloaded.fileName || "") : "")
@@ -1472,7 +1532,12 @@ async function refreshTasks() {
     if (!target) return
     if (target.toLowerCase() === DEFAULT_PATCHES_SOURCE_REPO.toLowerCase()) return
     const nextOptions = mergeRepoOptions(
-      patchesSourceRepoOptions.filter((item) => String(item || "").trim().toLowerCase() !== target.toLowerCase()),
+      patchesSourceRepoOptions.filter(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() !== target.toLowerCase(),
+      ),
       "",
       DEFAULT_PATCHES_SOURCE_REPO,
     )
@@ -1636,7 +1701,11 @@ async function refreshTasks() {
       })
       if (missingLocalApkApp) {
         const appName = missingLocalApkApp.displayName || missingLocalApkApp.name || "app"
-        setMessage(locale === "zh-TW" ? `[${appName}] local 模式需先選擇本地 APK 或輸入自訂路徑。` : `[${appName}] local mode requires a selected local APK or custom path.`)
+        setMessage(
+          locale === "zh-TW"
+            ? `[${appName}] local 模式需先選擇本地 APK 或輸入自訂路徑。`
+            : `[${appName}] local mode requires a selected local APK or custom path.`,
+        )
         return
       }
     }
@@ -1998,8 +2067,15 @@ async function refreshTasks() {
   useEffect(() => {
     if (morpheSettingsOpen) {
       const nextOptions = mergeRepoOptions(configForm?.morpheCli?.repoOptions, "", DEFAULT_MORPHE_SOURCE_REPO)
-      const current = String(morpheSourceRepo || "").trim().toLowerCase()
-      const hasCurrent = nextOptions.some((item) => String(item || "").trim().toLowerCase() === current)
+      const current = String(morpheSourceRepo || "")
+        .trim()
+        .toLowerCase()
+      const hasCurrent = nextOptions.some(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() === current,
+      )
       const nextRepo = hasCurrent ? morpheSourceRepo : String(nextOptions[0] || DEFAULT_MORPHE_SOURCE_REPO)
       setMorpheSourceRepoOptions(nextOptions)
       setMorpheSourceRepo(nextRepo)
@@ -2016,8 +2092,15 @@ async function refreshTasks() {
   useEffect(() => {
     if (patchesSettingsOpen) {
       const nextOptions = mergeRepoOptions(configForm?.patches?.repoOptions, "", DEFAULT_PATCHES_SOURCE_REPO)
-      const current = String(patchesSourceRepo || "").trim().toLowerCase()
-      const hasCurrent = nextOptions.some((item) => String(item || "").trim().toLowerCase() === current)
+      const current = String(patchesSourceRepo || "")
+        .trim()
+        .toLowerCase()
+      const hasCurrent = nextOptions.some(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() === current,
+      )
       const nextRepo = hasCurrent ? patchesSourceRepo : String(nextOptions[0] || DEFAULT_PATCHES_SOURCE_REPO)
       setPatchesSourceRepoOptions(nextOptions)
       setPatchesSourceRepo(nextRepo)
@@ -2144,9 +2227,7 @@ async function refreshTasks() {
     if (selectedTask && String(selectedTask.id || "") === dialogTargetTaskId) return selectedTask
     return tasks.find((task) => String(task?.id || "") === dialogTargetTaskId) || null
   }, [dialogTargetTaskId, liveTaskId, liveTask, selectedTask, tasks])
-  const dialogTargetStatus = String(
-    String(liveTaskId || "") === dialogTargetTaskId ? liveTaskStatus : dialogTargetTask?.status || "",
-  )
+  const dialogTargetStatus = String(String(liveTaskId || "") === dialogTargetTaskId ? liveTaskStatus : dialogTargetTask?.status || "")
   const dialogTargetLog = String(
     String(liveTaskId || "") === dialogTargetTaskId ? liveTaskLog : taskLogs[dialogTargetTaskId] || selectedTaskLog || "",
   )
@@ -2214,11 +2295,19 @@ async function refreshTasks() {
           <div className='space-y-2 rounded-md bg-slate-100/80 p-2.5'>
             <div className='flex items-center justify-between gap-2 text-xs'>
               <span className='inline-flex items-center gap-1.5 text-muted-foreground'>
-                <span className={`h-2 w-2 rounded-full ${javaEnv.loading ? "bg-slate-300" : javaEnv.installed ? "bg-emerald-400/80" : "bg-red-400/80"}`} />
+                <span
+                  className={`h-2 w-2 rounded-full ${javaEnv.loading ? "bg-slate-300" : javaEnv.installed ? "bg-emerald-400/80" : "bg-red-400/80"}`}
+                />
                 {t("sidebar.javaVersion")}
               </span>
               <span className='font-medium'>
-                {javaEnv.loading ? t("sidebar.checking") : javaEnv.installed ? hasText(javaEnv.version) ? javaEnv.version : "OK" : t("sidebar.notInstalled")}
+                {javaEnv.loading
+                  ? t("sidebar.checking")
+                  : javaEnv.installed
+                    ? hasText(javaEnv.version)
+                      ? javaEnv.version
+                      : "OK"
+                    : t("sidebar.notInstalled")}
               </span>
             </div>
           </div>
@@ -2355,7 +2444,13 @@ async function refreshTasks() {
           taskLog={dialogTargetLog}
         />
 
-        <ConfigPathDialog open={configPathDialogOpen} onOpenChange={setConfigPathDialogOpen} t={t} configPath={configPath} setConfigPath={setConfigPath} />
+        <ConfigPathDialog
+          open={configPathDialogOpen}
+          onOpenChange={setConfigPathDialogOpen}
+          t={t}
+          configPath={configPath}
+          setConfigPath={setConfigPath}
+        />
 
         <AppSettingsDialog
           open={appSettingsOpen}
