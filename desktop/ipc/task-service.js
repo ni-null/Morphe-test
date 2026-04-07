@@ -328,6 +328,34 @@ function isGitHubRateLimitError(err) {
   return text.includes("rate limit exceeded") || text.includes("api.github.com") && text.includes("http 403");
 }
 
+function repoToDirName(repo) {
+  return String(repo || "").trim().replace(/\//g, "@");
+}
+
+function repoDirNameToRepo(repoDirName) {
+  return String(repoDirName || "").trim().replace(/@/g, "/");
+}
+
+function normalizeSourceReleaseKeyPart(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function buildSourceReleaseRecordKey(type, repo, fileName) {
+  const typeKey = normalizeSourceReleaseKeyPart(type);
+  const repoKey = normalizeSourceReleaseKeyPart(repo);
+  const fileKey = normalizeSourceReleaseKeyPart(fileName);
+  if (!typeKey || !repoKey || !fileKey) return "";
+  return `${typeKey}|${repoKey}|${fileKey}`;
+}
+
+function inferRepoFromSourceRelativePath(relativePath) {
+  const normalized = String(relativePath || "").trim().replace(/\\/g, "/");
+  if (!normalized) return "";
+  const repoDir = String(normalized.split("/")[0] || "").trim();
+  if (!repoDir || !repoDir.includes("@")) return "";
+  return repoDirNameToRepo(repoDir);
+}
+
 async function fetchGitHubReleases(repo, runtime) {
   const repoValue = String(repo || "").trim();
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repoValue)) {
@@ -362,6 +390,7 @@ class TaskService {
     this.versionsCacheDir = path.join(this.cacheDir, "compatible-versions");
     this.patchEntriesCacheDir = path.join(this.cacheDir, "patch-entries");
     this.templatesCacheDir = path.join(this.cacheDir, "app-templates");
+    this.sourceReleaseMetadataPath = path.join(this.workspacePaths.runtime, "source-release-times.json");
     this.patchEntriesParserVersion = "v5";
     this.tasks = new Map();
   }
@@ -385,6 +414,73 @@ class TaskService {
     const filePath = path.join(cacheDir, `${cacheKey}.json`);
     await fsp.mkdir(cacheDir, { recursive: true });
     await fsp.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  }
+
+  async readSourceReleaseMetadata() {
+    if (!(await fileExists(this.sourceReleaseMetadataPath))) {
+      return { entries: {} };
+    }
+    try {
+      const raw = await fsp.readFile(this.sourceReleaseMetadataPath, "utf8");
+      const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
+      const entries = parsed && typeof parsed === "object" && parsed.entries && typeof parsed.entries === "object"
+        ? parsed.entries
+        : {};
+      return { entries };
+    } catch {
+      return { entries: {} };
+    }
+  }
+
+  async writeSourceReleaseMetadata(data) {
+    const payload = data && typeof data === "object" ? data : {};
+    const entries = payload.entries && typeof payload.entries === "object" ? payload.entries : {};
+    await fsp.mkdir(path.dirname(this.sourceReleaseMetadataPath), { recursive: true });
+    await fsp.writeFile(
+      this.sourceReleaseMetadataPath,
+      `${JSON.stringify({
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        entries,
+      }, null, 2)}\n`,
+      "utf8",
+    );
+  }
+
+  async upsertSourceReleaseMetadata(type, repo, versions) {
+    const repoValue = String(repo || "").trim();
+    const list = Array.isArray(versions) ? versions : [];
+    if (!repoValue || list.length === 0) return;
+
+    const metadata = await this.readSourceReleaseMetadata();
+    const entries = metadata.entries && typeof metadata.entries === "object" ? metadata.entries : {};
+    let changed = false;
+
+    for (const item of list) {
+      const fileName = String(item && item.fileName ? item.fileName : "").trim();
+      const publishedAt = String(item && item.publishedAt ? item.publishedAt : "").trim();
+      const tag = String(item && item.tag ? item.tag : "").trim();
+      if (!fileName || !publishedAt) continue;
+      const key = buildSourceReleaseRecordKey(type, repoValue, fileName);
+      if (!key) continue;
+      const prev = entries[key] && typeof entries[key] === "object" ? entries[key] : {};
+      if (String(prev.publishedAt || "") === publishedAt && String(prev.tag || "") === tag) {
+        continue;
+      }
+      entries[key] = {
+        type: String(type || "").trim(),
+        repo: repoValue,
+        repoDirName: repoToDirName(repoValue),
+        fileName,
+        publishedAt,
+        tag,
+        savedAt: new Date().toISOString(),
+      };
+      changed = true;
+    }
+
+    if (!changed) return;
+    await this.writeSourceReleaseMetadata({ entries });
   }
 
   async getFileFingerprint(filePath) {
@@ -524,14 +620,26 @@ class TaskService {
     const spec = getSourceSpec(type);
     const targetDir = this.workspacePaths[spec.folderKey];
     await fsp.mkdir(targetDir, { recursive: true });
+    const releaseMetadata = await this.readSourceReleaseMetadata();
+    const releaseEntries = releaseMetadata.entries && typeof releaseMetadata.entries === "object"
+      ? releaseMetadata.entries
+      : {};
     const files = await collectSourceFilesRecursive(targetDir, spec.ext);
     return {
       type: spec.type,
       dir: targetDir,
-      files: files.map((item) => ({
-        ...item,
-        relativePath: path.relative(targetDir, item.fullPath),
-      })),
+      files: files.map((item) => {
+        const relativePath = path.relative(targetDir, item.fullPath);
+        const repo = inferRepoFromSourceRelativePath(relativePath);
+        const key = buildSourceReleaseRecordKey(spec.type, repo, item.name);
+        const release = key ? releaseEntries[key] : null;
+        return {
+          ...item,
+          relativePath,
+          repo,
+          publishedAt: String(release && release.publishedAt ? release.publishedAt : ""),
+        };
+      }),
     };
   }
 
@@ -640,6 +748,7 @@ class TaskService {
         });
       }
     }
+    await this.upsertSourceReleaseMetadata(spec.type, repo, versions);
     return {
       type: spec.type,
       repo,

@@ -126,21 +126,29 @@ export default function BuildPage({
               </CardTitle>
             </div>
             <div className='flex flex-wrap gap-2'>
-              <Button variant={rawOverrideMode ? "default" : "outline"} onClick={onToggleRawMode} disabled={isBusy}>
-                <Code2 className='h-5 w-5' />
+              <Button
+                variant='ghost'
+                className={cn(
+                  "h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200",
+                  rawOverrideMode ? "bg-slate-200" : "bg-slate-100",
+                )}
+                onClick={onToggleRawMode}
+                disabled={isBusy}>
+                <Code2 className='h-4 w-4' />
                 {t("settings.raw")}
               </Button>
               <Button
-                variant='outline'
+                variant='ghost'
+                className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200'
                 onClick={() => setConfigPathDialogOpen(true)}
                 disabled={isBusy}
                 aria-label={t("dialog.configPathTitle")}
                 title={t("dialog.configPathTitle")}>
-                <Pencil className='h-5 w-5' />
+                <Pencil className='h-4 w-4' />
                 {t("settings.path")}
               </Button>
-              <Button variant='outline' onClick={loadConfig} disabled={isBusy}>
-                <RefreshCw className='h-5 w-5' />
+              <Button variant='ghost' className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-slate-100 text-slate-800 hover:bg-slate-200' onClick={loadConfig} disabled={isBusy}>
+                <RefreshCw className='h-4 w-4' />
                 {t("settings.reload")}
               </Button>
             </div>

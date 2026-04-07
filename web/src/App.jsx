@@ -765,7 +765,14 @@ function App() {
   const [packageMetaMap, setPackageMetaMap] = useState(() => (defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}))
 
   const [isBusy, setIsBusy] = useState(false)
-  const [message, setMessage] = useState("Ready")
+  const [message, setSidebarMessage] = useState("")
+  const setMessage = (value) => {
+    const text = String(value ?? "").trim()
+    if (text) {
+      console.log(text)
+    }
+    setSidebarMessage("")
+  }
   const lastSavedSignatureRef = useRef("")
 
   const generatedToml = useMemo(() => configFormToToml(configForm), [configForm])
@@ -1176,8 +1183,8 @@ async function refreshTasks() {
     }
   }
 
-  async function loadMorpheSourceVersions() {
-    const repo = String(morpheSourceRepo || "").trim()
+  async function loadMorpheSourceVersions(repoOverride = "") {
+    const repo = String(repoOverride || morpheSourceRepo || "").trim()
     if (!repo) {
       setMorpheSourceVersions([])
       setMorpheSourceVersion("")
@@ -1190,8 +1197,16 @@ async function refreshTasks() {
         repo,
       })
       const versions = dedupeSourceVersions(data?.versions)
+      const localFileNameSet = new Set(
+        morpheLocalFiles
+          .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+          .filter(Boolean),
+      )
+      const firstUndownloaded = versions.find(
+        (item) => !localFileNameSet.has(String(item?.fileName || "").trim().toLowerCase()),
+      )
       setMorpheSourceVersions(versions)
-      setMorpheSourceVersion(versions.length > 0 ? String(versions[0].fileName || "") : "")
+      setMorpheSourceVersion(firstUndownloaded ? String(firstUndownloaded.fileName || "") : "")
     } catch (error) {
       setMorpheSourceVersions([])
       setMorpheSourceVersion("")
@@ -1208,14 +1223,17 @@ async function refreshTasks() {
     setMorpheSourceRepoOptions(nextOptions)
     setMorpheSourceRepo(repo)
     updateConfigSection("morpheCli", { repoOptions: nextOptions })
+    loadMorpheSourceVersions(repo)
     setMorpheSourceRepoDraft("")
   }
 
   function onSelectMorpheSourceRepo(value) {
+    const repo = String(value || "").trim()
     const nextOptions = mergeRepoOptions(morpheSourceRepoOptions, value, DEFAULT_MORPHE_SOURCE_REPO)
     setMorpheSourceRepoOptions(nextOptions)
     updateConfigSection("morpheCli", { repoOptions: nextOptions })
-    setMorpheSourceRepo(value)
+    setMorpheSourceRepo(repo)
+    loadMorpheSourceVersions(repo)
   }
 
   function onDeleteMorpheSourceRepo(value) {
@@ -1236,8 +1254,8 @@ async function refreshTasks() {
     })
   }
 
-  async function loadPatchesSourceVersions() {
-    const repo = String(patchesSourceRepo || "").trim()
+  async function loadPatchesSourceVersions(repoOverride = "") {
+    const repo = String(repoOverride || patchesSourceRepo || "").trim()
     if (!repo) {
       setPatchesSourceVersions([])
       setPatchesSourceVersion("")
@@ -1250,8 +1268,16 @@ async function refreshTasks() {
         repo,
       })
       const versions = dedupeSourceVersions(data?.versions)
+      const localFileNameSet = new Set(
+        patchesLocalFiles
+          .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+          .filter(Boolean),
+      )
+      const firstUndownloaded = versions.find(
+        (item) => !localFileNameSet.has(String(item?.fileName || "").trim().toLowerCase()),
+      )
       setPatchesSourceVersions(versions)
-      setPatchesSourceVersion(versions.length > 0 ? String(versions[0].fileName || "") : "")
+      setPatchesSourceVersion(firstUndownloaded ? String(firstUndownloaded.fileName || "") : "")
     } catch (error) {
       setPatchesSourceVersions([])
       setPatchesSourceVersion("")
@@ -1268,14 +1294,17 @@ async function refreshTasks() {
     setPatchesSourceRepoOptions(nextOptions)
     setPatchesSourceRepo(repo)
     updateConfigSection("patches", { repoOptions: nextOptions })
+    loadPatchesSourceVersions(repo)
     setPatchesSourceRepoDraft("")
   }
 
   function onSelectPatchesSourceRepo(value) {
+    const repo = String(value || "").trim()
     const nextOptions = mergeRepoOptions(patchesSourceRepoOptions, value, DEFAULT_PATCHES_SOURCE_REPO)
     setPatchesSourceRepoOptions(nextOptions)
     updateConfigSection("patches", { repoOptions: nextOptions })
-    setPatchesSourceRepo(value)
+    setPatchesSourceRepo(repo)
+    loadPatchesSourceVersions(repo)
   }
 
   function onDeletePatchesSourceRepo(value) {
@@ -1360,20 +1389,22 @@ async function refreshTasks() {
     }
   }
 
-  async function onDownloadMorpheFromSource() {
-    if (!hasText(morpheSourceRepo) || !hasText(morpheSourceVersion)) return
+  async function onDownloadMorpheFromSource(versionOverride = "") {
+    const targetVersion = hasText(versionOverride) ? String(versionOverride).trim() : String(morpheSourceVersion || "").trim()
+    if (!hasText(morpheSourceRepo) || !hasText(targetVersion)) return
     setMorpheSourceDownloading(true)
     try {
       const data = await fetchAndSaveSource({
         type: "morphe-cli",
         mode: "stable",
         patchesRepo: morpheSourceRepo,
-        version: morpheSourceVersion,
+        version: targetVersion,
       })
       await loadMorpheLocalFiles()
       if (hasText(data?.fullPath)) {
         updateConfigSection("morpheCli", { path: String(data.fullPath) })
       }
+      setMorpheSourceVersion("")
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
     } catch (error) {
       setMessage(error.message || String(error))
@@ -1382,20 +1413,22 @@ async function refreshTasks() {
     }
   }
 
-  async function onDownloadPatchesFromSource() {
-    if (!hasText(patchesSourceRepo) || !hasText(patchesSourceVersion)) return
+  async function onDownloadPatchesFromSource(versionOverride = "") {
+    const targetVersion = hasText(versionOverride) ? String(versionOverride).trim() : String(patchesSourceVersion || "").trim()
+    if (!hasText(patchesSourceRepo) || !hasText(targetVersion)) return
     setPatchesSourceDownloading(true)
     try {
       const data = await fetchAndSaveSource({
         type: "patches",
         mode: "stable",
         patchesRepo: patchesSourceRepo,
-        version: patchesSourceVersion,
+        version: targetVersion,
       })
       await loadPatchesLocalFiles()
       if (hasText(data?.fullPath)) {
         updateConfigSection("patches", { path: String(data.fullPath) })
       }
+      setPatchesSourceVersion("")
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
     } catch (error) {
       setMessage(error.message || String(error))
@@ -1912,7 +1945,7 @@ async function refreshTasks() {
         </div>
 
         <Separator />
-        <p className='text-xs text-muted-foreground break-words'>{message}</p>
+        {hasText(message) ? <p className='text-xs text-muted-foreground break-words'>{message}</p> : null}
       </aside>
 
       <main className='main-panel space-y-4'>

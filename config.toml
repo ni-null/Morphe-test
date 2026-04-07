@@ -4,8 +4,8 @@ patches_repo = "MorpheApp/morphe-cli"
 repo_options = ["MorpheApp/morphe-cli", "1212"]
 
 [patches]
-mode = "dev"
-patches_repo = "MorpheApp/morphe-patches"
+mode = "local"
+path = "C:\\Users\\S00129\\AppData\\Local\\MorphePatcher\\workspace\\patches\\MorpheApp@morphe-patches\\patches-1.23.0-dev.3.mpp"
 repo_options = ["MorpheApp/morphe-patches"]
 
 [youtube]
@@ -18,7 +18,7 @@ uptodown-dlurl = "https://youtube.en.uptodown.com/android"
 archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.google.android.youtube/"
 
 [youtube_music]
-mode = "remote"
+mode = false
 package_name = "com.google.android.apps.youtube.music"
 patches_mode = "custom"
 patches = ["Hide music video ads", "Permanent repeat", "Custom branding", "Change header", "Hide buttons", "Hide category bar", "Change miniplayer color", "Enable forced miniplayer", "Miniplayer previous and next buttons", "Navigation bar", "Hide 'Get Music Premium'", "Change start page", "Theme", "Bypass certificate checks", "Disable DRC audio", "Enable exclusive audio playback", "Force original audio", "Remove background playback restrictions", "Enable debugging", "Check watch history domain name resolution", "GmsCore support", "Sanitize sharing links", "Disable QUIC protocol"]
@@ -26,5 +26,3 @@ patches = ["Hide music video ads", "Permanent repeat", "Custom branding", "Chang
 [reddit]
 mode = false
 package_name = "com.reddit.frontpage"
-patches_mode = "custom"
-patches = ["Hide ads", "Hide recommended communities shelf", "Disable modern home", "Hide navigation buttons", "Disable screenshot popup", "Hide sidebar components", "Remove subreddit dialog", "Hide Trending Today shelf", "Show view count", "Spoof signature", "Open links directly", "Sanitize sharing links", "Disable Play Store updates"]

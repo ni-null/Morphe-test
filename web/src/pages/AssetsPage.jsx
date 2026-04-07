@@ -1,12 +1,17 @@
-import { Download, Loader2, Package, Plus, RefreshCw, Settings2, Trash2 } from "lucide-react"
+import { Check, Download, FolderGit2, Loader2, Package, Settings2, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "../components/ui/select"
 import packageNameMetaMap from "../../json/package-name-meta.json"
+
+const MORPHE_ADD_CUSTOM_REPO_VALUE = "__ADD_CUSTOM_MORPHE_REPO__"
+const PATCHES_ADD_CUSTOM_REPO_VALUE = "__ADD_CUSTOM_PATCHES_REPO__"
+const MORPHE_LOCAL_SOURCE_VALUE = "__MORPHE_LOCAL_SOURCE__"
+const PATCHES_LOCAL_SOURCE_VALUE = "__PATCHES_LOCAL_SOURCE__"
 
 function inferGroupKeyFromApk(file) {
   const name = String(file?.name || file?.fileName || "")
@@ -43,6 +48,87 @@ function buildSectionToPackageMetaMap(source) {
     }
   }
   return out
+}
+
+function formatPublishedAt(value) {
+  const text = String(value || "").trim()
+  if (!text) return ""
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return text
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}/${month}/${day}`
+}
+
+function formatRepoPathOnly(relativePath) {
+  const normalized = String(relativePath || "").trim().replace(/\\/g, "/")
+  if (!normalized) return ""
+  const repoDirName = String(normalized.split("/")[0] || "").trim()
+  return repoDirName.replace(/@/g, "/")
+}
+
+function normalizeRepoDirFromRepo(repo) {
+  return String(repo || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/\//g, "@")
+    .toLowerCase()
+}
+
+function getRepoDirFromRelativePath(relativePath) {
+  const normalized = String(relativePath || "").trim().replace(/\\/g, "/")
+  return String(normalized.split("/")[0] || "")
+    .trim()
+    .toLowerCase()
+}
+
+function buildSourceMixedItems(sourceVersions, localFiles, selectedRepo = "") {
+  const remoteList = Array.isArray(sourceVersions) ? sourceVersions : []
+  const allLocalList = Array.isArray(localFiles) ? localFiles : []
+  const repoDir = normalizeRepoDirFromRepo(selectedRepo)
+  const localList = repoDir
+    ? allLocalList.filter((file) => getRepoDirFromRelativePath(file?.relativePath) === repoDir)
+    : allLocalList
+  const localByName = new Map()
+
+  for (const file of localList) {
+    const fileName = String(file?.name || file?.fileName || "").trim()
+    if (!fileName) continue
+    localByName.set(fileName.toLowerCase(), file)
+  }
+
+  const items = remoteList.map((item) => {
+    const fileName = String(item?.fileName || "").trim()
+    const local = localByName.get(fileName.toLowerCase()) || null
+    return {
+      key: `remote-${fileName}`,
+      fileName,
+      isRemote: true,
+      hasLocal: Boolean(local),
+      publishedAt: String(item?.publishedAt || local?.publishedAt || "").trim(),
+      relativePath: String(local?.relativePath || "").trim(),
+      sizeBytes: Number(local?.sizeBytes || 0),
+    }
+  })
+
+  const remoteNameSet = new Set(items.map((item) => item.fileName.toLowerCase()))
+  for (const local of localList) {
+    const fileName = String(local?.name || local?.fileName || "").trim()
+    if (!fileName) continue
+    if (remoteNameSet.has(fileName.toLowerCase())) continue
+    items.push({
+      key: `local-only-${fileName}`,
+      fileName,
+      isRemote: false,
+      hasLocal: true,
+      publishedAt: String(local?.publishedAt || "").trim(),
+      relativePath: String(local?.relativePath || "").trim(),
+      sizeBytes: Number(local?.sizeBytes || 0),
+    })
+  }
+
+  return items
 }
 
 export default function AssetsPage({
@@ -88,10 +174,24 @@ export default function AssetsPage({
   loadDownloadedApkFiles,
 }) {
   const [addRepoDialogType, setAddRepoDialogType] = useState("")
+  const [morpheRepoMode, setMorpheRepoMode] = useState("remote")
+  const [patchesRepoMode, setPatchesRepoMode] = useState("remote")
   const apkGroups = groupApksByPackage(downloadedApkFiles)
   const sectionMetaMap = buildSectionToPackageMetaMap(packageNameMetaMap)
   const addRepoOpen = addRepoDialogType === "morphe" || addRepoDialogType === "patches"
   const addRepoDraft = addRepoDialogType === "patches" ? patchesSourceRepoDraft : morpheSourceRepoDraft
+  const morpheLocalFileNameSet = new Set(
+    morpheLocalFiles
+      .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+      .filter(Boolean),
+  )
+  const patchesLocalFileNameSet = new Set(
+    patchesLocalFiles
+      .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+      .filter(Boolean),
+  )
+  const morpheMixedItems = buildSourceMixedItems(morpheSourceVersions, morpheLocalFiles, morpheSourceRepo)
+  const patchesMixedItems = buildSourceMixedItems(patchesSourceVersions, patchesLocalFiles, patchesSourceRepo)
 
   function onConfirmAddRepo() {
     if (addRepoDialogType === "morphe") {
@@ -109,175 +209,249 @@ export default function AssetsPage({
     }
   }
 
+  function onChangeMorpheRepo(value) {
+    if (value === MORPHE_ADD_CUSTOM_REPO_VALUE) {
+      setAddRepoDialogType("morphe")
+      return
+    }
+    if (value === MORPHE_LOCAL_SOURCE_VALUE) {
+      setMorpheRepoMode("local")
+      return
+    }
+    setMorpheRepoMode("remote")
+    onSelectMorpheSourceRepo(value)
+  }
+
+  function onChangePatchesRepo(value) {
+    if (value === PATCHES_ADD_CUSTOM_REPO_VALUE) {
+      setAddRepoDialogType("patches")
+      return
+    }
+    if (value === PATCHES_LOCAL_SOURCE_VALUE) {
+      setPatchesRepoMode("local")
+      return
+    }
+    setPatchesRepoMode("remote")
+    onSelectPatchesSourceRepo(value)
+  }
+
+  function onDownloadMorpheItem(fileName) {
+    const next = String(fileName || "")
+    setMorpheSourceVersion(next)
+    if (!hasText(next)) return
+    if (morpheLocalFileNameSet.has(next.trim().toLowerCase())) return
+    onDownloadMorpheFromSource(next)
+  }
+
+  function onDownloadPatchesItem(fileName) {
+    const next = String(fileName || "")
+    setPatchesSourceVersion(next)
+    if (!hasText(next)) return
+    if (patchesLocalFileNameSet.has(next.trim().toLowerCase())) return
+    onDownloadPatchesFromSource(next)
+  }
+
   return (
     <div className='space-y-4'>
       <Card>
             <CardHeader className='py-3'>
-              <CardTitle className='text-base flex items-center justify-between gap-2'>
+              <CardTitle className='text-base flex items-center gap-2'>
                 <span className='inline-flex items-center gap-2'>
                   <Settings2 className='h-4 w-4' />
                   {t("assets.cli")}
                 </span>
-                <div className='flex items-center gap-2'>
-                  <Button size='sm' variant='outline' onClick={() => setAddRepoDialogType("morphe")}>
-                    <Plus className='h-4 w-4' />
-                    {t("source.addCustomRepo")}
-                  </Button>
-                  <Button size='sm' variant='outline' onClick={loadMorpheLocalFiles}>
-                    <RefreshCw className='h-4 w-4' />
-                    {t("action.refresh")}
-                  </Button>
-                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-3'>
-              <div className='grid gap-2 md:grid-cols-[1fr_1fr_auto]'>
-                <div className='space-y-1'>
-                  <Label>{t("source.repo")}</Label>
-                  <Select value={hasText(morpheSourceRepo) ? morpheSourceRepo : "MorpheApp/morphe-cli"} onValueChange={onSelectMorpheSourceRepo}>
+              <div className='space-y-1'>
+                  <Select value={morpheRepoMode === "local" ? MORPHE_LOCAL_SOURCE_VALUE : hasText(morpheSourceRepo) ? morpheSourceRepo : "MorpheApp/morphe-cli"} onValueChange={onChangeMorpheRepo}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
+                        <FolderGit2 className='h-3.5 w-3.5' />
+                        {t("source.repo")}
+                      </span>
+                      <SelectValue className='min-w-0' />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position='popper' side='bottom' align='start'>
+                      <SelectItem value={MORPHE_LOCAL_SOURCE_VALUE} className='h-8'>{t("source.localOnly")}</SelectItem>
+                      <SelectSeparator />
                       {morpheSourceRepoOptions.map((repo) => (
-                        <SelectItem key={`assets-morphe-repo-${repo}`} value={repo}>
+                        <SelectItem key={`assets-morphe-repo-${repo}`} value={repo} className='h-8'>
                           {repo}
                         </SelectItem>
                       ))}
+                      <SelectSeparator />
+                      <SelectItem value={MORPHE_ADD_CUSTOM_REPO_VALUE} className='h-8'>
+                        + {t("source.addCustomRepo")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className='space-y-1'>
-                  <Label>{t("source.version")}</Label>
-                  <Select value={morpheSourceVersion || "__NONE__"} onValueChange={(value) => setMorpheSourceVersion(value === "__NONE__" ? "" : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("source.selectVersion")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value='__NONE__'>{t("source.noneSelected")}</SelectItem>
-                      {morpheSourceVersions.map((item) => (
-                        <SelectItem key={`assets-morphe-version-${String(item.fileName)}-${String(item.tag || "")}`} value={String(item.fileName)}>
-                          {item.fileName}
-                        </SelectItem>
+              </div>
+              {morpheRepoMode === "local" ? (
+                <div className='space-y-2'>
+                  {morpheLocalFiles.length === 0 ? (
+                    <p className='text-sm text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
+                  ) : (
+                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                      {morpheLocalFiles.map((file) => (
+                        <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1'>
+                          <div className='min-w-0'>
+                            <div className='flex min-w-0 items-center gap-2 text-sm'>
+                              <span className='shrink-0 font-medium'>{file.name}</span>
+                              <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{formatRepoPathOnly(file.relativePath)}</span>
+                              {hasText(file.publishedAt) ? <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground/60'>{formatPublishedAt(file.publishedAt)}</span> : null}
+                            </div>
+                          </div>
+                          <div className='flex items-center gap-2'>
+                            <span className='whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              className='h-6 w-6 text-red-600 hover:bg-red-50 hover:text-red-700'
+                              disabled={morpheDeleteName === file.relativePath}
+                              onClick={() => openConfirmDialog("delete-morphe-file", t("confirm.deleteMorpheTitle"), t("confirm.deleteMorpheDesc", { path: file.relativePath }), file)}>
+                              {morpheDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
+                            </Button>
+                          </div>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button className='self-end' onClick={onDownloadMorpheFromSource} disabled={morpheSourceDownloading || morpheSourceLoading || !hasText(morpheSourceVersion)}>
-                  {morpheSourceDownloading ? <Loader2 className='h-4 w-4 animate-spin' /> : <Download className='h-4 w-4' />}
-                  {t("source.download")}
-                </Button>
-              </div>
-              <div className='space-y-2'>
-                {morpheLocalFiles.length === 0 ? (
-                  <p className='text-sm text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
-                ) : (
-                  morpheLocalFiles.map((file) => (
-                    <div key={`assets-morphe-file-${file.fullPath}`} className='flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2'>
-                      <div className='min-w-0'>
-                        <p className='text-sm font-medium break-all'>{file.name}</p>
-                        <p className='text-xs text-muted-foreground break-all'>{file.relativePath}</p>
-                      </div>
-                      <div className='flex items-center gap-2'>
-                        <span className='text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700'
-                          disabled={morpheDeleteName === file.relativePath}
-                          onClick={() => openConfirmDialog("delete-morphe-file", t("confirm.deleteMorpheTitle"), t("confirm.deleteMorpheDesc", { path: file.relativePath }), file)}>
-                          {morpheDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
-                        </Button>
-                      </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className='space-y-2'>
+                  {morpheMixedItems.length === 0 ? null : (
+                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                      {morpheMixedItems.map((item) => {
+                        const isDownloading = morpheSourceDownloading && String(morpheSourceVersion || "").trim() === String(item.fileName || "").trim()
+                        const canDownload = item.isRemote && !item.hasLocal
+                        return (
+                          <div
+                            key={`assets-morphe-mixed-${item.key}`}
+                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/60" : ""}`}
+                            onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : undefined}>
+                            <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
+                              {item.hasLocal ? (
+                                <Check className='h-4 w-4 shrink-0 text-emerald-600' />
+                              ) : isDownloading ? (
+                                <Loader2 className='h-4 w-4 shrink-0 animate-spin text-slate-500' />
+                              ) : (
+                                <Download className={`h-4 w-4 shrink-0 ${canDownload ? "cursor-pointer text-slate-600" : "text-slate-400"}`} />
+                              )}
+                              <span className='min-w-0 truncate font-medium'>{item.fileName}</span>
+                              <span className='shrink-0 whitespace-nowrap text-right text-xs text-muted-foreground'>{hasText(item.publishedAt) ? formatPublishedAt(item.publishedAt) : ""}</span>
+                            </div>
+                            {item.hasLocal && item.relativePath ? (
+                              <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(item.sizeBytes)}</span>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
       </Card>
 
       <Card>
             <CardHeader className='py-3'>
-              <CardTitle className='text-base flex items-center justify-between gap-2'>
+              <CardTitle className='text-base flex items-center gap-2'>
                 <span className='inline-flex items-center gap-2'>
                   <Package className='h-4 w-4' />
                   {t("assets.patches")}
                 </span>
-                <div className='flex items-center gap-2'>
-                  <Button size='sm' variant='outline' onClick={() => setAddRepoDialogType("patches")}>
-                    <Plus className='h-4 w-4' />
-                    {t("source.addCustomRepo")}
-                  </Button>
-                  <Button size='sm' variant='outline' onClick={loadPatchesLocalFiles}>
-                    <RefreshCw className='h-4 w-4' />
-                    {t("action.refresh")}
-                  </Button>
-                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-3'>
-              <div className='grid gap-2 md:grid-cols-[1fr_1fr_auto]'>
-                <div className='space-y-1'>
-                  <Label>{t("source.repo")}</Label>
-                  <Select value={hasText(patchesSourceRepo) ? patchesSourceRepo : "MorpheApp/morphe-patches"} onValueChange={onSelectPatchesSourceRepo}>
+              <div className='space-y-1'>
+                  <Select value={patchesRepoMode === "local" ? PATCHES_LOCAL_SOURCE_VALUE : hasText(patchesSourceRepo) ? patchesSourceRepo : "MorpheApp/morphe-patches"} onValueChange={onChangePatchesRepo}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
+                        <FolderGit2 className='h-3.5 w-3.5' />
+                        {t("source.repo")}
+                      </span>
+                      <SelectValue className='min-w-0' />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={PATCHES_LOCAL_SOURCE_VALUE} className='h-8'>{t("source.localOnly")}</SelectItem>
+                      <SelectSeparator />
                       {patchesSourceRepoOptions.map((repo) => (
-                        <SelectItem key={`assets-patches-repo-${repo}`} value={repo}>
+                        <SelectItem key={`assets-patches-repo-${repo}`} value={repo} className='h-8'>
                           {repo}
                         </SelectItem>
                       ))}
+                      <SelectSeparator />
+                      <SelectItem value={PATCHES_ADD_CUSTOM_REPO_VALUE} className='h-8'>
+                        + {t("source.addCustomRepo")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className='space-y-1'>
-                  <Label>{t("source.version")}</Label>
-                  <Select value={patchesSourceVersion || "__NONE__"} onValueChange={(value) => setPatchesSourceVersion(value === "__NONE__" ? "" : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("source.selectVersion")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value='__NONE__'>{t("source.noneSelected")}</SelectItem>
-                      {patchesSourceVersions.map((item) => (
-                        <SelectItem key={`assets-patches-version-${String(item.fileName)}-${String(item.tag || "")}`} value={String(item.fileName)}>
-                          {item.fileName}
-                        </SelectItem>
+              </div>
+              {patchesRepoMode === "local" ? (
+                <div className='space-y-2'>
+                  {patchesLocalFiles.length === 0 ? (
+                    <p className='text-sm text-muted-foreground'>{t("patches.noLocalFiles")}</p>
+                  ) : (
+                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                      {patchesLocalFiles.map((file) => (
+                        <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1'>
+                          <div className='min-w-0'>
+                            <div className='flex min-w-0 items-center gap-2 text-sm'>
+                              <span className='shrink-0 font-medium'>{file.name}</span>
+                              <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{formatRepoPathOnly(file.relativePath)}</span>
+                              {hasText(file.publishedAt) ? <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground/60'>{formatPublishedAt(file.publishedAt)}</span> : null}
+                            </div>
+                          </div>
+                          <div className='flex items-center gap-2'>
+                            <span className='whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              className='h-6 w-6 text-red-600 hover:bg-red-50 hover:text-red-700'
+                              disabled={patchesDeleteName === file.relativePath}
+                              onClick={() => openConfirmDialog("delete-patches-file", t("confirm.deletePatchesTitle"), t("confirm.deletePatchesDesc", { path: file.relativePath }), file)}>
+                              {patchesDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
+                            </Button>
+                          </div>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button className='self-end' onClick={onDownloadPatchesFromSource} disabled={patchesSourceDownloading || patchesSourceLoading || !hasText(patchesSourceVersion)}>
-                  {patchesSourceDownloading ? <Loader2 className='h-4 w-4 animate-spin' /> : <Download className='h-4 w-4' />}
-                  {t("source.download")}
-                </Button>
-              </div>
-              <div className='space-y-2'>
-                {patchesLocalFiles.length === 0 ? (
-                  <p className='text-sm text-muted-foreground'>{t("patches.noLocalFiles")}</p>
-                ) : (
-                  patchesLocalFiles.map((file) => (
-                    <div key={`assets-patches-file-${file.fullPath}`} className='flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2'>
-                      <div className='min-w-0'>
-                        <p className='text-sm font-medium break-all'>{file.name}</p>
-                        <p className='text-xs text-muted-foreground break-all'>{file.relativePath}</p>
-                      </div>
-                      <div className='flex items-center gap-2'>
-                        <span className='text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700'
-                          disabled={patchesDeleteName === file.relativePath}
-                          onClick={() => openConfirmDialog("delete-patches-file", t("confirm.deletePatchesTitle"), t("confirm.deletePatchesDesc", { path: file.relativePath }), file)}>
-                          {patchesDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
-                        </Button>
-                      </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className='space-y-2'>
+                  {patchesMixedItems.length === 0 ? null : (
+                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                      {patchesMixedItems.map((item) => {
+                        const isDownloading = patchesSourceDownloading && String(patchesSourceVersion || "").trim() === String(item.fileName || "").trim()
+                        const canDownload = item.isRemote && !item.hasLocal
+                        return (
+                          <div
+                            key={`assets-patches-mixed-${item.key}`}
+                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/60" : ""}`}
+                            onClick={canDownload ? () => onDownloadPatchesItem(item.fileName) : undefined}>
+                            <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
+                              {item.hasLocal ? (
+                                <Check className='h-4 w-4 shrink-0 text-emerald-600' />
+                              ) : isDownloading ? (
+                                <Loader2 className='h-4 w-4 shrink-0 animate-spin text-slate-500' />
+                              ) : (
+                                <Download className={`h-4 w-4 shrink-0 ${canDownload ? "cursor-pointer text-slate-600" : "text-slate-400"}`} />
+                              )}
+                              <span className='min-w-0 truncate font-medium'>{item.fileName}</span>
+                              <span className='shrink-0 whitespace-nowrap text-right text-xs text-muted-foreground'>{hasText(item.publishedAt) ? formatPublishedAt(item.publishedAt) : ""}</span>
+                            </div>
+                            {item.hasLocal && item.relativePath ? (
+                              <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(item.sizeBytes)}</span>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
       </Card>
 
@@ -288,10 +462,6 @@ export default function AssetsPage({
                   <Package className='h-4 w-4' />
                   {t("assets.apk")}
                 </span>
-                <Button size='sm' variant='outline' onClick={loadDownloadedApkFiles} disabled={downloadedApkLoading}>
-                  {downloadedApkLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
-                  {t("action.refresh")}
-                </Button>
               </CardTitle>
               <p className='text-xs text-muted-foreground break-all'>{downloadedApkDir}</p>
             </CardHeader>
@@ -299,32 +469,34 @@ export default function AssetsPage({
               {apkGroups.length === 0 ? (
                 <p className='text-sm text-muted-foreground'>{t("assets.noApkFiles")}</p>
               ) : (
-                apkGroups.map(([groupKey, files]) => {
-                  const meta = sectionMetaMap[String(groupKey || "").toLowerCase()] || null
-                  const icon = hasText(meta?.icon) ? String(meta.icon) : ""
-                  const packageName = hasText(meta?.packageName) ? String(meta.packageName) : t("assets.unknownPackage")
-                  const title = hasText(meta?.label) ? String(meta.label) : `[${groupKey}]`
-                  return (
-                    <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-md border bg-background p-3'>
-                      <div className='flex items-center gap-2'>
-                        {hasText(icon) ? <img src={icon} alt={title} className='h-6 w-6 rounded-sm object-contain' /> : null}
-                        <p className='text-sm font-semibold break-all'>{title}</p>
-                      </div>
-                      <p className='text-xs text-muted-foreground break-all'>{packageName}</p>
-                      <div className='space-y-1'>
-                        {files.map((file) => (
-                          <div key={`apk-file-${file.fullPath}`} className='flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2'>
-                            <div className='min-w-0'>
-                              <p className='text-sm break-all'>{file.name}</p>
-                              <p className='text-xs text-muted-foreground break-all'>{file.relativePath}</p>
+                <div className='assets-scroll max-h-72 space-y-3 overflow-y-auto pr-1'>
+                  {apkGroups.map(([groupKey, files]) => {
+                    const meta = sectionMetaMap[String(groupKey || "").toLowerCase()] || null
+                    const icon = hasText(meta?.icon) ? String(meta.icon) : ""
+                    const packageName = hasText(meta?.packageName) ? String(meta.packageName) : t("assets.unknownPackage")
+                    const title = hasText(meta?.label) ? String(meta.label) : `[${groupKey}]`
+                    return (
+                      <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-md border bg-background p-3'>
+                        <div className='flex items-center gap-2'>
+                          {hasText(icon) ? <img src={icon} alt={title} className='h-6 w-6 rounded-sm object-contain' /> : null}
+                          <p className='text-sm font-semibold break-all'>{title}</p>
+                        </div>
+                        <p className='text-xs text-muted-foreground break-all'>{packageName}</p>
+                        <div className='space-y-1'>
+                          {files.map((file) => (
+                            <div key={`apk-file-${file.fullPath}`} className='flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2'>
+                              <div className='flex min-w-0 items-center gap-2 text-sm'>
+                                <span className='shrink-0'>{file.name}</span>
+                                <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{file.relativePath}</span>
+                              </div>
+                              <span className='whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
                             </div>
-                            <span className='text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })
+                    )
+                  })}
+                </div>
               )}
             </CardContent>
       </Card>
