@@ -51,6 +51,12 @@ const PACKAGE_NAME_LABELS = Object.fromEntries(
 const PACKAGE_NAME_ICON_FALLBACKS = Object.fromEntries(
   Object.entries(defaultPackageMetaMap || {}).map(([packageName, meta]) => [String(packageName || "").trim().toLowerCase(), String(meta?.icon || "").trim()]),
 )
+const BUILD_STAGE_DEFINITIONS = [
+  { key: "morpheCli", labelKey: "build.stage.morpheCli" },
+  { key: "patches", labelKey: "build.stage.patches" },
+  { key: "downloadApk", labelKey: "build.stage.downloadApk" },
+  { key: "javaBuild", labelKey: "build.stage.javaBuild" },
+]
 
 let appIdSeed = 0
 
@@ -662,6 +668,41 @@ function isNotFoundError(error) {
   return text.includes("404") || text.includes("not found")
 }
 
+function detectBuildStageIndexFromLine(line) {
+  const text = String(line || "")
+    .trim()
+    .toLowerCase()
+  if (!text) return -1
+
+  const matchesJavaBuild = (text.includes("java") && (text.includes("-jar") || text.includes("list-patches") || text.includes("patch"))) || text.includes("running java")
+  if (matchesJavaBuild) return 3
+
+  const matchesDownloadApk =
+    text.includes("download apk") ||
+    text.includes("resolved download url") ||
+    text.includes("provider downloaded file") ||
+    text.includes("using local apk") ||
+    text.includes("下載 apk") ||
+    text.includes("下載並保存成功")
+  if (matchesDownloadApk) return 2
+
+  const matchesPatches =
+    text.includes("patch file") ||
+    text.includes("auto patch bundle") ||
+    text.includes("patches") ||
+    text.includes(" patch ")
+  if (matchesPatches) return 1
+
+  const matchesMorpheCli =
+    text.includes("morphe-cli") ||
+    text.includes("morphe cli") ||
+    text.includes("locked morphe-cli") ||
+    text.includes("auto morphe-cli")
+  if (matchesMorpheCli) return 0
+
+  return -1
+}
+
 function App() {
   const activeNav = useUiStore((state) => state.activeNav)
   const setActiveNav = useUiStore((state) => state.setActiveNav)
@@ -705,6 +746,7 @@ function App() {
   const [liveTaskId, setLiveTaskId] = useState("")
   const [liveTask, setLiveTask] = useState(null)
   const [liveTaskLog, setLiveTaskLog] = useState("")
+  const [logDialogTaskId, setLogDialogTaskId] = useState("")
   const [buildLaunchPending, setBuildLaunchPending] = useState(false)
   const [configLoaded, setConfigLoaded] = useState(false)
   const [isAutoSavingConfig, setIsAutoSavingConfig] = useState(false)
@@ -1988,6 +2030,96 @@ async function refreshTasks() {
       .filter(Boolean)
     return lines.length > 0 ? lines[lines.length - 1] : ""
   }, [liveTaskLog])
+  const buildProgressStages = useMemo(() => {
+    const status = String(liveTask?.status || "").toLowerCase()
+    const isWorking = buildLaunchPending || status === "running" || status === "stopping"
+    const isFailed = status === "failed" || status === "canceled"
+    const isCompleted = status === "completed"
+
+    const lines = String(liveTaskLog || "")
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    let furthestStageIndex = -1
+    for (const line of lines) {
+      const stageIndex = detectBuildStageIndexFromLine(line)
+      if (stageIndex > furthestStageIndex) {
+        furthestStageIndex = stageIndex
+      }
+    }
+
+    const currentIndex = furthestStageIndex >= 0 ? furthestStageIndex : isWorking ? 0 : -1
+    return BUILD_STAGE_DEFINITIONS.map((stage, index) => {
+      let state = "pending"
+      if (isCompleted) {
+        state = index <= Math.max(currentIndex, 3) ? "done" : "pending"
+      } else if (isFailed) {
+        if (index < currentIndex) state = "done"
+        if (index === currentIndex) state = "error"
+      } else if (isWorking) {
+        if (index < currentIndex) state = "done"
+        if (index === currentIndex) state = "active"
+      }
+      return {
+        key: stage.key,
+        label: t(stage.labelKey),
+        state,
+      }
+    })
+  }, [buildLaunchPending, liveTask?.status, liveTaskLog, t])
+  const selectedTaskLog = String(taskLogs[selectedTaskId] || "")
+  const selectedTaskLastLine = useMemo(() => {
+    const lines = String(selectedTaskLog || "")
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    return lines.length > 0 ? lines[lines.length - 1] : ""
+  }, [selectedTaskLog])
+  const dialogTargetTaskId = String(logDialogTaskId || liveTaskId || selectedTaskId || "").trim()
+  const dialogTargetTask = useMemo(() => {
+    if (!dialogTargetTaskId) return null
+    if (String(liveTaskId || "") === dialogTargetTaskId && liveTask) return liveTask
+    if (selectedTask && String(selectedTask.id || "") === dialogTargetTaskId) return selectedTask
+    return tasks.find((task) => String(task?.id || "") === dialogTargetTaskId) || null
+  }, [dialogTargetTaskId, liveTaskId, liveTask, selectedTask, tasks])
+  const dialogTargetStatus = String(
+    String(liveTaskId || "") === dialogTargetTaskId ? liveTaskStatus : dialogTargetTask?.status || "",
+  )
+  const dialogTargetLog = String(
+    String(liveTaskId || "") === dialogTargetTaskId ? liveTaskLog : taskLogs[dialogTargetTaskId] || selectedTaskLog || "",
+  )
+  const dialogTargetLastLine = useMemo(() => {
+    if (String(liveTaskId || "") === dialogTargetTaskId) return liveLastLine
+    const lines = String(dialogTargetLog || "")
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    return lines.length > 0 ? lines[lines.length - 1] : selectedTaskLastLine
+  }, [dialogTargetLog, dialogTargetTaskId, liveLastLine, liveTaskId, selectedTaskLastLine])
+
+  function onOpenLogDialog(taskId = "") {
+    const target = String(taskId || "").trim()
+    const fallback = String(liveTaskId || selectedTaskId || "").trim()
+    const resolved = target || fallback
+    if (!resolved) {
+      setLogDialogTaskId("")
+      setLogDialogOpen(true)
+      return
+    }
+    if (target) {
+      setSelectedTaskId(target)
+    }
+    setLogDialogTaskId(resolved)
+    setLogDialogOpen(true)
+  }
+
+  function onLogDialogOpenChange(open) {
+    setLogDialogOpen(open)
+    if (!open) {
+      setLogDialogTaskId("")
+    }
+  }
 
   return (
     <div className='shell-layout'>
@@ -2058,7 +2190,9 @@ async function refreshTasks() {
             buildLaunchPending={buildLaunchPending}
             isBuildStopping={isBuildStopping}
             liveLastLine={liveLastLine}
-            setLogDialogOpen={setLogDialogOpen}
+            liveTaskStartedAt={liveTask?.startedAt || ""}
+            buildProgressStages={buildProgressStages}
+            onOpenLogDialog={() => onOpenLogDialog(liveTaskId)}
             liveTaskId={liveTaskId}
             onStopBuildTask={onStopBuildTask}
             onBuildPrimaryAction={onBuildPrimaryAction}
@@ -2142,26 +2276,23 @@ async function refreshTasks() {
             refreshTasks={refreshTasks}
             isBusy={isBusy}
             tasks={tasks}
-            selectedTaskId={selectedTaskId}
-            setSelectedTaskId={setSelectedTaskId}
-            taskLogs={taskLogs}
             formatTaskLabel={formatTaskLabel}
             statusVariant={statusVariant}
             deletingTaskId={deletingTaskId}
             onOpenTaskOutputDir={onOpenSelectedTaskOutputDir}
             openingTaskFolder={openingTaskFolder}
+            onOpenTaskLog={onOpenLogDialog}
           />
         ) : null}
 
         <TaskDialogs
           t={t}
           logDialogOpen={logDialogOpen}
-          setLogDialogOpen={setLogDialogOpen}
-          liveTaskId={liveTaskId}
-          liveTaskStatus={liveTaskStatus}
+          setLogDialogOpen={onLogDialogOpenChange}
+          taskId={dialogTargetTaskId}
+          taskStatus={dialogTargetStatus}
           statusVariant={statusVariant}
-          liveLastLine={liveLastLine}
-          liveTaskLog={liveTaskLog}
+          taskLog={dialogTargetLog}
         />
 
         <ConfigPathDialog open={configPathDialogOpen} onOpenChange={setConfigPathDialogOpen} t={t} configPath={configPath} setConfigPath={setConfigPath} />

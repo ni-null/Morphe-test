@@ -318,9 +318,9 @@ export default function AssetsPage({
                   {morpheLocalFiles.length === 0 ? (
                     <p className='text-sm text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
                   ) : (
-                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1'>
                       {morpheLocalFiles.map((file) => (
-                        <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1'>
+                        <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                           <div className='min-w-0'>
                             <div className='flex min-w-0 items-center gap-2 text-sm'>
                               <span className='shrink-0 font-medium'>{file.name}</span>
@@ -347,14 +347,14 @@ export default function AssetsPage({
               ) : (
                 <div className='space-y-2'>
                   {morpheMixedItems.length === 0 ? null : (
-                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1'>
                       {morpheMixedItems.map((item) => {
                         const isDownloading = morpheSourceDownloading && String(morpheSourceVersion || "").trim() === String(item.fileName || "").trim()
                         const canDownload = item.isRemote && !item.hasLocal
                         return (
                           <div
                             key={`assets-morphe-mixed-${item.key}`}
-                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/70" : ""}`}
+                            className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/40" : ""}`}
                             onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : undefined}>
                             <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                               {item.hasLocal ? (
@@ -424,9 +424,9 @@ export default function AssetsPage({
                   {patchesLocalFiles.length === 0 ? (
                     <p className='text-sm text-muted-foreground'>{t("patches.noLocalFiles")}</p>
                   ) : (
-                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1'>
                       {patchesLocalFiles.map((file) => (
-                        <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1'>
+                        <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                           <div className='min-w-0'>
                             <div className='flex min-w-0 items-center gap-2 text-sm'>
                               <span className='shrink-0 font-medium'>{file.name}</span>
@@ -453,14 +453,14 @@ export default function AssetsPage({
               ) : (
                 <div className='space-y-2'>
                   {patchesMixedItems.length === 0 ? null : (
-                    <div className='assets-scroll max-h-56 space-y-2 overflow-y-auto pr-1'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1'>
                       {patchesMixedItems.map((item) => {
                         const isDownloading = patchesSourceDownloading && String(patchesSourceVersion || "").trim() === String(item.fileName || "").trim()
                         const canDownload = item.isRemote && !item.hasLocal
                         return (
                           <div
                             key={`assets-patches-mixed-${item.key}`}
-                            className={`flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/70" : ""}`}
+                            className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/40" : ""}`}
                             onClick={canDownload ? () => onDownloadPatchesItem(item.fileName) : undefined}>
                             <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                               {item.hasLocal ? (
@@ -502,7 +502,7 @@ export default function AssetsPage({
               {apkGroups.length === 0 ? (
                 <p className='text-sm text-muted-foreground'>{t("assets.noApkFiles")}</p>
               ) : (
-                <div className='assets-scroll max-h-72 space-y-3 overflow-y-auto pr-1'>
+                <div className='assets-scroll max-h-72 space-y-2 overflow-y-auto pr-1'>
                   {apkGroups.map(([groupKey, files]) => {
                     const meta = sectionMetaMap[String(groupKey || "").toLowerCase()] || null
                     const icon = hasText(meta?.icon) ? String(meta.icon) : ""
@@ -511,10 +511,10 @@ export default function AssetsPage({
                     const key = String(groupKey || "__unknown__")
                     const expanded = apkExpandedByGroup[key] === true
                     return (
-                      <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-md bg-slate-50 p-2'>
+                      <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-xl bg-slate-100/85 p-2.5'>
                         <button
                           type='button'
-                          className='flex h-10 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left hover:bg-slate-100'
+                          className='flex h-10 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left hover:bg-slate-100/80'
                           onClick={() => {
                             setApkExpandedByGroup((prev) => ({
                               ...prev,
@@ -528,9 +528,9 @@ export default function AssetsPage({
                           <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
                         </button>
                         {expanded ? (
-                          <div className='space-y-1'>
+                          <div className='space-y-1 rounded-lg bg-slate-100/80 p-1.5'>
                             {files.map((file) => (
-                              <div key={`apk-file-${file.fullPath}`} className='flex items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5'>
+                              <div key={`apk-file-${file.fullPath}`} className='flex items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 hover:bg-slate-200/80'>
                                 <span className='min-w-0 flex-1 truncate text-sm'>{file.name}</span>
                                 <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
                                 <button
@@ -566,11 +566,11 @@ export default function AssetsPage({
           <div className='space-y-3'>
             <div className='space-y-2'>
               <Label>{t("source.customRepos")}</Label>
-              <div className='assets-scroll max-h-40 space-y-2 overflow-y-auto pr-1'>
+              <div className='assets-scroll max-h-40 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1'>
                 {manageRepoOptions.map((repo) => {
                   const isDefault = String(repo || "").trim().toLowerCase() === String(defaultRepo || "").trim().toLowerCase()
                   return (
-                    <div key={`assets-manage-repo-${repo}`} className='flex min-h-8 items-center justify-between gap-2 rounded-md bg-muted/60 px-2.5 py-1'>
+                    <div key={`assets-manage-repo-${repo}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                       <span className='min-w-0 truncate text-sm'>{repo}</span>
                       {isDefault ? null : (
                         <Button

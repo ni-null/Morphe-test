@@ -1,8 +1,7 @@
-import { ChevronDown, ChevronUp, FolderOpen, Loader2, RefreshCw, Trash2 } from "lucide-react"
+import { FolderOpen, Loader2, RefreshCw, Trash2 } from "lucide-react"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
-import { cn } from "../lib/utils"
 
 export default function HistoryPage({
   t,
@@ -12,19 +11,13 @@ export default function HistoryPage({
   refreshTasks,
   isBusy,
   tasks,
-  selectedTaskId,
-  setSelectedTaskId,
-  taskLogs,
   formatTaskLabel,
   statusVariant,
   deletingTaskId,
   onOpenTaskOutputDir,
   openingTaskFolder,
+  onOpenTaskLog,
 }) {
-  const toggleTaskLog = (taskId) => {
-    setSelectedTaskId(selectedTaskId === taskId ? "" : taskId)
-  }
-
   return (
     <div className='space-y-4'>
       <Card>
@@ -61,11 +54,19 @@ export default function HistoryPage({
         <CardContent>
           <div className='grid gap-2 max-h-[520px] overflow-auto'>
             {tasks.map((task) => {
-              const isExpanded = selectedTaskId === task.id
-              const log = taskLogs[task.id] || ""
               return (
                 <div key={task.id} className='w-full'>
-                  <div className='rounded-md border px-3 py-2'>
+                  <div
+                    className='rounded-md border px-3 py-2 cursor-pointer'
+                    role='button'
+                    tabIndex={0}
+                    onClick={() => onOpenTaskLog(task.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        onOpenTaskLog(task.id)
+                      }
+                    }}>
                     <div className='flex items-center justify-between gap-2'>
                       <span className='text-sm flex-1 min-w-0 break-all'>{formatTaskLabel(task)}</span>
                       <div className='flex items-center gap-1 shrink-0'>
@@ -73,17 +74,10 @@ export default function HistoryPage({
                         <Button
                           variant='ghost'
                           size='icon'
-                          onClick={() => toggleTaskLog(task.id)}
-                          disabled={!task.taskLogPath}
-                          title={isExpanded ? t("dialog.hideTaskLog") : t("dialog.viewTaskLog")}
-                          aria-label={isExpanded ? t("dialog.hideTaskLog") : t("dialog.viewTaskLog")}
-                          className='h-7 w-7 text-muted-foreground hover:text-foreground'>
-                          {isExpanded ? <ChevronUp className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          onClick={() => onOpenTaskOutputDir(task.id)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onOpenTaskOutputDir(task.id)
+                          }}
                           disabled={openingTaskFolder}
                           title={t("dialog.openTaskOutput")}
                           aria-label={t("dialog.openTaskOutput")}
@@ -106,13 +100,6 @@ export default function HistoryPage({
                       </div>
                     </div>
                   </div>
-                  {isExpanded && (
-                    <div className='rounded-md border border-t-0 bg-muted/30 -mt-px px-3 py-2'>
-                      <pre className='mono-box max-h-[300px] overflow-auto text-xs'>
-                        {log || t("dialog.noLog")}
-                      </pre>
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -122,4 +109,3 @@ export default function HistoryPage({
     </div>
   )
 }
-

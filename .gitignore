@@ -5,6 +5,7 @@ cache/
 morphe-cli/
 patches/
 runtime/
+workspace/
 
 # Build artifacts
 dist/
