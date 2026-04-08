@@ -8,7 +8,7 @@ const { registerIpcHandlers } = require("./ipc/handlers");
 const APP_CONTENT_ROOT = app.isPackaged
   ? path.join(process.resourcesPath, "app.asar")
   : path.resolve(__dirname, "..");
-const WEB_DIST_DIR = path.join(APP_CONTENT_ROOT, "web", "dist");
+const WEB_DIST_DIR = path.join(APP_CONTENT_ROOT, "desktop", "web", "dist");
 const PRELOAD_PATH = path.join(__dirname, "preload.js");
 const DESKTOP_DEV = String(process.env.DESKTOP_DEV || "") === "1";
 const VITE_DEV_URL = process.env.VITE_DEV_URL || "http://127.0.0.1:5173";
@@ -29,7 +29,7 @@ async function createMainWindow() {
     if (!fileExists(path.join(WEB_DIST_DIR, "index.html"))) {
       dialog.showErrorBox(
         "Missing UI Build",
-        "web/dist not found. Run `npm run web:build` before launching Electron.",
+        "desktop/web/dist not found. Run `npm run web:build` before launching Electron.",
       );
       app.quit();
       return;

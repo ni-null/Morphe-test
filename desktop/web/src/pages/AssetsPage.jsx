@@ -13,6 +13,15 @@ const PATCHES_ADD_CUSTOM_REPO_VALUE = "__ADD_CUSTOM_PATCHES_REPO__"
 const MORPHE_LOCAL_SOURCE_VALUE = "__MORPHE_LOCAL_SOURCE__"
 const PATCHES_LOCAL_SOURCE_VALUE = "__PATCHES_LOCAL_SOURCE__"
 
+function normalizePackageIconPath(value) {
+  const text = String(value || "").trim()
+  if (!text) return ""
+  if (/^(https?:|data:|file:)/i.test(text)) return text
+  if (text.startsWith("/assets/")) return `.${text}`
+  if (text.startsWith("assets/")) return `./${text}`
+  return text
+}
+
 function inferGroupKeyFromApk(file) {
   const name = String(file?.name || file?.fileName || "")
   const first = String(name.split("-")[0] || "")
@@ -44,7 +53,7 @@ function buildSectionToPackageMetaMap(source) {
     out[section] = {
       packageName: String(packageName || "").trim(),
       label: String(meta?.label || "").trim(),
-      icon: String(meta?.icon || "").trim(),
+      icon: normalizePackageIconPath(meta?.icon),
     }
   }
   return out

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
-import { Code2, FileText, Hammer, Package, Pencil, Play, Plus, RefreshCw, Settings2, Smartphone, Square } from "lucide-react"
+import { Cloud, Code2, FileText, FlaskConical, FolderGit2,SquareChevronRight ,Hammer, HardDrive, Package, Pencil, Play, Plus, RefreshCw, Settings2, Smartphone, Square } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Label } from "../components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { Textarea } from "../components/ui/textarea"
 import { cn } from "../lib/utils"
 
@@ -27,8 +28,12 @@ export default function BuildPage({
   generatedToml,
   rawConfigInput,
   setRawConfigInputValue,
-  setMorpheSettingsOpen,
-  setPatchesSettingsOpen,
+  morpheCliSelectValue,
+  morpheCliSelectOptions,
+  onChangeMorpheCliSelect,
+  patchesSelectValue,
+  patchesSelectOptions,
+  onChangePatchesSelect,
   appendApp,
   apps,
   updateApp,
@@ -39,6 +44,28 @@ export default function BuildPage({
 }) {
   const [nowMs, setNowMs] = useState(() => Date.now())
   const isWorking = isBuildRunning || buildLaunchPending || isBuildStopping
+
+  function renderSourceOption(item) {
+    const kind = String(item?.kind || "").trim().toLowerCase()
+    const label = String(item?.label || "").trim()
+    const folderLabel = String(item?.folderLabel || "").trim()
+    const Icon = kind === "remote-dev" ? FlaskConical : kind === "local-file" ? HardDrive : Cloud
+    const iconClassName =
+      kind === "remote-dev"
+        ? "h-3.5 w-3.5 text-amber-600"
+        : kind === "local-file"
+          ? "h-3.5 w-3.5 text-slate-600"
+          : "h-3.5 w-3.5 text-sky-600"
+    return (
+      <>
+        <span className='inline-flex min-w-0 flex-1 items-center gap-2'>
+          <Icon className={iconClassName} />
+          <span className='min-w-0 truncate'>{label}</span>
+        </span>
+        {kind === "local-file" && folderLabel ? <span className='ml-auto shrink-0 text-xs text-muted-foreground'>{`(${folderLabel})`}</span> : null}
+      </>
+    )
+  }
 
   useEffect(() => {
     if (!isWorking) return
@@ -214,23 +241,41 @@ export default function BuildPage({
             <div className='space-y-4'>
               <section className='space-y-2'>
                 <h3 className='text-base font-semibold'>{t("settings.source")}</h3>
-                <div className='flex flex-wrap gap-2'>
-                  <Button
-                    variant='ghost'
-                    className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200'
-                    onClick={() => setMorpheSettingsOpen(true)}
-                    disabled={isBusy}>
-                    <Settings2 className='h-6 w-6' />
-                    morphe-cli
-                  </Button>
-                  <Button
-                    variant='ghost'
-                    className='h-11 px-5 text-base border-0 bg-slate-100 hover:bg-slate-200'
-                    onClick={() => setPatchesSettingsOpen(true)}
-                    disabled={isBusy}>
-                    <Package className='h-6 w-6' />
-                    patches
-                  </Button>
+                <div className='grid w-full grid-cols-2 gap-2'>
+                  <Select value={morpheCliSelectValue} onValueChange={onChangeMorpheCliSelect}>
+                    <SelectTrigger className='h-10 w-full border-0 bg-slate-50 hover:bg-slate-50'>
+                      <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
+                        <SquareChevronRight className='h-3.5 w-3.5' />
+                      </span>
+                      <span className='pointer-events-none min-w-0 truncate px-2 text-left'>
+                        <SelectValue />
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent position='popper' side='bottom' align='start'>
+                      {(Array.isArray(morpheCliSelectOptions) ? morpheCliSelectOptions : []).map((item) => (
+                        <SelectItem key={`morphe-cli-select-${item.value}`} value={item.value}>
+                          {renderSourceOption(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={patchesSelectValue} onValueChange={onChangePatchesSelect}>
+                    <SelectTrigger className='h-10 w-full border-0 bg-slate-50 hover:bg-slate-50'>
+                      <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
+                        <Package className='h-3.5 w-3.5' />
+                       </span>
+                      <span className='pointer-events-none min-w-0 truncate px-2 text-left'>
+                        <SelectValue />
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent position='popper' side='bottom' align='start'>
+                      {(Array.isArray(patchesSelectOptions) ? patchesSelectOptions : []).map((item) => (
+                        <SelectItem key={`patches-select-${item.value}`} value={item.value}>
+                          {renderSourceOption(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </section>
 

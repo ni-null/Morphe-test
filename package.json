@@ -3,14 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "description": "Auto download APK and patch with morphe-cli on Windows",
+  "workspaces": [
+    "desktop",
+    "desktop/web"
+  ],
   "scripts": {
-    "web:ui": "npm --prefix ./web run dev",
-    "web:build": "npm --prefix ./web run build",
-    "desktop:install": "npm --prefix ./desktop install",
-    "desktop:dev": "npm --prefix ./desktop run dev",
-    "desktop:start": "npm run web:build && npm --prefix ./desktop run start",
-    "desktop:pack": "npm run web:build && npm --prefix ./desktop run pack",
-    "i18n:patches:zh-TW": "npm --prefix ./web run i18n:patches:zh-TW"
+    "web:dev": "npm run dev --workspace desktop/web",
+    "web:ui": "npm run web:dev",
+    "web:build": "npm run build --workspace desktop/web",
+    "desktop:install": "npm install --workspace desktop",
+    "desktop:dev": "npm run dev --workspace desktop",
+    "desktop:start": "npm run web:build && npm run start --workspace desktop",
+    "desktop:pack": "npm run web:build && npm run pack --workspace desktop",
+    "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace desktop/web"
   },
   "dependencies": {
     "chalk": "^4.1.2"
@@ -23,7 +28,7 @@
     },
     "files": [
       "desktop/**/*",
-      "web/dist/**/*",
+      "desktop/web/dist/**/*",
       "main.js",
       "scripts/**/*",
       "utils/**/*",

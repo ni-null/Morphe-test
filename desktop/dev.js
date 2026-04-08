@@ -29,7 +29,7 @@ function spawnNpm(label, scriptArgs, options = {}) {
   return spawnProcess(label, "npm", scriptArgs, options)
 }
 
-const ui = spawnNpm("web-ui", ["--prefix", "./web", "run", "dev"])
+const ui = spawnNpm("web-ui", ["--prefix", "./desktop/web", "run", "dev"])
 
 const desktop = spawnProcess("desktop", electronBin, [path.join(__dirname, "main.js")], {
   env: {

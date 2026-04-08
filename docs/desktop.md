@@ -11,7 +11,7 @@
 - `desktop/preload.js`: secure bridge (`contextBridge`) for renderer.
 - `desktop/ipc/handlers.js`: IPC router and app service operations.
 - `desktop/ipc/task-service.js`: task/state layer (spawn CLI, history, logs, cache, sources).
-- `web/`: React renderer UI (loaded by Electron).
+- `desktop/web/`: React renderer UI (loaded by Electron).
 
 ## Communication
 - Renderer calls `window.morpheDesktop.invoke(method, payload)`.

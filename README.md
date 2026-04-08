@@ -59,16 +59,16 @@ mode = "remote" # remote / local / false
 
 ## Desktop App (IPC)
 Desktop UI is now Electron-only and communicates through IPC (no standalone web-api server):
-- Renderer: `web/` (Vite + React)
+- Renderer: `desktop/web/` (Vite + React)
 - Bridge: `desktop/preload.js` + `desktop/ipc/handlers.js`
 - Core execution: still `main.js` CLI child process
 
 Renderer structure (kept intentionally simple):
-- `web/src/App.jsx`: orchestration only (state + action wiring)
-- `web/src/pages/*`: page-level UI
-- `web/src/features/*`: large dialogs/feature blocks
-- `web/src/services/*`: IPC-facing service wrappers
-- `web/src/stores/*`: shared UI state only (`uiStore`, `dialogStore`)
+- `desktop/web/src/App.jsx`: orchestration only (state + action wiring)
+- `desktop/web/src/pages/*`: page-level UI
+- `desktop/web/src/features/*`: large dialogs/feature blocks
+- `desktop/web/src/services/*`: IPC-facing service wrappers
+- `desktop/web/src/stores/*`: shared UI state only (`uiStore`, `dialogStore`)
 
 Commands:
 - `npm run web:build`

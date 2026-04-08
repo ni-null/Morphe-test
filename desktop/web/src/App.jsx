@@ -102,6 +102,26 @@ function hasText(value) {
   return String(value || "").trim().length > 0
 }
 
+function normalizePackageIconPath(value) {
+  const text = String(value || "").trim()
+  if (!text) return ""
+  if (/^(https?:|data:|file:)/i.test(text)) return text
+  if (text.startsWith("/assets/")) return `.${text}`
+  if (text.startsWith("assets/")) return `./${text}`
+  return text
+}
+
+function extractSourceFolderLabel(file) {
+  const relativePath = String(file?.relativePath || "")
+    .trim()
+    .replace(/\\/g, "/")
+  if (relativePath) {
+    const repoDir = String(relativePath.split("/")[0] || "").trim()
+    if (repoDir) return repoDir.replace(/@/g, "/")
+  }
+  return ""
+}
+
 function mergeRepoOptions(prev, candidate, baseRepo = "") {
   const list = Array.isArray(prev) ? prev : []
   const merged = list.map((item) => String(item || "").trim()).filter(Boolean)
@@ -2115,9 +2135,10 @@ function App() {
   }, [patchesSettingsOpen, patchesSourceRepo])
 
   useEffect(() => {
-    if (activeNav !== NAV_ASSETS) return
+    if (activeNav !== NAV_ASSETS && activeNav !== NAV_BUILD) return
     loadMorpheLocalFiles()
     loadPatchesLocalFiles()
+    if (activeNav === NAV_BUILD) return
     loadMorpheSourceVersions()
     loadPatchesSourceVersions()
     loadDownloadedApkFiles()
@@ -2152,8 +2173,8 @@ function App() {
       .trim()
       .toLowerCase()
     const item = packageMetaMap && typeof packageMetaMap === "object" ? packageMetaMap[key] : null
-    if (item && hasText(item.icon)) return String(item.icon).trim()
-    return hasText(PACKAGE_NAME_ICON_FALLBACKS[key]) ? String(PACKAGE_NAME_ICON_FALLBACKS[key]).trim() : ""
+    if (item && hasText(item.icon)) return normalizePackageIconPath(item.icon)
+    return hasText(PACKAGE_NAME_ICON_FALLBACKS[key]) ? normalizePackageIconPath(PACKAGE_NAME_ICON_FALLBACKS[key]) : ""
   }
   function resolvePackageDisplayName(packageName) {
     const key = String(packageName || "")
@@ -2220,6 +2241,89 @@ function App() {
       .filter(Boolean)
     return lines.length > 0 ? lines[lines.length - 1] : ""
   }, [selectedTaskLog])
+  const morpheCliSelectOptions = useMemo(() => {
+    const options = [
+      { value: MORPHE_REMOTE_STABLE_VALUE, label: "latest stable (MorpheApp/morphe-cli)", kind: "remote-stable" },
+      { value: MORPHE_REMOTE_DEV_VALUE, label: "latest dev (MorpheApp/morphe-cli)", kind: "remote-dev" },
+    ]
+    const localItems = (Array.isArray(morpheLocalFiles) ? morpheLocalFiles : []).map((file) => ({
+      value: String(file?.fullPath || "").trim(),
+      label: String(file?.name || "").trim() || String(file?.relativePath || "").trim(),
+      folderLabel: extractSourceFolderLabel(file),
+      kind: "local-file",
+    }))
+    for (const item of localItems) {
+      if (!hasText(item.value) || !hasText(item.label)) continue
+      if (options.some((option) => option.value === item.value)) continue
+      options.push(item)
+    }
+    return options
+  }, [morpheLocalFiles])
+
+  const morpheCliSelectValue = useMemo(() => {
+    const mode = String(configForm?.morpheCli?.mode || "stable").trim().toLowerCase()
+    if (mode === "dev") return MORPHE_REMOTE_DEV_VALUE
+    if (mode === "stable") return MORPHE_REMOTE_STABLE_VALUE
+    const localValue = String(configForm?.morpheCli?.path || "").trim()
+    if (localValue && morpheCliSelectOptions.some((item) => item.value === localValue)) return localValue
+    return MORPHE_REMOTE_STABLE_VALUE
+  }, [configForm?.morpheCli?.mode, configForm?.morpheCli?.path, morpheCliSelectOptions])
+
+  function onChangeMorpheCliSelect(value) {
+    const selected = String(value || "").trim()
+    if (!selected) return
+    if (selected === MORPHE_REMOTE_STABLE_VALUE) {
+      updateConfigSection("morpheCli", { mode: "stable" })
+      return
+    }
+    if (selected === MORPHE_REMOTE_DEV_VALUE) {
+      updateConfigSection("morpheCli", { mode: "dev" })
+      return
+    }
+    updateConfigSection("morpheCli", { mode: "local", path: selected })
+  }
+
+  const patchesSelectOptions = useMemo(() => {
+    const options = [
+      { value: PATCHES_REMOTE_STABLE_VALUE, label: "latest stable (MorpheApp/morphe-patches)", kind: "remote-stable" },
+      { value: PATCHES_REMOTE_DEV_VALUE, label: "latest dev (MorpheApp/morphe-patches)", kind: "remote-dev" },
+    ]
+    const localItems = (Array.isArray(patchesLocalFiles) ? patchesLocalFiles : []).map((file) => ({
+      value: String(file?.fullPath || "").trim(),
+      label: String(file?.name || "").trim() || String(file?.relativePath || "").trim(),
+      folderLabel: extractSourceFolderLabel(file),
+      kind: "local-file",
+    }))
+    for (const item of localItems) {
+      if (!hasText(item.value) || !hasText(item.label)) continue
+      if (options.some((option) => option.value === item.value)) continue
+      options.push(item)
+    }
+    return options
+  }, [patchesLocalFiles])
+
+  const patchesSelectValue = useMemo(() => {
+    const mode = String(configForm?.patches?.mode || "stable").trim().toLowerCase()
+    if (mode === "dev") return PATCHES_REMOTE_DEV_VALUE
+    if (mode === "stable") return PATCHES_REMOTE_STABLE_VALUE
+    const localValue = String(configForm?.patches?.path || "").trim()
+    if (localValue && patchesSelectOptions.some((item) => item.value === localValue)) return localValue
+    return PATCHES_REMOTE_STABLE_VALUE
+  }, [configForm?.patches?.mode, configForm?.patches?.path, patchesSelectOptions])
+
+  function onChangePatchesSelect(value) {
+    const selected = String(value || "").trim()
+    if (!selected) return
+    if (selected === PATCHES_REMOTE_STABLE_VALUE) {
+      updateConfigSection("patches", { mode: "stable" })
+      return
+    }
+    if (selected === PATCHES_REMOTE_DEV_VALUE) {
+      updateConfigSection("patches", { mode: "dev" })
+      return
+    }
+    updateConfigSection("patches", { mode: "local", path: selected })
+  }
   const dialogTargetTaskId = String(logDialogTaskId || liveTaskId || selectedTaskId || "").trim()
   const dialogTargetTask = useMemo(() => {
     if (!dialogTargetTaskId) return null
@@ -2355,8 +2459,12 @@ function App() {
             generatedToml={generatedToml}
             rawConfigInput={rawConfigInput}
             setRawConfigInputValue={setRawConfigInput}
-            setMorpheSettingsOpen={setMorpheSettingsOpen}
-            setPatchesSettingsOpen={setPatchesSettingsOpen}
+            morpheCliSelectValue={morpheCliSelectValue}
+            morpheCliSelectOptions={morpheCliSelectOptions}
+            onChangeMorpheCliSelect={onChangeMorpheCliSelect}
+            patchesSelectValue={patchesSelectValue}
+            patchesSelectOptions={patchesSelectOptions}
+            onChangePatchesSelect={onChangePatchesSelect}
             appendApp={appendApp}
             apps={configForm.apps}
             updateApp={updateApp}
