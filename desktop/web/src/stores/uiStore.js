@@ -8,11 +8,16 @@ function normalizeLocale(value) {
   return String(value || "").trim() === "zh-TW" ? "zh-TW" : DEFAULT_LOCALE
 }
 
+function normalizeTheme(value) {
+  return String(value || "").trim() === "dark" ? "dark" : "light"
+}
+
 export const useUiStore = create(
   persist(
     (set) => ({
       activeNav: "build",
       locale: DEFAULT_LOCALE,
+      theme: "light",
       setActiveNav: (activeNav) =>
         set(() => {
           const value = String(activeNav || "").trim()
@@ -24,6 +29,10 @@ export const useUiStore = create(
         set(() => ({
           locale: normalizeLocale(locale),
         })),
+      setTheme: (theme) =>
+        set(() => ({
+          theme: normalizeTheme(theme),
+        })),
     }),
     {
       name: UI_STORE_KEY,
@@ -31,6 +40,7 @@ export const useUiStore = create(
       partialize: (state) => ({
         activeNav: state.activeNav,
         locale: state.locale,
+        theme: state.theme,
       }),
     },
   ),

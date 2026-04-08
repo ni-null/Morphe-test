@@ -26,6 +26,10 @@ const {
   safeFileName,
   formatError,
 } = require("./utils/common");
+const {
+  buildPatchedApkName,
+  resolvePatchNamingParts,
+} = require("./utils/patch-naming");
 const { readTomlFile } = require("./utils/toml");
 const { toAbsoluteUrl, getHrefMatches, selectBestByVersion } = require("./utils/url");
 const { createRuntime } = require("./utils/runtime");
@@ -170,13 +174,6 @@ async function findPatchedApkFile(outputDir, apkPath, runtime) {
   );
   ranked.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
   return ranked[0].apkFile;
-}
-
-function buildPatchedApkName(appName, apkVersion, patchPath) {
-  const appLabel = safeFileName(appName);
-  const versionLabel = safeFileName(hasValue(apkVersion) ? String(apkVersion).trim() : "unknown");
-  const patchLabel = safeFileName(path.basename(patchPath, path.extname(patchPath)));
-  return `morphe-${appLabel}-${versionLabel}-${patchLabel}.apk`;
 }
 
 async function runPatchFlow(params) {
@@ -654,12 +651,15 @@ async function run() {
         patchSelection,
       });
       if (releaseMetadata) {
+        const patchNaming = resolvePatchNamingParts(patchPath);
         releaseMetadata.apps.push({
           appName,
           apkVersion: apkResult.version,
           apkProvider: apkResult.provider || null,
           patchPath,
-          patchFileName: path.basename(patchPath),
+          patchFileName: patchNaming.patchFileName,
+          patchRepoName: patchNaming.patchRepoName,
+          patchVersionLabel: patchNaming.patchVersionLabel,
           outputApkPath,
         });
       }

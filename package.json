@@ -8,6 +8,7 @@
     "desktop/web"
   ],
   "scripts": {
+    "test:patch-naming": "node ./tests/patch-naming.test.js",
     "web:dev": "npm run dev --workspace morphe-web-ui",
     "web:ui": "npm run web:dev",
     "web:build": "npm run build --workspace morphe-web-ui",

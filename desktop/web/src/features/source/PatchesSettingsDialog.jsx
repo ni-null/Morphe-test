@@ -86,7 +86,7 @@ export default function PatchesSettingsDialog({
                         openConfirmDialog("delete-patches-file", t("confirm.deletePatchesTitle"), t("confirm.deletePatchesDesc", { path: file.relativePath }), file)
                       }}
                       disabled={patchesDeleteName === file.relativePath}
-                      className='h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700'>
+                      className='h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200'>
                       {patchesDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
                     </Button>
                   </div>
