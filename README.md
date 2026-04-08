@@ -71,7 +71,8 @@ Renderer structure (kept intentionally simple):
 - `desktop/web/src/App.jsx`: orchestration only (state + action wiring)
 - `desktop/web/src/pages/*`: page-level UI
 - `desktop/web/src/features/*`: large dialogs/feature blocks
-- `desktop/web/src/services/*`: IPC-facing service wrappers
+- `desktop/web/src/api.js`: IPC-facing request layer
+- `desktop/web/src/lib/app-core.js`: extracted pure helpers/constants for App runtime
 - `desktop/web/src/stores/*`: shared UI state only (`uiStore`, `dialogStore`)
 
 Commands:

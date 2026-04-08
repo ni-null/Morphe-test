@@ -71,7 +71,8 @@ package_name = "com.google.android.youtube"
 - `desktop/web/src/App.jsx`：流程協調（狀態與動作串接）
 - `desktop/web/src/pages/*`：頁面層 UI
 - `desktop/web/src/features/*`：較大的功能區塊 / 對話框
-- `desktop/web/src/services/*`：IPC 呼叫封裝
+- `desktop/web/src/api.js`：IPC 呼叫層
+- `desktop/web/src/lib/app-core.js`：抽離出的 App 純函式/常數
 - `desktop/web/src/stores/*`：共享 UI 狀態（`uiStore`、`dialogStore`）
 
 指令：
