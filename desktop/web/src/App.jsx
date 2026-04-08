@@ -781,6 +781,8 @@ function App() {
   const [taskLogs, setTaskLogs] = useState({})
   const [taskArtifacts, setTaskArtifacts] = useState([])
   const [taskOutputDir, setTaskOutputDir] = useState("")
+  const [buildGeneratedApks, setBuildGeneratedApks] = useState([])
+  const [buildGeneratedApksLoading, setBuildGeneratedApksLoading] = useState(false)
   const [deletingAllTasks, setDeletingAllTasks] = useState(false)
   const [clearingAllCache, setClearingAllCache] = useState(false)
   const [deletingTaskId, setDeletingTaskId] = useState("")
@@ -2176,6 +2178,75 @@ function App() {
     if (item && hasText(item.icon)) return normalizePackageIconPath(item.icon)
     return hasText(PACKAGE_NAME_ICON_FALLBACKS[key]) ? normalizePackageIconPath(PACKAGE_NAME_ICON_FALLBACKS[key]) : ""
   }
+  const completedBuildTaskSignature = useMemo(() => {
+    return tasks
+      .filter((task) => String(task?.status || "").toLowerCase() === "completed")
+      .slice(0, 12)
+      .map((task) => String(task?.id || ""))
+      .join("|")
+  }, [tasks])
+
+  useEffect(() => {
+    if (activeNav !== NAV_BUILD) return
+
+    const completedTasks = tasks
+      .filter((task) => String(task?.status || "").toLowerCase() === "completed")
+      .slice(0, 12)
+
+    if (completedTasks.length === 0) {
+      setBuildGeneratedApks([])
+      setBuildGeneratedApksLoading(false)
+      return
+    }
+
+    let canceled = false
+    setBuildGeneratedApksLoading(true)
+
+    Promise.allSettled(
+      completedTasks.map(async (task) => {
+        const taskId = String(task?.id || "").trim()
+        if (!taskId) return []
+        const data = await fetchTaskArtifacts(taskId)
+        const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : []
+        return artifacts.map((item) => ({
+          taskId,
+          taskStartedAt: String(task?.startedAt || ""),
+          fileName: String(item?.fileName || ""),
+          fullPath: String(item?.fullPath || ""),
+          relativePath: String(item?.relativePath || ""),
+          sizeBytes: Number(item?.sizeBytes || 0),
+          modifiedAt: String(item?.modifiedAt || ""),
+        }))
+      }),
+    )
+      .then((results) => {
+        if (canceled) return
+        const dedup = new Map()
+        for (const result of results) {
+          if (result.status !== "fulfilled" || !Array.isArray(result.value)) continue
+          for (const item of result.value) {
+            const key = String(item?.fullPath || "").trim() || `${item.taskId}:${item.relativePath}:${item.fileName}`
+            if (!key) continue
+            if (!dedup.has(key)) dedup.set(key, item)
+          }
+        }
+        const merged = Array.from(dedup.values())
+        merged.sort((a, b) => {
+          const aTime = Date.parse(String(a?.modifiedAt || ""))
+          const bTime = Date.parse(String(b?.modifiedAt || ""))
+          if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return bTime - aTime
+          return String(a?.fileName || "").localeCompare(String(b?.fileName || ""), undefined, { sensitivity: "base" })
+        })
+        setBuildGeneratedApks(merged)
+      })
+      .finally(() => {
+        if (!canceled) setBuildGeneratedApksLoading(false)
+      })
+
+    return () => {
+      canceled = true
+    }
+  }, [activeNav, completedBuildTaskSignature])
   function resolvePackageDisplayName(packageName) {
     const key = String(packageName || "")
       .trim()
@@ -2472,6 +2543,9 @@ function App() {
             hasText={hasText}
             setAppSettingsId={setAppSettingsId}
             setAppSettingsOpen={setAppSettingsOpen}
+            buildGeneratedApks={buildGeneratedApks}
+            buildGeneratedApksLoading={buildGeneratedApksLoading}
+            formatBytes={formatBytes}
           />
         ) : null}
 
