@@ -28,6 +28,9 @@ function buildCliEnv(options) {
   // Otherwise the child may finish script logic but keep Electron process alive, causing
   // task status to remain "running" on the UI side.
   env.ELECTRON_RUN_AS_NODE = "1";
+  if (options && options.signingKeystorePath) {
+    env.MORPHE_KEYSTORE_PATH = String(options.signingKeystorePath);
+  }
   return env;
 }
 

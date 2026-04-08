@@ -61,6 +61,7 @@ const DEFAULT_FLAGS = {
 const LIVE_BUILD_TASK_ID_KEY = "morphe.liveBuildTaskId"
 const MORPHE_SOURCE_REPOS_KEY = "morphe.source.repos"
 const PATCHES_SOURCE_REPOS_KEY = "patches.source.repos"
+const KEYSTORE_SELECTED_PATH_KEY = "morphe.signing.keystore.path"
 const DEFAULT_MORPHE_SOURCE_REPO = "MorpheApp/morphe-cli"
 const DEFAULT_PATCHES_SOURCE_REPO = "MorpheApp/morphe-patches"
 const APP_VER_AUTO_VALUE = "__APP_AUTO__"
@@ -377,6 +378,17 @@ function packageToSectionName(packageName) {
   return normalized
 }
 
+function customAppNameToSectionName(name) {
+  const normalized = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+  if (!normalized) return "custom_app"
+  if (/^[0-9]/u.test(normalized)) return `app_${normalized}`
+  return normalized
+}
+
 function resolveDisplayName(packageName, fallbackName) {
   const key = String(packageName || "")
     .trim()
@@ -427,7 +439,7 @@ function createEmptyApp(name = "", options = {}) {
   }
 }
 
-function createDefaultConfigForm() {
+function createLegacyDefaultApps() {
   const youtube = createEmptyApp("youtube", {
     packageName: "com.google.android.youtube",
     displayName: "YouTube",
@@ -443,7 +455,56 @@ function createDefaultConfigForm() {
   youtube.mode = "remote"
   youtubeMusic.mode = "false"
   reddit.mode = "false"
+  return [youtube, youtubeMusic, reddit]
+}
 
+function createDefaultAppsFromPresets() {
+  const templates = Array.isArray(appPresets) ? appPresets : []
+  if (templates.length === 0) {
+    return createLegacyDefaultApps()
+  }
+
+  const nextApps = []
+  const seenSectionKeys = new Set()
+  const seenPackageKeys = new Set()
+
+  for (const template of templates) {
+    const packageName = String(template?.packageName || template?.package_name || "").trim()
+    const section = hasText(template?.name) ? String(template.name).trim() : packageToSectionName(packageName)
+    if (!hasText(section)) continue
+
+    const sectionKey = section.toLowerCase()
+    const packageKey = packageName.toLowerCase()
+    if (seenSectionKeys.has(sectionKey)) continue
+    if (packageKey && seenPackageKeys.has(packageKey)) continue
+
+    const label = hasText(template?.displayName) ? String(template.displayName).trim() : resolveDisplayName(packageName, section)
+    const app = createEmptyApp(section, { packageName, displayName: label })
+    app.mode = normalizeAppMode(template?.mode)
+    app.patchesMode = String(template?.patches_mode || template?.patchesMode || "")
+      .trim()
+      .toLowerCase() === "custom"
+      ? "custom"
+      : "default"
+    if (Array.isArray(template?.patches)) {
+      app.patches = template.patches.map((item) => String(item || "").trim()).filter(Boolean)
+    }
+    if (hasText(template?.apkmirror_dlurl)) app.apkmirrorDlurl = String(template.apkmirror_dlurl).trim()
+    if (hasText(template?.uptodown_dlurl)) app.uptodownDlurl = String(template.uptodown_dlurl).trim()
+    if (hasText(template?.archive_dlurl)) app.archiveDlurl = String(template.archive_dlurl).trim()
+
+    nextApps.push(app)
+    seenSectionKeys.add(sectionKey)
+    if (packageKey) seenPackageKeys.add(packageKey)
+  }
+
+  if (nextApps.length === 0) {
+    return createLegacyDefaultApps()
+  }
+  return nextApps
+}
+
+function createDefaultConfigForm() {
   return {
     morpheCli: {
       mode: "stable",
@@ -457,7 +518,7 @@ function createDefaultConfigForm() {
       repoOptions: [DEFAULT_PATCHES_SOURCE_REPO],
       path: "",
     },
-    apps: [youtube, youtubeMusic, reddit],
+    apps: createDefaultAppsFromPresets(),
   }
 }
 
@@ -606,10 +667,11 @@ function configFormToToml(configForm) {
   return `${blocks.map((block) => block.join("\n")).join("\n\n")}\n`
 }
 
-function buildTaskPayload(configPath, mode, flags) {
+function buildTaskPayload(configPath, mode, flags, signingKeystorePath = "") {
   const safeFlags = flags || {}
   return {
     configPath,
+    signingKeystorePath: hasText(signingKeystorePath) ? String(signingKeystorePath).trim() : "",
     dryRun: !!safeFlags.dryRun,
     force: !!safeFlags.force,
     downloadOnly: false,
@@ -770,7 +832,7 @@ function App() {
   const confirmDialogBusy = useDialogStore((state) => state.confirmDialogBusy)
   const setConfirmDialogBusy = useDialogStore((state) => state.setConfirmDialogBusy)
 
-  const [configPath, setConfigPath] = useState("config.toml")
+  const [configPath, setConfigPath] = useState("toml/default.toml")
   const [configForm, setConfigForm] = useState(createDefaultConfigForm)
   const [rawConfigInput, setRawConfigInput] = useState("")
   const [rawOverrideMode, setRawOverrideMode] = useState(false)
@@ -797,6 +859,15 @@ function App() {
   const [isAutoSavingConfig, setIsAutoSavingConfig] = useState(false)
   const [morpheLocalFiles, setMorpheLocalFiles] = useState([])
   const [patchesLocalFiles, setPatchesLocalFiles] = useState([])
+  const [keystoreFiles, setKeystoreFiles] = useState([])
+  const [keystoreDir, setKeystoreDir] = useState("")
+  const [selectedKeystorePath, setSelectedKeystorePath] = useState(() => {
+    try {
+      return String(globalThis?.localStorage?.getItem(KEYSTORE_SELECTED_PATH_KEY) || "").trim()
+    } catch {
+      return ""
+    }
+  })
   const [morpheDeleteName, setMorpheDeleteName] = useState("")
   const [patchesDeleteName, setPatchesDeleteName] = useState("")
   const [morpheSourceRepoOptions, setMorpheSourceRepoOptions] = useState(() => {
@@ -1056,6 +1127,87 @@ function App() {
     }
   }
 
+  function appendCustomApp(rawName, rawPackageName) {
+    const displayName = String(rawName || "").trim()
+    const packageName = String(rawPackageName || "").trim()
+    if (!displayName || !packageName) return false
+    if (!/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u.test(packageName)) {
+      setMessage(t("msg.invalidPackageName", { package: packageName }))
+      return false
+    }
+
+    let added = false
+    let duplicate = false
+    let duplicatePackage = false
+
+    setConfigForm((prev) => {
+      const existsByLabel = prev.apps.some((app) => {
+        const currentDisplay = String(app.displayName || app.name || "")
+          .trim()
+          .toLowerCase()
+        return currentDisplay === displayName.toLowerCase()
+      })
+      if (existsByLabel) {
+        duplicate = true
+        return prev
+      }
+      const packageKey = packageName.toLowerCase()
+      const existsByPackage = prev.apps.some((app) => {
+        const currentPackage = String(app.packageName || "")
+          .trim()
+          .toLowerCase()
+        return currentPackage && currentPackage === packageKey
+      })
+      if (existsByPackage) {
+        duplicatePackage = true
+        return prev
+      }
+
+      const existingSections = new Set(
+        prev.apps
+          .map((app) =>
+            String(app.name || "")
+              .trim()
+              .toLowerCase(),
+          )
+          .filter(Boolean),
+      )
+
+      const base = customAppNameToSectionName(displayName)
+      let sectionName = base
+      let suffix = 2
+      while (existingSections.has(sectionName.toLowerCase())) {
+        sectionName = `${base}_${suffix}`
+        suffix += 1
+      }
+
+      const newApp = createEmptyApp(sectionName, {
+        displayName,
+        packageName,
+      })
+      newApp.mode = "false"
+      added = true
+      return {
+        ...prev,
+        apps: [...prev.apps, newApp],
+      }
+    })
+
+    if (duplicate) {
+      setMessage(t("msg.appNameExists", { name: displayName }))
+      return false
+    }
+    if (duplicatePackage) {
+      setMessage(t("msg.packageNameExists", { package: packageName }))
+      return false
+    }
+    if (added) {
+      setMessage(t("msg.appAdded", { name: displayName }))
+      return true
+    }
+    return false
+  }
+
   async function loadAppVersions(app) {
     const appId = String(app?.id || "")
     const packageName = String(app?.packageName || "").trim()
@@ -1247,6 +1399,9 @@ function App() {
     try {
       const data = await openAssetsDir(target)
       setMessage(t("msg.opened", { path: data?.path || target }))
+      if (target.toLowerCase() === "keystore") {
+        loadKeystoreFiles()
+      }
     } catch (error) {
       setMessage(error.message || String(error))
     }
@@ -1581,6 +1736,34 @@ function App() {
     }
   }
 
+  async function loadKeystoreFiles() {
+    try {
+      const data = await listSourceFiles("keystore")
+      const files = Array.isArray(data?.files) ? data.files : []
+      setKeystoreFiles(files)
+      setKeystoreDir(String(data?.dir || ""))
+      setSelectedKeystorePath((prev) => {
+        const current = String(prev || "").trim()
+        if (current && files.some((file) => String(file?.fullPath || "").trim() === current)) {
+          return current
+        }
+        const defaultFile = files.find((file) => String(file?.name || "").trim().toLowerCase() === "morphe-test.keystore")
+        if (defaultFile && hasText(defaultFile.fullPath)) {
+          return String(defaultFile.fullPath).trim()
+        }
+        const first = files[0]
+        if (first && hasText(first.fullPath)) {
+          return String(first.fullPath).trim()
+        }
+        return ""
+      })
+    } catch (error) {
+      setKeystoreFiles([])
+      setKeystoreDir("")
+      setMessage(error.message || String(error))
+    }
+  }
+
   function openConfirmDialog(action, title, description, payload = null) {
     setConfirmDialog({
       open: true,
@@ -1736,7 +1919,9 @@ function App() {
       setBuildLaunchPending(true)
     }
     try {
-      const payload = buildTaskPayload(configPath, mode, flags)
+      const signingKeystorePath =
+        mode === TASK_MODE_BUILD && hasText(selectedKeystorePath) ? String(selectedKeystorePath).trim() : ""
+      const payload = buildTaskPayload(configPath, mode, flags, signingKeystorePath)
       const data = await startTask(payload)
       if (data?.task) {
         setSelectedTaskId(data.task.id)
@@ -2080,6 +2265,14 @@ function App() {
   }, [patchesSourceRepoOptions])
 
   useEffect(() => {
+    if (!hasText(selectedKeystorePath)) {
+      localStorage.removeItem(KEYSTORE_SELECTED_PATH_KEY)
+      return
+    }
+    localStorage.setItem(KEYSTORE_SELECTED_PATH_KEY, selectedKeystorePath)
+  }, [selectedKeystorePath])
+
+  useEffect(() => {
     const status = String(liveTask?.status || "").toLowerCase()
     if (!status) return
     if (["running", "stopping"].includes(status)) return
@@ -2140,6 +2333,7 @@ function App() {
     if (activeNav !== NAV_ASSETS && activeNav !== NAV_BUILD) return
     loadMorpheLocalFiles()
     loadPatchesLocalFiles()
+    loadKeystoreFiles()
     if (activeNav === NAV_BUILD) return
     loadMorpheSourceVersions()
     loadPatchesSourceVersions()
@@ -2395,6 +2589,32 @@ function App() {
     }
     updateConfigSection("patches", { mode: "local", path: selected })
   }
+
+  const keystoreSelectOptions = useMemo(() => {
+    return (Array.isArray(keystoreFiles) ? keystoreFiles : [])
+      .map((file) => ({
+        value: String(file?.fullPath || "").trim(),
+        label: String(file?.name || file?.fileName || "").trim() || String(file?.relativePath || "").trim(),
+        folderLabel: extractSourceFolderLabel(file),
+      }))
+      .filter((item) => hasText(item.value) && hasText(item.label))
+  }, [keystoreFiles])
+
+  const keystoreSelectValue = useMemo(() => {
+    const selected = String(selectedKeystorePath || "").trim()
+    if (selected && keystoreSelectOptions.some((item) => item.value === selected)) {
+      return selected
+    }
+    const first = String(keystoreSelectOptions[0]?.value || "").trim()
+    return first || "__NONE__"
+  }, [selectedKeystorePath, keystoreSelectOptions])
+
+  function onChangeKeystoreSelect(value) {
+    const selected = String(value || "").trim()
+    if (!selected || selected === "__NONE__") return
+    setSelectedKeystorePath(selected)
+  }
+
   const dialogTargetTaskId = String(logDialogTaskId || liveTaskId || selectedTaskId || "").trim()
   const dialogTargetTask = useMemo(() => {
     if (!dialogTargetTaskId) return null
@@ -2536,7 +2756,11 @@ function App() {
             patchesSelectValue={patchesSelectValue}
             patchesSelectOptions={patchesSelectOptions}
             onChangePatchesSelect={onChangePatchesSelect}
+            keystoreSelectValue={keystoreSelectValue}
+            keystoreSelectOptions={keystoreSelectOptions}
+            onChangeKeystoreSelect={onChangeKeystoreSelect}
             appendApp={appendApp}
+            onAppendCustomApp={appendCustomApp}
             apps={configForm.apps}
             updateApp={updateApp}
             getPackageIcon={getPackageIcon}

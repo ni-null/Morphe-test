@@ -11,8 +11,12 @@ async function requestIpc(method, payload = {}) {
   return bridge.invoke(method, payload)
 }
 
-export async function fetchConfig(configPath = "config.toml") {
+export async function fetchConfig(configPath = "") {
   return requestIpc("fetchConfig", { configPath })
+}
+
+export async function fetchWorkspaceInfo() {
+  return requestIpc("getWorkspaceInfo")
 }
 
 export async function fetchPackageMap() {
@@ -37,7 +41,7 @@ export async function startTask(options) {
 
 export async function fetchAppTemplates(configPath) {
   return requestIpc("fetchAppTemplates", {
-    configPath: String(configPath || "config.toml"),
+    configPath: String(configPath || ""),
   })
 }
 
@@ -85,13 +89,13 @@ export async function openTaskArtifactDir(taskId, relativePath) {
 
 export async function fetchAppCompatibleVersions(configPath, app) {
   return requestIpc("fetchAppCompatibleVersions", {
-    configPath: String(configPath || "config.toml"),
+    configPath: String(configPath || ""),
     app: app && typeof app === "object" ? app : {},
   })
 }
 
 export async function fetchAppPatchOptions(configPath, app) {
-  const safeConfigPath = String(configPath || "config.toml")
+  const safeConfigPath = String(configPath || "")
   const safeApp = app && typeof app === "object" ? app : {}
   try {
     return await requestIpc("fetchAppPatchOptions", {

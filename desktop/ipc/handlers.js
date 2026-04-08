@@ -3,19 +3,9 @@
 const fsp = require("fs").promises;
 const path = require("path");
 const { BrowserWindow, dialog } = require("electron");
+const fs = require("fs");
 const { TaskService } = require("./task-service");
 const { IPC_CHANNEL } = require("./constants");
-
-function resolveProjectPath(projectRoot, maybeRelativePath, fallbackRelative) {
-  const selected = maybeRelativePath && String(maybeRelativePath).trim()
-    ? String(maybeRelativePath).trim()
-    : fallbackRelative;
-  const resolved = path.resolve(projectRoot, selected);
-  if (resolved !== projectRoot && !resolved.startsWith(`${projectRoot}${path.sep}`)) {
-    throw new Error(`Path is outside project root: ${selected}`);
-  }
-  return resolved;
-}
 
 function normalizeBoolean(value) {
   return value === true || String(value).toLowerCase() === "true";
@@ -35,9 +25,17 @@ function createInvokeHandler(projectRoot) {
     }
 
     if (method === "fetchConfig") {
-      const configPath = resolveProjectPath(projectRoot, payload.configPath, "config.toml");
+      const configPath = taskService.resolveConfigPath(payload.configPath);
+      await fsp.mkdir(path.dirname(configPath), { recursive: true });
+      if (!fs.existsSync(configPath)) {
+        await fsp.writeFile(configPath, "", "utf8");
+      }
       const content = await fsp.readFile(configPath, "utf8");
       return { path: configPath, content };
+    }
+
+    if (method === "getWorkspaceInfo") {
+      return taskService.getWorkspaceInfo();
     }
 
     if (method === "fetchPackageMap") {
@@ -49,7 +47,7 @@ function createInvokeHandler(projectRoot) {
     }
 
     if (method === "saveConfig") {
-      const configPath = resolveProjectPath(projectRoot, payload.path, "config.toml");
+      const configPath = taskService.resolveConfigPath(payload.path);
       const content = String(payload.content || "");
       await fsp.mkdir(path.dirname(configPath), { recursive: true });
       await fsp.writeFile(configPath, content, "utf8");

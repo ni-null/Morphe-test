@@ -494,6 +494,9 @@ async function run() {
   const signingConfig = requiresCliJar
     ? await resolveSigningConfig({
         configDir,
+        projectRoot: process.cwd(),
+        workspaceDir: workspacePaths.root,
+        preferWorkspaceKeystore: hasValue(options.workspacePath),
         runtime,
         dryRun: options.dryRun,
         env: process.env,

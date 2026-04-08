@@ -209,6 +209,26 @@ function resolveInsideProject(projectRoot, maybePath, fallbackRelative) {
   return absolute;
 }
 
+function isPathInsideRoot(candidatePath, rootPath) {
+  const absolute = path.resolve(String(candidatePath || ""));
+  const normalizedRoot = path.resolve(String(rootPath || ""));
+  return absolute === normalizedRoot || absolute.startsWith(`${normalizedRoot}${path.sep}`);
+}
+
+function resolveInsideRoots(roots, maybePath, fallbackRelative, resolveBase) {
+  const selected = hasValue(maybePath) ? String(maybePath).trim() : String(fallbackRelative || "").trim();
+  const base = String(resolveBase || "").trim();
+  const absolute = path.isAbsolute(selected)
+    ? path.normalize(selected)
+    : path.resolve(base || process.cwd(), selected);
+  const rootList = Array.isArray(roots) ? roots.map((item) => path.resolve(String(item || ""))).filter(Boolean) : [];
+  if (rootList.length === 0) return absolute;
+  if (rootList.some((root) => isPathInsideRoot(absolute, root))) {
+    return absolute;
+  }
+  throw new Error(`Path is outside allowed roots: ${selected}`);
+}
+
 async function fileExists(targetPath) {
   try {
     await fsp.access(targetPath, fs.constants.F_OK);
@@ -216,6 +236,20 @@ async function fileExists(targetPath) {
   } catch {
     return false;
   }
+}
+
+async function ensureWorkspaceDefaultKeystore(workspacePaths, projectRoot) {
+  const targetDir = workspacePaths && workspacePaths.keystore ? String(workspacePaths.keystore) : "";
+  if (!targetDir) return;
+  await fsp.mkdir(targetDir, { recursive: true });
+
+  const targetPath = path.join(targetDir, "morphe-test.keystore");
+  if (await fileExists(targetPath)) return;
+
+  const sourcePath = path.join(String(projectRoot || ""), "morphe-test.keystore");
+  if (!(await fileExists(sourcePath))) return;
+
+  await fsp.copyFile(sourcePath, targetPath);
 }
 
 async function readJsonIfExists(targetPath) {
@@ -309,6 +343,7 @@ function toTaskSummary(task) {
     persistLogs: task.persistLogs !== false,
     stopRequested: !!task.stopRequested,
     workspacePath: task.workspacePath || null,
+    signingKeystorePath: task.signingKeystorePath || null,
   };
 }
 
@@ -319,6 +354,9 @@ function getSourceSpec(type) {
   }
   if (key === "patches") {
     return { type: key, ext: ".mpp", folderKey: "patches" };
+  }
+  if (key === "keystore") {
+    return { type: key, ext: ".keystore", folderKey: "keystore" };
   }
   throw new Error(`Unsupported source type: ${type}`);
 }
@@ -395,6 +433,27 @@ class TaskService {
     this.tasks = new Map();
   }
 
+  getDefaultConfigPath() {
+    return path.join(this.workspacePaths.root, "toml", "default.toml");
+  }
+
+  resolveConfigPath(configPathInput) {
+    return resolveInsideRoots(
+      [this.workspacePaths.root, this.projectRoot],
+      configPathInput,
+      path.join("toml", "default.toml"),
+      this.workspacePaths.root,
+    );
+  }
+
+  getWorkspaceInfo() {
+    return {
+      workspaceRoot: this.workspacePaths.root,
+      tomlDir: path.join(this.workspacePaths.root, "toml"),
+      defaultConfigPath: this.getDefaultConfigPath(),
+    };
+  }
+
   getPackageMetaMap() {
     return buildPackageMetaMap();
   }
@@ -447,10 +506,14 @@ class TaskService {
 
   async openAssetsDir(kind) {
     const key = String(kind || "").trim().toLowerCase();
+    if (key === "keystore") {
+      await ensureWorkspaceDefaultKeystore(this.workspacePaths, this.projectRoot);
+    }
     let targetDir = "";
     if (key === "morphe-cli") targetDir = this.workspacePaths.morpheCli;
     if (key === "patches") targetDir = this.workspacePaths.patches;
     if (key === "downloads" || key === "apk") targetDir = this.workspacePaths.downloads;
+    if (key === "keystore") targetDir = this.workspacePaths.keystore;
     if (!targetDir) {
       throw new Error(`Unsupported assets dir kind: ${kind}`);
     }
@@ -623,7 +686,7 @@ class TaskService {
   }
 
   async getAppTemplates(configPathInput) {
-    const configPath = resolveInsideProject(this.projectRoot, configPathInput, "config.toml");
+    const configPath = this.resolveConfigPath(configPathInput);
     const configDir = path.dirname(configPath);
     const runtime = createRuntime({
       cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
@@ -707,6 +770,9 @@ class TaskService {
 
   async listSourceFiles(type) {
     const spec = getSourceSpec(type);
+    if (spec.type === "keystore") {
+      await ensureWorkspaceDefaultKeystore(this.workspacePaths, this.projectRoot);
+    }
     const targetDir = this.workspacePaths[spec.folderKey];
     await fsp.mkdir(targetDir, { recursive: true });
     const releaseMetadata = await this.readSourceReleaseMetadata();
@@ -928,11 +994,7 @@ class TaskService {
   }
 
   async getAppCompatibleVersions(options) {
-    const configPath = resolveInsideProject(
-      this.projectRoot,
-      options && options.configPath ? options.configPath : "config.toml",
-      "config.toml",
-    );
+    const configPath = this.resolveConfigPath(options && options.configPath ? options.configPath : "");
     const configDir = path.dirname(configPath);
     const runtime = createRuntime({
       cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
@@ -1051,11 +1113,7 @@ class TaskService {
   }
 
   async getAppPatchEntries(options) {
-    const configPath = resolveInsideProject(
-      this.projectRoot,
-      options && options.configPath ? options.configPath : "config.toml",
-      "config.toml",
-    );
+    const configPath = this.resolveConfigPath(options && options.configPath ? options.configPath : "");
     const configDir = path.dirname(configPath);
     const runtime = createRuntime({
       cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
@@ -1579,8 +1637,10 @@ class TaskService {
   }
 
   startTask(options) {
-    const configPath = resolveInsideProject(this.projectRoot, options && options.configPath, "config.toml");
-    const workspacePath = options && options.workspacePath ? String(options.workspacePath) : "";
+    const configPath = this.resolveConfigPath(options && options.configPath ? options.configPath : "");
+    const workspacePathInput = options && options.workspacePath ? String(options.workspacePath) : "";
+    const workspacePath = hasValue(workspacePathInput) ? workspacePathInput : this.workspacePaths.root;
+    const signingKeystorePath = options && options.signingKeystorePath ? String(options.signingKeystorePath).trim() : "";
     const migrateWorkspace = !!(options && options.migrateWorkspace);
 
     const modes = {
@@ -1601,6 +1661,7 @@ class TaskService {
     const spawned = spawnCliTask(this.projectRoot, {
       configPath,
       workspacePath,
+      signingKeystorePath,
       migrateWorkspace,
       ...modes,
       noTaskLog: !persistLogs,
@@ -1641,6 +1702,7 @@ class TaskService {
       stopRequested: false,
       child: spawned.child,
       workspacePath,
+      signingKeystorePath,
       lines: [],
     };
 

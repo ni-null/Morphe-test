@@ -342,7 +342,7 @@ export default function AssetsPage({
                             <Button
                               variant='ghost'
                               size='icon'
-                              className='h-6 w-6 text-red-600 hover:bg-red-50 hover:text-red-700'
+                              className='h-6 w-6 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                               disabled={morpheDeleteName === file.relativePath}
                               onClick={() => openConfirmDialog("delete-morphe-file", t("confirm.deleteMorpheTitle"), t("confirm.deleteMorpheDesc", { path: file.relativePath }), file)}>
                               {morpheDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
@@ -448,7 +448,7 @@ export default function AssetsPage({
                             <Button
                               variant='ghost'
                               size='icon'
-                              className='h-6 w-6 text-red-600 hover:bg-red-50 hover:text-red-700'
+                              className='h-6 w-6 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                               disabled={patchesDeleteName === file.relativePath}
                               onClick={() => openConfirmDialog("delete-patches-file", t("confirm.deletePatchesTitle"), t("confirm.deletePatchesDesc", { path: file.relativePath }), file)}>
                               {patchesDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
@@ -544,7 +544,7 @@ export default function AssetsPage({
                                 <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
                                 <button
                                   type='button'
-                                  className='inline-flex h-5 w-5 items-center justify-center rounded-sm text-red-600 hover:bg-red-50 hover:text-red-700'
+                                  className='inline-flex h-5 w-5 items-center justify-center rounded-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                                   onClick={() => openConfirmDialog("delete-apk-file", t("confirm.deleteApkTitle"), t("confirm.deleteApkDesc", { path: file.relativePath }), file)}
                                   aria-label={t("confirm.deleteApkTitle")}
                                   title={t("confirm.deleteApkTitle")}
@@ -585,7 +585,7 @@ export default function AssetsPage({
                         <Button
                           variant='ghost'
                           size='icon'
-                          className='h-6 w-6 shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700'
+                          className='h-6 w-6 shrink-0 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                           onClick={() => onDeleteManagedRepo(repo)}
                           aria-label={t("source.deleteCustomRepo")}
                           title={t("source.deleteCustomRepo")}>

@@ -3,7 +3,7 @@
 const fsp = require("fs").promises;
 const path = require("path");
 
-const LOCAL_KEYSTORE_REL = "morphe-test.keystore";
+const LOCAL_KEYSTORE_NAME = "morphe-test.keystore";
 const CI_KEYSTORE_REL = ".keystore/morphe-ci.keystore";
 
 function hasValue(value) {
@@ -35,9 +35,33 @@ async function writeKeystoreFromBase64(keystorePath, base64Data, runtime) {
   await fsp.writeFile(keystorePath, decoded);
 }
 
+function buildLocalKeystoreCandidates(configDir, projectRoot) {
+  const values = [];
+  if (hasValue(projectRoot)) {
+    values.push(path.resolve(String(projectRoot).trim(), LOCAL_KEYSTORE_NAME));
+  }
+  values.push(path.resolve(configDir, LOCAL_KEYSTORE_NAME));
+  return Array.from(new Set(values));
+}
+
 async function resolveSigningConfig(params) {
-  const { configDir, runtime, dryRun, env, logInfo } = params;
+  const { configDir, projectRoot, workspaceDir, preferWorkspaceKeystore, runtime, dryRun, env, logInfo } = params;
   const effectiveEnv = env || process.env;
+  const explicitKeystorePath = resolveEnvKey(effectiveEnv, ["MORPHE_KEYSTORE_PATH"]);
+  if (explicitKeystorePath) {
+    const resolvedPath = path.isAbsolute(explicitKeystorePath)
+      ? path.normalize(explicitKeystorePath)
+      : path.resolve(configDir, explicitKeystorePath);
+    const exists = await runtime.fileExists(resolvedPath);
+    if (!exists) {
+      throw new Error(`Selected keystore not found: ${resolvedPath}`);
+    }
+    logInfo(`Using signing keystore: ${resolvedPath}`);
+    return {
+      keystorePath: resolvedPath,
+      source: "env-path",
+    };
+  }
   const keystoreBase64 = resolveEnvKey(effectiveEnv, ["MORPHE_KEYSTORE_BASE64"]);
 
   if (keystoreBase64) {
@@ -54,12 +78,49 @@ async function resolveSigningConfig(params) {
     };
   }
 
-  const keystorePath = path.resolve(configDir, LOCAL_KEYSTORE_REL);
+  const shouldUseWorkspaceKeystore = preferWorkspaceKeystore === true && hasValue(workspaceDir);
+  if (shouldUseWorkspaceKeystore) {
+    const workspaceKeystorePath = path.resolve(String(workspaceDir).trim(), "keystore", LOCAL_KEYSTORE_NAME);
+    await runtime.ensureDir(path.dirname(workspaceKeystorePath));
+    const workspaceExists = await runtime.fileExists(workspaceKeystorePath);
+    if (workspaceExists) {
+      logInfo(`Using signing keystore: ${workspaceKeystorePath}`);
+      return {
+        keystorePath: workspaceKeystorePath,
+        source: "workspace-default",
+      };
+    }
+
+    const candidates = buildLocalKeystoreCandidates(configDir, projectRoot).filter(
+      (sourcePath) => path.normalize(sourcePath) !== path.normalize(workspaceKeystorePath),
+    );
+    for (const sourcePath of candidates) {
+      const exists = await runtime.fileExists(sourcePath);
+      if (!exists) continue;
+      if (dryRun) {
+        logInfo(`DryRun: would copy keystore ${sourcePath} -> ${workspaceKeystorePath}`);
+      } else {
+        await fsp.copyFile(sourcePath, workspaceKeystorePath);
+        logInfo(`Copied signing keystore: ${sourcePath} -> ${workspaceKeystorePath}`);
+      }
+      return {
+        keystorePath: workspaceKeystorePath,
+        source: "workspace-copied",
+      };
+    }
+
+    throw new Error(
+      `Workspace keystore not found: ${workspaceKeystorePath}. ` +
+        `Please put ${LOCAL_KEYSTORE_NAME} under workspace/keystore or set MORPHE_KEYSTORE_BASE64.`,
+    );
+  }
+
+  const keystorePath = path.resolve(configDir, LOCAL_KEYSTORE_NAME);
   const exists = await runtime.fileExists(keystorePath);
   if (!exists) {
     throw new Error(
       `Local test keystore not found: ${keystorePath}. ` +
-        "Please add morphe-test.keystore in project root or set MORPHE_KEYSTORE_BASE64.",
+        `Please add ${LOCAL_KEYSTORE_NAME} in config directory or set MORPHE_KEYSTORE_BASE64.`,
     );
   } else {
     logInfo(`Using signing keystore: ${keystorePath}`);

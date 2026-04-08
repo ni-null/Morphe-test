@@ -8,14 +8,14 @@
     "desktop/web"
   ],
   "scripts": {
-    "web:dev": "npm run dev --workspace desktop/web",
+    "web:dev": "npm run dev --workspace morphe-web-ui",
     "web:ui": "npm run web:dev",
-    "web:build": "npm run build --workspace desktop/web",
-    "desktop:install": "npm install --workspace desktop",
-    "desktop:dev": "npm run dev --workspace desktop",
-    "desktop:start": "npm run web:build && npm run start --workspace desktop",
-    "desktop:pack": "npm run web:build && npm run pack --workspace desktop",
-    "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace desktop/web"
+    "web:build": "npm run build --workspace morphe-web-ui",
+    "desktop:install": "npm install --workspace morphe-desktop",
+    "desktop:dev": "npm run dev --workspace morphe-desktop",
+    "desktop:start": "npm run web:build && npm run start --workspace morphe-desktop",
+    "desktop:pack": "npm run web:build && npm run pack --workspace morphe-desktop",
+    "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace morphe-web-ui"
   },
   "dependencies": {
     "chalk": "^4.1.2"
@@ -23,11 +23,19 @@
   "build": {
     "appId": "com.morphe.patcher",
     "productName": "Morphe Patcher",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US",
+      "zh-TW"
+    ],
     "extraMetadata": {
       "main": "desktop/main.js"
     },
     "files": [
-      "desktop/**/*",
+      "desktop/main.js",
+      "desktop/preload.js",
+      "desktop/ipc/**/*",
       "desktop/web/dist/**/*",
       "main.js",
       "scripts/**/*",

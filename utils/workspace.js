@@ -76,6 +76,7 @@ function buildWorkspacePaths(workspaceRoot) {
     output: path.join(root, "output"),
     cache: path.join(root, "cache"),
     runtime: path.join(root, "runtime"),
+    keystore: path.join(root, "keystore"),
   };
 }
 
@@ -87,6 +88,7 @@ async function ensureWorkspaceDirs(workspacePaths) {
   await fsp.mkdir(workspacePaths.output, { recursive: true });
   await fsp.mkdir(workspacePaths.cache, { recursive: true });
   await fsp.mkdir(workspacePaths.runtime, { recursive: true });
+  await fsp.mkdir(workspacePaths.keystore, { recursive: true });
 }
 
 async function pathExists(targetPath) {

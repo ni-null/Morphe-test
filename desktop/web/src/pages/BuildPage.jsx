@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
-import { Boxes, Cloud, Code2, FileText, FlaskConical, Hammer, HardDrive, Package, Pencil, Play, Plus, Settings2, Smartphone, Square, SquareChevronRight } from "lucide-react"
+import { Boxes, Cloud, Code2, FileText, FlaskConical, Hammer, HardDrive, KeyRound, Package, Pencil, Play, Plus, Settings2, Smartphone, Square, SquareChevronRight } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog"
+import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { Textarea } from "../components/ui/textarea"
@@ -33,7 +35,11 @@ export default function BuildPage({
   patchesSelectValue,
   patchesSelectOptions,
   onChangePatchesSelect,
+  keystoreSelectValue,
+  keystoreSelectOptions,
+  onChangeKeystoreSelect,
   appendApp,
+  onAppendCustomApp,
   apps,
   updateApp,
   getPackageIcon,
@@ -45,7 +51,26 @@ export default function BuildPage({
   formatBytes,
 }) {
   const [nowMs, setNowMs] = useState(() => Date.now())
+  const [customAppDialogOpen, setCustomAppDialogOpen] = useState(false)
+  const [customAppNameDraft, setCustomAppNameDraft] = useState("")
+  const [customAppPackageDraft, setCustomAppPackageDraft] = useState("")
   const isWorking = isBuildRunning || buildLaunchPending || isBuildStopping
+
+  function onCloseCustomAppDialog() {
+    setCustomAppDialogOpen(false)
+    setCustomAppNameDraft("")
+    setCustomAppPackageDraft("")
+  }
+
+  function onConfirmAppendCustomApp() {
+    const name = String(customAppNameDraft || "").trim()
+    const packageName = String(customAppPackageDraft || "").trim()
+    if (!name || !packageName) return
+    const added = typeof onAppendCustomApp === "function" ? onAppendCustomApp(name, packageName) : false
+    if (added !== false) {
+      onCloseCustomAppDialog()
+    }
+  }
 
   function renderSourceOption(item) {
     const kind = String(item?.kind || "").trim().toLowerCase()
@@ -206,40 +231,74 @@ export default function BuildPage({
           <div className='space-y-4'>
             <section className='space-y-2'>
               <h3 className='text-base font-semibold'>來源設定</h3>
-              <div className='grid w-full grid-cols-2 gap-2'>
-                <Select value={morpheCliSelectValue} onValueChange={onChangeMorpheCliSelect}>
-                  <SelectTrigger className='h-10 w-full border-0 bg-slate-50 hover:bg-slate-50'>
-                    <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
-                      <SquareChevronRight className='h-3.5 w-3.5' />
-                    </span>
-                    <span className='pointer-events-none min-w-0 truncate px-2 text-left'>
-                      <SelectValue />
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent position='popper' side='bottom' align='start'>
-                    {(Array.isArray(morpheCliSelectOptions) ? morpheCliSelectOptions : []).map((item) => (
-                      <SelectItem key={`morphe-cli-select-${item.value}`} value={item.value}>
-                        {renderSourceOption(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className='flex w-full items-center gap-2'>
+                <div className='min-w-0 flex-1'>
+                  <Select value={morpheCliSelectValue} onValueChange={onChangeMorpheCliSelect}>
+                    <SelectTrigger className='h-10 w-full border-0 bg-slate-100 hover:bg-slate-100'>
+                      <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
+                        <SquareChevronRight className='h-3.5 w-3.5' />
+                      </span>
+                      <span className='pointer-events-none min-w-0 truncate px-2 text-left'>
+                        <SelectValue />
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent position='popper' side='bottom' align='start'>
+                      {(Array.isArray(morpheCliSelectOptions) ? morpheCliSelectOptions : []).map((item) => (
+                        <SelectItem key={`morphe-cli-select-${item.value}`} value={item.value}>
+                          {renderSourceOption(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                <Select value={patchesSelectValue} onValueChange={onChangePatchesSelect}>
-                  <SelectTrigger className='h-10 w-full border-0 bg-slate-50 hover:bg-slate-50'>
-                    <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
-                      <Boxes className='h-3.5 w-3.5' />
-                    </span>
-                    <span className='pointer-events-none min-w-0 truncate px-2 text-left'>
-                      <SelectValue />
+                <div className='min-w-0 flex-1'>
+                  <Select value={patchesSelectValue} onValueChange={onChangePatchesSelect}>
+                    <SelectTrigger className='h-10 w-full border-0 bg-slate-100 hover:bg-slate-100'>
+                      <span className='inline-flex items-center gap-2 whitespace-nowrap border-r border-slate-300 pr-2 text-xs font-medium text-slate-700'>
+                        <Boxes className='h-3.5 w-3.5' />
+                      </span>
+                      <span className='pointer-events-none min-w-0 truncate px-2 text-left'>
+                        <SelectValue />
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent position='popper' side='bottom' align='start'>
+                      {(Array.isArray(patchesSelectOptions) ? patchesSelectOptions : []).map((item) => (
+                        <SelectItem key={`patches-select-${item.value}`} value={item.value}>
+                          {renderSourceOption(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Select value={keystoreSelectValue} onValueChange={onChangeKeystoreSelect}>
+                  <SelectTrigger
+                    className='h-10 w-10 shrink-0 justify-center border-0 bg-slate-100 px-0 text-slate-700 hover:bg-slate-100 [&>svg]:hidden'
+                    aria-label={t("settings.keystoreSelectPlaceholder")}
+                    title={t("settings.keystoreSelectPlaceholder")}
+                  >
+                    <KeyRound className='h-4 w-4' />
+                    <span className='sr-only'>
+                      <SelectValue placeholder={t("settings.keystoreSelectPlaceholder")} />
                     </span>
                   </SelectTrigger>
                   <SelectContent position='popper' side='bottom' align='start'>
-                    {(Array.isArray(patchesSelectOptions) ? patchesSelectOptions : []).map((item) => (
-                      <SelectItem key={`patches-select-${item.value}`} value={item.value}>
-                        {renderSourceOption(item)}
+                    {(Array.isArray(keystoreSelectOptions) ? keystoreSelectOptions : []).length === 0 ? (
+                      <SelectItem value='__NONE__' disabled>
+                        {t("settings.noKeystore")}
                       </SelectItem>
-                    ))}
+                    ) : (
+                      (Array.isArray(keystoreSelectOptions) ? keystoreSelectOptions : []).map((item) => (
+                        <SelectItem key={`keystore-select-${item.value}`} value={item.value}>
+                          <span className='inline-flex min-w-0 flex-1 items-center gap-2'>
+                            <HardDrive className='h-3.5 w-3.5 text-slate-600' />
+                            <span className='min-w-0 truncate'>{item.label}</span>
+                          </span>
+                          {item.folderLabel ? <span className='ml-auto shrink-0 text-xs text-muted-foreground'>{`(${item.folderLabel})`}</span> : null}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -254,12 +313,12 @@ export default function BuildPage({
                       key={`build-app-enable-${app.id}`}
                       className={cn(
                         "inline-flex items-stretch overflow-hidden rounded-md text-sm transition-colors",
-                        enabled ? "bg-emerald-50 text-emerald-900" : "bg-white text-slate-600",
-                      )}
+                 "bg-slate-100 text-slate-600",
+                      )} 
                     >
                       <button
                         type='button'
-                        className='inline-flex items-center gap-2 px-3 py-2 transition-colors hover:bg-black/5'
+                        className='inline-flex items-center gap-2 px-3 py-2 transition-colors '
                         onClick={() => updateApp(app.id, { mode: enabled ? "false" : "remote" })}
                       >
                         {hasText(getPackageIcon(app.packageName)) ? (
@@ -272,7 +331,7 @@ export default function BuildPage({
                           <Smartphone className='h-5 w-5 text-muted-foreground' />
                         )}
                         <span className='font-medium'>{app.displayName || app.name || "app-name"}</span>
-                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full", enabled ? "bg-emerald-500" : "bg-slate-300")} />
+                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full", enabled ? "bg-[#87d369]" : "bg-slate-300")} />
                       </button>
                       <button
                         type='button'
@@ -289,6 +348,16 @@ export default function BuildPage({
                     </div>
                   )
                 })}
+                <button
+                  type='button'
+                  className='inline-flex h-[42px] items-center gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 text-sm text-slate-700 transition-colors hover:bg-slate-100'
+                  onClick={() => setCustomAppDialogOpen(true)}
+                  disabled={isBusy}
+                  title={t("dialog.addAppTitle")}
+                  aria-label={t("dialog.addAppTitle")}
+                >
+                  <Plus className='h-4 w-4' />
+                </button>
               </div>
             </section>
           </div>
@@ -395,6 +464,52 @@ export default function BuildPage({
         )}
       </CardContent>
     </Card>
+    <Dialog open={customAppDialogOpen} onOpenChange={(open) => (!open ? onCloseCustomAppDialog() : setCustomAppDialogOpen(true))}>
+      <DialogContent className='max-w-md'>
+        <DialogHeader>
+          <DialogTitle>{t("dialog.addAppTitle")}</DialogTitle>
+        </DialogHeader>
+        <div className='space-y-3'>
+          <div className='space-y-2'>
+            <Label htmlFor='build-custom-app-name'>{t("dialog.addAppNameLabel")}</Label>
+            <Input
+              id='build-custom-app-name'
+              value={customAppNameDraft}
+              onChange={(event) => setCustomAppNameDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return
+                event.preventDefault()
+                onConfirmAppendCustomApp()
+              }}
+              placeholder={t("dialog.addAppNamePlaceholder")}
+              autoFocus
+            />
+          </div>
+          <div className='space-y-2'>
+            <Label htmlFor='build-custom-app-package'>{t("dialog.addAppPackageLabel")}</Label>
+            <Input
+              id='build-custom-app-package'
+              value={customAppPackageDraft}
+              onChange={(event) => setCustomAppPackageDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return
+                event.preventDefault()
+                onConfirmAppendCustomApp()
+              }}
+              placeholder={t("dialog.addAppPackagePlaceholder")}
+            />
+          </div>
+          <div className='flex items-center justify-end gap-2'>
+            <Button variant='ghost' onClick={onCloseCustomAppDialog}>
+              {t("action.cancel")}
+            </Button>
+            <Button onClick={onConfirmAppendCustomApp} disabled={!hasText(customAppNameDraft) || !hasText(customAppPackageDraft)}>
+              {t("action.add")}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }

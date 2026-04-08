@@ -16,7 +16,7 @@ export default function ConfigPathDialog({ open, onOpenChange, t, configPath, se
         </DialogHeader>
         <div className='space-y-1'>
           <Label htmlFor='config-path'>{t("dialog.configPathLabel")}</Label>
-          <Input id='config-path' value={configPath} onChange={(event) => setConfigPath(event.target.value)} placeholder='config.toml' />
+          <Input id='config-path' value={configPath} onChange={(event) => setConfigPath(event.target.value)} placeholder='toml/default.toml' />
         </div>
       </DialogContent>
     </Dialog>
