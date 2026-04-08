@@ -15,10 +15,6 @@ export async function fetchConfig(configPath = "") {
   return requestIpc("fetchConfig", { configPath })
 }
 
-export async function fetchWorkspaceInfo() {
-  return requestIpc("getWorkspaceInfo")
-}
-
 export async function fetchPackageMap() {
   return requestIpc("fetchPackageMap")
 }
@@ -37,12 +33,6 @@ export async function listTasks(limit = 50) {
 
 export async function startTask(options) {
   return requestIpc("startTask", options || {})
-}
-
-export async function fetchAppTemplates(configPath) {
-  return requestIpc("fetchAppTemplates", {
-    configPath: String(configPath || ""),
-  })
 }
 
 export async function fetchTask(taskId) {

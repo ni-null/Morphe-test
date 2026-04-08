@@ -4,9 +4,17 @@
 
 ## 結構總覽
 
+- `[global]`：全域設定（例如 workspace）
 - `[morphe-cli]`：`morphe-cli` jar 來源設定
 - `[patches]`：patches 檔案來源設定
+- `[signing]`：簽章設定（keystore / alias / password）
 - `[app-name]`：每個 App 一個區塊（例如 `[youtube]`）
+
+## `[global]`
+
+| 參數 | 型別 | 說明 |
+| --- | --- | --- |
+| `workspace` | `string` | 指定 workspace 根目錄（downloads/patches/output/runtime/toml）。 |
 
 ## `[morphe-cli]`
 
@@ -25,6 +33,15 @@
 | `patches_repo` | `string` | patches 的 GitHub repo（例如 `MorpheApp/morphe-patches`）。`stable/dev` 模式使用。 |
 | `path` | `string` | 本地 `.mpp` 路徑。`local` 模式使用。 |
 | `ver` | `string` | 指定 patches 檔名（可選），例如 `patches-1.23.0-dev.1.mpp`。 |
+
+## `[signing]`
+
+| 參數 | 型別 | 說明 |
+| --- | --- | --- |
+| `keystore_path` / `keystore-path` / `path` | `string` | keystore 路徑（可絕對或相對 `config.toml`）。 |
+| `store_password` / `store-password` / `keystore_password` | `string` | keystore 密碼（可選）。 |
+| `entry_alias` / `entry-alias` / `alias` | `string` | 簽章 alias（可選）。 |
+| `entry_password` / `entry-password` / `key_password` | `string` | 簽章 entry 密碼（可選）。 |
 
 ## `[app-name]`（每個 App 區塊）
 
@@ -84,8 +101,12 @@ patches_repo = "MorpheApp/morphe-patches"
 mode = "stable"
 path = ""
 
+[signing]
+keystore_path = "./workspace/keystore/morphe-test.keystore"
+
 [youtube]
 mode = "remote"
+package_name = "com.google.android.youtube"
 apkmirror-dlurl = "https://www.apkmirror.com/apk/google-inc/youtube"
 uptodown-dlurl = "https://youtube.en.uptodown.com/android"
 archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.google.android.youtube/"

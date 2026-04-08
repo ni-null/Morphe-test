@@ -1,3 +1,3 @@
-import { fetchConfig, fetchWorkspaceInfo, fetchPackageMap, saveConfig, fetchAppTemplates } from "../api"
+import { fetchConfig, fetchPackageMap, saveConfig } from "../api"
 
-export { fetchConfig, fetchWorkspaceInfo, fetchPackageMap, saveConfig, fetchAppTemplates }
+export { fetchConfig, fetchPackageMap, saveConfig }

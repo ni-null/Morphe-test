@@ -34,10 +34,6 @@ function createInvokeHandler(projectRoot) {
       return { path: configPath, content };
     }
 
-    if (method === "getWorkspaceInfo") {
-      return taskService.getWorkspaceInfo();
-    }
-
     if (method === "fetchPackageMap") {
       return { map: taskService.getPackageMetaMap() };
     }
@@ -75,10 +71,6 @@ function createInvokeHandler(projectRoot) {
         persistLogs,
       });
       return { task };
-    }
-
-    if (method === "fetchAppTemplates") {
-      return await taskService.getAppTemplates(payload.configPath);
     }
 
     if (method === "fetchTask") {

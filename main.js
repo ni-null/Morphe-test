@@ -43,7 +43,7 @@ const {
 const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
 const TASK_STATUS_COMPLETED_MARKER = "__TASK_STATUS__:completed";
 const TASK_STATUS_FAILED_MARKER = "__TASK_STATUS__:failed";
-const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli"]);
+const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli", "signing", "sign"]);
 const REMOVED_APP_KEYS = new Set([
   "apk",
   "app_url",
@@ -73,7 +73,7 @@ function uniqueValues(values) {
 }
 
 
-function runJavaPatch(jarPath, patchPath, apkPath, outputDir, appName, signingConfig, patchSelection) {
+function runJavaPatch(jarPath, patchPath, apkPath, outputDir, signingConfig, patchSelection) {
   return new Promise((resolve, reject) => {
     const utf8Flags = "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8";
     const javaToolOptions = [process.env.JAVA_TOOL_OPTIONS, utf8Flags].filter(Boolean).join(" ").trim();
@@ -209,7 +209,7 @@ async function runPatchFlow(params) {
 
   try {
     logStep(`Patching [${appName}] with morphe-cli`);
-    await runJavaPatch(jarPath, patchPath, apkPath, outputDir, appName, signingConfig, patchSelection);
+    await runJavaPatch(jarPath, patchPath, apkPath, outputDir, signingConfig, patchSelection);
 
     const patchedSource = await findPatchedApkFile(outputDir, apkPath, runtime);
     if (!patchedSource) {
@@ -416,6 +416,7 @@ async function run() {
 
   const morpheCliCfg = config["morphe-cli"] || config.morphe_cli || {};
   const patchesCfg = config.patches || {};
+  const signingCfg = config.signing || config.sign || {};
   const downloadDir = workspacePaths.downloads;
 
   const runtime = createRuntime({
@@ -494,6 +495,7 @@ async function run() {
         projectRoot: process.cwd(),
         workspaceDir: workspacePaths.root,
         preferWorkspaceKeystore: hasValue(options.workspacePath),
+        signingCfg,
         runtime,
         dryRun: options.dryRun,
         env: process.env,

@@ -19,7 +19,7 @@ const MAX_IN_MEMORY_LINES = 2000;
 const TASK_STATUS_COMPLETED_MARKER = "__TASK_STATUS__:completed";
 const TASK_STATUS_FAILED_MARKER = "__TASK_STATUS__:failed";
 const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
-const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli"]);
+const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli", "signing", "sign"]);
 
 function getPackageMapRecord(packageName) {
   const key = String(packageName || "").trim().toLowerCase();
@@ -41,13 +41,6 @@ function getPackageMapRecord(packageName) {
     };
   }
   return null;
-}
-
-function mapPackageDisplayName(packageName) {
-  if (!hasValue(packageName)) return "";
-  const record = getPackageMapRecord(packageName);
-  if (record && hasValue(record.label)) return String(record.label).trim();
-  return `[${packageName}]`;
 }
 
 function nameToSectionName(name) {
@@ -78,51 +71,6 @@ function packageToSectionName(packageName) {
   if (!normalized) return "app_template";
   if (/^[0-9]/u.test(normalized)) return `app_${normalized}`;
   return normalized;
-}
-
-function normalizeTemplatePackageName(template) {
-  const directCandidates = [
-    template && template.packageName,
-    template && template.package_name,
-    template && template.package,
-  ];
-  for (const candidate of directCandidates) {
-    if (hasValue(candidate)) {
-      return String(candidate).trim();
-    }
-  }
-
-  const section = hasValue(template && template.section)
-    ? String(template.section).trim()
-    : hasValue(template && template.key)
-      ? String(template.key).trim()
-      : "";
-  if (!section) return "";
-  if (!section.includes(".") && /_/u.test(section)) {
-    const restored = section.replace(/_/gu, ".");
-    if (/^[a-z0-9]+(\.[a-z0-9_]+)+$/iu.test(restored)) {
-      return restored;
-    }
-  }
-  return "";
-}
-
-function normalizeTemplateRecord(template) {
-  const packageName = normalizeTemplatePackageName(template);
-  const section = hasValue(packageName)
-    ? packageToSectionName(packageName)
-    : (hasValue(template && template.section)
-      ? String(template.section).trim()
-      : "");
-  const label = hasValue(template && template.label)
-    ? String(template.label).trim()
-    : mapPackageDisplayName(packageName || section);
-  return {
-    key: hasValue(template && template.key) ? String(template.key).trim() : section,
-    section,
-    packageName,
-    label,
-  };
 }
 
 function buildPackageMetaMap() {
@@ -197,16 +145,6 @@ function sanitizeTailCount(value) {
   const n = Number.parseInt(String(value || "200"), 10);
   if (!Number.isFinite(n) || n <= 0) return 200;
   return Math.min(n, 5000);
-}
-
-function resolveInsideProject(projectRoot, maybePath, fallbackRelative) {
-  const selected = maybePath && String(maybePath).trim() ? String(maybePath).trim() : fallbackRelative;
-  const absolute = path.resolve(projectRoot, selected);
-  const normalizedRoot = path.resolve(projectRoot);
-  if (absolute !== normalizedRoot && !absolute.startsWith(`${normalizedRoot}${path.sep}`)) {
-    throw new Error(`Path is outside project root: ${selected}`);
-  }
-  return absolute;
 }
 
 function isPathInsideRoot(candidatePath, rootPath) {
@@ -427,14 +365,9 @@ class TaskService {
     this.cacheDir = this.workspacePaths.cache;
     this.versionsCacheDir = path.join(this.cacheDir, "compatible-versions");
     this.patchEntriesCacheDir = path.join(this.cacheDir, "patch-entries");
-    this.templatesCacheDir = path.join(this.cacheDir, "app-templates");
     this.sourceReleaseMetadataPath = path.join(this.workspacePaths.runtime, "source-release-times.json");
     this.patchEntriesParserVersion = "v5";
     this.tasks = new Map();
-  }
-
-  getDefaultConfigPath() {
-    return path.join(this.workspacePaths.root, "toml", "default.toml");
   }
 
   resolveConfigPath(configPathInput) {
@@ -444,14 +377,6 @@ class TaskService {
       path.join("toml", "default.toml"),
       this.workspacePaths.root,
     );
-  }
-
-  getWorkspaceInfo() {
-    return {
-      workspaceRoot: this.workspacePaths.root,
-      tomlDir: path.join(this.workspacePaths.root, "toml"),
-      defaultConfigPath: this.getDefaultConfigPath(),
-    };
   }
 
   getPackageMetaMap() {
@@ -682,89 +607,6 @@ class TaskService {
       logWarn: () => {},
       logStep: () => {},
       defaultPatchesRepo: DEFAULT_MORPHE_PATCHES_REPO,
-    };
-  }
-
-  async getAppTemplates(configPathInput) {
-    const configPath = this.resolveConfigPath(configPathInput);
-    const configDir = path.dirname(configPath);
-    const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
-      cacheDir: this.workspacePaths.cache,
-      logStep: () => {},
-    });
-    const config = await readTomlFile(configPath, runtime.fileExists);
-    const morpheCliCfg = await resolveMorpheCliCfgForApiReads(
-      config["morphe-cli"] || config.morphe_cli || {},
-      configDir,
-      runtime.fileExists,
-    );
-    const patchesCfg = resolvePatchesCfgForApiReads(config.patches || {});
-    const ctx = this.createTaskContext(runtime);
-
-    const jarPath = await morpheCli.resolveMorpheCliJar({
-      configDir,
-      workspaceDir: this.workspacePaths.root,
-      morpheCliCfg,
-      dryRun: false,
-      force: false,
-      ctx,
-    });
-
-    const patchPath = await mpp.resolvePatchFile({
-      app: {},
-      appName: "__templates__",
-      configDir,
-      workspaceDir: this.workspacePaths.root,
-      patchesCfg,
-      dryRun: false,
-      force: false,
-      ctx,
-    });
-
-    const jarFp = await this.getFileFingerprint(jarPath);
-    const patchFp = await this.getFileFingerprint(patchPath);
-    const templatesCacheKey = this.buildCacheKey({
-      type: "app-templates",
-      jar: jarFp,
-      patch: patchFp,
-    });
-    const templatesCached = await this.readCacheJson(this.templatesCacheDir, templatesCacheKey);
-    if (templatesCached && Array.isArray(templatesCached.templates)) {
-      const templates = templatesCached.templates.map((item) => normalizeTemplateRecord(item));
-      return {
-        configPath,
-        templates,
-        cache: { hit: true, key: templatesCacheKey },
-      };
-    }
-
-    const packages = await mpp.listSupportedPackages({
-      jarPath,
-      patchPath,
-      ctx,
-    });
-
-    const templates = packages.map((packageName) => normalizeTemplateRecord({
-      key: packageToSectionName(packageName),
-      section: packageToSectionName(packageName),
-      packageName,
-      label: mapPackageDisplayName(packageName),
-    }));
-
-    await this.writeCacheJson(this.templatesCacheDir, templatesCacheKey, {
-      savedAt: new Date().toISOString(),
-      cacheType: "app-templates",
-      key: templatesCacheKey,
-      jar: jarFp,
-      patch: patchFp,
-      templates,
-    });
-
-    return {
-      configPath,
-      templates,
-      cache: { hit: false, key: templatesCacheKey },
     };
   }
 

@@ -49,8 +49,12 @@ patches_repo = "MorpheApp/morphe-patches"
 mode = "stable" # stable / dev / local
 path = ""
 
+[signing]
+keystore_path = "./workspace/keystore/morphe-test.keystore"
+
 [youtube]
 mode = "remote" # remote / local / false
+package_name = "com.google.android.youtube"
 ```
 
 ## CI Workflows
@@ -78,6 +82,8 @@ mode = "remote" # remote / local / false
 - `npm run desktop:pack`（用 electron-builder 打包 Windows portable exe）
 
 詳細架構： [docs/desktop.md](./docs/desktop.md)
+CLI 參數： [docs/cli.md](./docs/cli.md)
+TOML 欄位： [docs/toml.md](./docs/toml.md)
 
 ## CI/CD 流程
 ```mermaid

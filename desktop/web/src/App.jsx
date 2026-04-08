@@ -50,13 +50,7 @@ const NAV_BUILD = "build"
 const NAV_HISTORY = "history"
 const NAV_ASSETS = "assets"
 
-const TASK_MODE_BUILD = "build"
-const RESERVED_SECTIONS = new Set(["global", "morphe-cli", "morphe_cli", "patches"])
-
-const DEFAULT_FLAGS = {
-  dryRun: true,
-  force: false,
-}
+const RESERVED_SECTIONS = new Set(["global", "morphe-cli", "morphe_cli", "patches", "signing", "sign"])
 
 const LIVE_BUILD_TASK_ID_KEY = "morphe.liveBuildTaskId"
 const MORPHE_SOURCE_REPOS_KEY = "morphe.source.repos"
@@ -518,6 +512,9 @@ function createDefaultConfigForm() {
       repoOptions: [DEFAULT_PATCHES_SOURCE_REPO],
       path: "",
     },
+    signing: {
+      keystorePath: "",
+    },
     apps: createDefaultAppsFromPresets(),
   }
 }
@@ -585,6 +582,9 @@ function configFormFromToml(content) {
   defaults.patches.repoOptions = mergeRepoOptions(patchesRepoOptions, defaults.patches.patchesRepo, DEFAULT_PATCHES_SOURCE_REPO)
   defaults.patches.path = readTomlString(patchesCfg, ["path"])
 
+  const signingCfg = parsed.signing || parsed.sign || {}
+  defaults.signing.keystorePath = readTomlString(signingCfg, ["keystore_path", "keystore-path", "path"])
+
   const appNames = Object.keys(parsed).filter((name) => !RESERVED_SECTIONS.has(name.toLowerCase()))
   if (appNames.length > 0) {
     defaults.apps = appNames.map((name) => appFromToml(name, parsed[name] || {}))
@@ -638,6 +638,12 @@ function configFormToToml(configForm) {
   const patchesLines = buildTomlSectionLines("patches", patchesEntries)
   if (patchesLines.length) blocks.push(patchesLines)
 
+  const signingEntries = []
+  const signingKeystorePath = hasText(configForm?.signing?.keystorePath) ? configForm.signing.keystorePath : ""
+  pushTomlEntry(signingEntries, "keystore_path", hasText(signingKeystorePath), signingKeystorePath)
+  const signingLines = buildTomlSectionLines("signing", signingEntries)
+  if (signingLines.length) blocks.push(signingLines)
+
   for (const app of configForm.apps) {
     const appName = String(app.name || "").trim()
     if (!appName) continue
@@ -667,7 +673,7 @@ function configFormToToml(configForm) {
   return `${blocks.map((block) => block.join("\n")).join("\n\n")}\n`
 }
 
-function buildTaskPayload(configPath, mode, flags, signingKeystorePath = "") {
+function buildTaskPayload(configPath, flags, signingKeystorePath = "") {
   const safeFlags = flags || {}
   return {
     configPath,
@@ -677,7 +683,7 @@ function buildTaskPayload(configPath, mode, flags, signingKeystorePath = "") {
     downloadOnly: false,
     patchesOnly: false,
     morpheCliOnly: false,
-    persistLogs: mode === TASK_MODE_BUILD,
+    persistLogs: true,
   }
 }
 
@@ -862,7 +868,6 @@ function App() {
   const [morpheLocalFiles, setMorpheLocalFiles] = useState([])
   const [patchesLocalFiles, setPatchesLocalFiles] = useState([])
   const [keystoreFiles, setKeystoreFiles] = useState([])
-  const [keystoreDir, setKeystoreDir] = useState("")
   const [selectedKeystorePath, setSelectedKeystorePath] = useState(() => {
     try {
       return String(globalThis?.localStorage?.getItem(KEYSTORE_SELECTED_PATH_KEY) || "").trim()
@@ -886,7 +891,6 @@ function App() {
   const [morpheSourceRepoDraft, setMorpheSourceRepoDraft] = useState("")
   const [morpheSourceVersions, setMorpheSourceVersions] = useState([])
   const [morpheSourceVersion, setMorpheSourceVersion] = useState("")
-  const [morpheSourceLoading, setMorpheSourceLoading] = useState(false)
   const [morpheSourceDownloading, setMorpheSourceDownloading] = useState(false)
   const [patchesSourceRepoOptions, setPatchesSourceRepoOptions] = useState(() => {
     try {
@@ -902,7 +906,6 @@ function App() {
   const [patchesSourceRepoDraft, setPatchesSourceRepoDraft] = useState("")
   const [patchesSourceVersions, setPatchesSourceVersions] = useState([])
   const [patchesSourceVersion, setPatchesSourceVersion] = useState("")
-  const [patchesSourceLoading, setPatchesSourceLoading] = useState(false)
   const [patchesSourceDownloading, setPatchesSourceDownloading] = useState(false)
   const [appVersionOptions, setAppVersionOptions] = useState({})
   const [appVersionLoadingId, setAppVersionLoadingId] = useState("")
@@ -915,8 +918,6 @@ function App() {
   const [appLocalApkLoading, setAppLocalApkLoading] = useState(false)
   const [appLocalApkDir, setAppLocalApkDir] = useState("")
   const [downloadedApkFiles, setDownloadedApkFiles] = useState([])
-  const [downloadedApkDir, setDownloadedApkDir] = useState("")
-  const [downloadedApkLoading, setDownloadedApkLoading] = useState(false)
   const [apkDeletePath, setApkDeletePath] = useState("")
   const [pendingOverwriteApps, setPendingOverwriteApps] = useState([])
   const [packageMetaMap, setPackageMetaMap] = useState(() =>
@@ -941,7 +942,17 @@ function App() {
   }
   const lastSavedSignatureRef = useRef("")
 
-  const generatedToml = useMemo(() => configFormToToml(configForm), [configForm])
+  const generatedToml = useMemo(() => {
+    const base = configForm && typeof configForm === "object" ? configForm : createDefaultConfigForm()
+    const nextSigning = {
+      ...(base.signing || {}),
+      keystorePath: hasText(selectedKeystorePath) ? String(selectedKeystorePath).trim() : String(base?.signing?.keystorePath || "").trim(),
+    }
+    return configFormToToml({
+      ...base,
+      signing: nextSigning,
+    })
+  }, [configForm, selectedKeystorePath])
   const t = (key, vars = {}) => translate(locale, key, vars)
 
   useEffect(() => {
@@ -1390,18 +1401,13 @@ function App() {
   }
 
   async function loadDownloadedApkFiles() {
-    setDownloadedApkLoading(true)
     try {
       const data = await listDownloadedApks()
       const files = sortFilesByVersion(Array.isArray(data?.files) ? data.files : [])
       setDownloadedApkFiles(files)
-      setDownloadedApkDir(String(data?.dir || ""))
     } catch (error) {
       setDownloadedApkFiles([])
-      setDownloadedApkDir("")
       setMessage(error.message || String(error))
-    } finally {
-      setDownloadedApkLoading(false)
     }
   }
 
@@ -1477,6 +1483,7 @@ function App() {
       setConfigPath(resolvedPath)
       setRawConfigInput(content)
       setConfigForm(nextForm)
+      setSelectedKeystorePath(String(nextForm?.signing?.keystorePath || "").trim())
       setMorpheSourceRepoOptions(mergeRepoOptions(nextForm?.morpheCli?.repoOptions, nextForm?.morpheCli?.patchesRepo, DEFAULT_MORPHE_SOURCE_REPO))
       setPatchesSourceRepoOptions(mergeRepoOptions(nextForm?.patches?.repoOptions, nextForm?.patches?.patchesRepo, DEFAULT_PATCHES_SOURCE_REPO))
       lastSavedSignatureRef.current = `${resolvedPath}\n${content}`
@@ -1525,6 +1532,7 @@ function App() {
       setConfigPath(resolvedPath)
       setRawConfigInput(content)
       setConfigForm(nextForm)
+      setSelectedKeystorePath(String(nextForm?.signing?.keystorePath || "").trim())
       setMorpheSourceRepoOptions(mergeRepoOptions(nextForm?.morpheCli?.repoOptions, nextForm?.morpheCli?.patchesRepo, DEFAULT_MORPHE_SOURCE_REPO))
       setPatchesSourceRepoOptions(mergeRepoOptions(nextForm?.patches?.repoOptions, nextForm?.patches?.patchesRepo, DEFAULT_PATCHES_SOURCE_REPO))
       lastSavedSignatureRef.current = `${resolvedPath}\n${content}`
@@ -1554,7 +1562,6 @@ function App() {
       setMorpheSourceVersion("")
       return
     }
-    setMorpheSourceLoading(true)
     try {
       const data = await fetchSourceVersions({
         type: "morphe-cli",
@@ -1584,8 +1591,6 @@ function App() {
       setMorpheSourceVersions([])
       setMorpheSourceVersion("")
       setMessage(error.message || String(error))
-    } finally {
-      setMorpheSourceLoading(false)
     }
   }
 
@@ -1658,7 +1663,6 @@ function App() {
       setPatchesSourceVersion("")
       return
     }
-    setPatchesSourceLoading(true)
     try {
       const data = await fetchSourceVersions({
         type: "patches",
@@ -1688,8 +1692,6 @@ function App() {
       setPatchesSourceVersions([])
       setPatchesSourceVersion("")
       setMessage(error.message || String(error))
-    } finally {
-      setPatchesSourceLoading(false)
     }
   }
 
@@ -1753,10 +1755,12 @@ function App() {
       const data = await listSourceFiles("keystore")
       const files = Array.isArray(data?.files) ? data.files : []
       setKeystoreFiles(files)
-      setKeystoreDir(String(data?.dir || ""))
       setSelectedKeystorePath((prev) => {
         const current = String(prev || "").trim()
         if (current && files.some((file) => String(file?.fullPath || "").trim() === current)) {
+          return current
+        }
+        if (current) {
           return current
         }
         const defaultFile = files.find((file) => String(file?.name || "").trim().toLowerCase() === "morphe-test.keystore")
@@ -1771,7 +1775,6 @@ function App() {
       })
     } catch (error) {
       setKeystoreFiles([])
-      setKeystoreDir("")
       setMessage(error.message || String(error))
     }
   }
@@ -1899,49 +1902,42 @@ function App() {
       await onStopBuildTask()
       return
     }
-    await runTask(TASK_MODE_BUILD, {
+    await runBuildTask({
       dryRun: false,
       force: false,
     })
   }
 
-  async function runTask(mode, flags = DEFAULT_FLAGS) {
+  async function runBuildTask(flags = { dryRun: false, force: false }) {
     const isBuildRunningNow = String(liveTask?.status || "").toLowerCase() === "running"
-    if (mode === TASK_MODE_BUILD && (isBuildRunningNow || buildLaunchPending)) {
+    if (isBuildRunningNow || buildLaunchPending) {
       setMessage(t("msg.buildAlreadyRunning"))
       return
     }
-    if (mode === TASK_MODE_BUILD) {
-      const missingLocalApkApp = (configForm.apps || []).find((app) => {
-        if (String(app?.mode || "").toLowerCase() !== "local") return false
-        return !hasText(app?.localApkCustomPath) && !hasText(app?.localApkSelectedPath)
-      })
-      if (missingLocalApkApp) {
-        const appName = missingLocalApkApp.displayName || missingLocalApkApp.name || "app"
-        setMessage(
-          locale === "zh-TW"
-            ? `[${appName}] local 模式需先選擇本地 APK 或輸入自訂路徑。`
-            : `[${appName}] local mode requires a selected local APK or custom path.`,
-        )
-        return
-      }
+    const missingLocalApkApp = (configForm.apps || []).find((app) => {
+      if (String(app?.mode || "").toLowerCase() !== "local") return false
+      return !hasText(app?.localApkCustomPath) && !hasText(app?.localApkSelectedPath)
+    })
+    if (missingLocalApkApp) {
+      const appName = missingLocalApkApp.displayName || missingLocalApkApp.name || "app"
+      setMessage(
+        locale === "zh-TW"
+          ? `[${appName}] local 模式需先選擇本地 APK 或輸入自訂路徑。`
+          : `[${appName}] local mode requires a selected local APK or custom path.`,
+      )
+      return
     }
     setIsBusy(true)
-    if (mode === TASK_MODE_BUILD) {
-      setBuildLaunchPending(true)
-    }
+    setBuildLaunchPending(true)
     try {
-      const signingKeystorePath =
-        mode === TASK_MODE_BUILD && hasText(selectedKeystorePath) ? String(selectedKeystorePath).trim() : ""
-      const payload = buildTaskPayload(configPath, mode, flags, signingKeystorePath)
+      const signingKeystorePath = hasText(selectedKeystorePath) ? String(selectedKeystorePath).trim() : ""
+      const payload = buildTaskPayload(configPath, flags, signingKeystorePath)
       const data = await startTask(payload)
       if (data?.task) {
         setSelectedTaskId(data.task.id)
-        if (mode === TASK_MODE_BUILD) {
-          setLiveTaskId(data.task.id)
-          setLiveTask(data.task)
-          localStorage.setItem(LIVE_BUILD_TASK_ID_KEY, data.task.id)
-        }
+        setLiveTaskId(data.task.id)
+        setLiveTask(data.task)
+        localStorage.setItem(LIVE_BUILD_TASK_ID_KEY, data.task.id)
       }
       setMessage(t("msg.taskStarted"))
       await refreshTasks()
@@ -1949,9 +1945,7 @@ function App() {
       setMessage(error.message || String(error))
     } finally {
       setIsBusy(false)
-      if (mode === TASK_MODE_BUILD) {
-        setBuildLaunchPending(false)
-      }
+      setBuildLaunchPending(false)
     }
   }
 
@@ -2779,9 +2773,6 @@ function App() {
             onToggleRawMode={onToggleRawMode}
             isBusy={isBusy}
             setConfigPathDialogOpen={setConfigPathDialogOpen}
-            loadConfig={loadConfig}
-            setRawConfigInput={setRawConfigInput}
-            generatedToml={generatedToml}
             rawConfigInput={rawConfigInput}
             setRawConfigInputValue={setRawConfigInput}
             morpheCliSelectValue={morpheCliSelectValue}
@@ -2824,10 +2815,7 @@ function App() {
             setMorpheSourceVersion={setMorpheSourceVersion}
             morpheSourceVersions={morpheSourceVersions}
             onDownloadMorpheFromSource={onDownloadMorpheFromSource}
-            morpheSourceLoading={morpheSourceLoading}
             morpheSourceDownloading={morpheSourceDownloading}
-            loadMorpheSourceVersions={loadMorpheSourceVersions}
-            loadMorpheLocalFiles={loadMorpheLocalFiles}
             morpheLocalFiles={morpheLocalFiles}
             openConfirmDialog={openConfirmDialog}
             morpheDeleteName={morpheDeleteName}
@@ -2842,16 +2830,10 @@ function App() {
             setPatchesSourceVersion={setPatchesSourceVersion}
             patchesSourceVersions={patchesSourceVersions}
             onDownloadPatchesFromSource={onDownloadPatchesFromSource}
-            patchesSourceLoading={patchesSourceLoading}
             patchesSourceDownloading={patchesSourceDownloading}
-            loadPatchesSourceVersions={loadPatchesSourceVersions}
-            loadPatchesLocalFiles={loadPatchesLocalFiles}
             patchesLocalFiles={patchesLocalFiles}
             patchesDeleteName={patchesDeleteName}
             downloadedApkFiles={downloadedApkFiles}
-            downloadedApkDir={downloadedApkDir}
-            downloadedApkLoading={downloadedApkLoading}
-            loadDownloadedApkFiles={loadDownloadedApkFiles}
             onOpenAssetsDir={onOpenAssetsDir}
             apkDeletePath={apkDeletePath}
           />

@@ -20,6 +20,45 @@ function resolveEnvKey(env, keys) {
   return null;
 }
 
+function resolveConfigKey(config, keys) {
+  const target = config && typeof config === "object" ? config : {};
+  for (const key of keys) {
+    if (hasValue(target[key])) {
+      return String(target[key]).trim();
+    }
+  }
+  return "";
+}
+
+function resolveSigningCredentialConfig(signingCfg) {
+  const storePassword = resolveConfigKey(signingCfg, [
+    "store_password",
+    "store-password",
+    "keystore_password",
+    "keystore-password",
+  ]);
+  const entryAlias = resolveConfigKey(signingCfg, [
+    "entry_alias",
+    "entry-alias",
+    "keystore_entry_alias",
+    "keystore-entry-alias",
+    "alias",
+  ]);
+  const entryPassword = resolveConfigKey(signingCfg, [
+    "entry_password",
+    "entry-password",
+    "keystore_entry_password",
+    "keystore-entry-password",
+    "key_password",
+    "key-password",
+  ]);
+  return {
+    storePassword: hasValue(storePassword) ? storePassword : "",
+    entryAlias: hasValue(entryAlias) ? entryAlias : "",
+    entryPassword: hasValue(entryPassword) ? entryPassword : "",
+  };
+}
+
 async function writeKeystoreFromBase64(keystorePath, base64Data, runtime) {
   const normalized = String(base64Data).replace(/\s+/gu, "");
   let decoded = null;
@@ -45,8 +84,10 @@ function buildLocalKeystoreCandidates(configDir, projectRoot) {
 }
 
 async function resolveSigningConfig(params) {
-  const { configDir, projectRoot, workspaceDir, preferWorkspaceKeystore, runtime, dryRun, env, logInfo } = params;
+  const { configDir, projectRoot, workspaceDir, preferWorkspaceKeystore, signingCfg, runtime, dryRun, env, logInfo } = params;
   const effectiveEnv = env || process.env;
+  const credentialsFromConfig = resolveSigningCredentialConfig(signingCfg);
+
   const explicitKeystorePath = resolveEnvKey(effectiveEnv, ["MORPHE_KEYSTORE_PATH"]);
   if (explicitKeystorePath) {
     const resolvedPath = path.isAbsolute(explicitKeystorePath)
@@ -59,9 +100,28 @@ async function resolveSigningConfig(params) {
     logInfo(`Using signing keystore: ${resolvedPath}`);
     return {
       keystorePath: resolvedPath,
+      ...credentialsFromConfig,
       source: "env-path",
     };
   }
+
+  const explicitConfigPath = resolveConfigKey(signingCfg, ["keystore_path", "keystore-path", "path"]);
+  if (hasValue(explicitConfigPath)) {
+    const resolvedPath = path.isAbsolute(explicitConfigPath)
+      ? path.normalize(explicitConfigPath)
+      : path.resolve(configDir, explicitConfigPath);
+    const exists = await runtime.fileExists(resolvedPath);
+    if (!exists) {
+      throw new Error(`Selected keystore not found: ${resolvedPath}`);
+    }
+    logInfo(`Using signing keystore: ${resolvedPath}`);
+    return {
+      keystorePath: resolvedPath,
+      ...credentialsFromConfig,
+      source: "config",
+    };
+  }
+
   const keystoreBase64 = resolveEnvKey(effectiveEnv, ["MORPHE_KEYSTORE_BASE64"]);
 
   if (keystoreBase64) {
@@ -74,6 +134,7 @@ async function resolveSigningConfig(params) {
     }
     return {
       keystorePath,
+      ...credentialsFromConfig,
       source: "env-base64",
     };
   }
@@ -87,6 +148,7 @@ async function resolveSigningConfig(params) {
       logInfo(`Using signing keystore: ${workspaceKeystorePath}`);
       return {
         keystorePath: workspaceKeystorePath,
+        ...credentialsFromConfig,
         source: "workspace-default",
       };
     }
@@ -105,6 +167,7 @@ async function resolveSigningConfig(params) {
       }
       return {
         keystorePath: workspaceKeystorePath,
+        ...credentialsFromConfig,
         source: "workspace-copied",
       };
     }
@@ -128,6 +191,7 @@ async function resolveSigningConfig(params) {
 
   return {
     keystorePath,
+    ...credentialsFromConfig,
     source: "local-default",
   };
 }

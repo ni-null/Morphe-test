@@ -25,8 +25,6 @@ export default function BuildPage({
   onToggleRawMode,
   isBusy,
   setConfigPathDialogOpen,
-  setRawConfigInput,
-  generatedToml,
   rawConfigInput,
   setRawConfigInputValue,
   morpheCliSelectValue,
