@@ -49,6 +49,7 @@ export default function BuildPage({
   buildGeneratedApks,
   buildGeneratedApksLoading,
   formatBytes,
+  onOpenGeneratedApkDir,
 }) {
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [customAppDialogOpen, setCustomAppDialogOpen] = useState(false)
@@ -243,7 +244,7 @@ export default function BuildPage({
         </Button>
       </div>
     </div>
-    <Card className='rounded-xl bg-slate-100/60 dark:bg-muted/55 text-card-foreground border-0 shadow-sm'>
+    <Card className='rounded-xl bg-white dark:bg-card text-card-foreground border border-slate-200 dark:border-slate-700 shadow-sm'>
       <CardContent className='space-y-6 py-5'>
         {rawOverrideMode ? (
           <div className='space-y-2'>
@@ -461,7 +462,7 @@ export default function BuildPage({
       <Package className='h-5 w-5' />
       已產生 APK
     </div>
-    <Card className='rounded-xl bg-slate-200/70 dark:bg-muted/55 text-card-foreground border-0 shadow-sm'>
+    <Card className='rounded-xl bg-white dark:bg-card text-card-foreground border border-slate-200 dark:border-slate-700 shadow-sm'>
       <CardContent className='space-y-4 py-5'>
         {buildGeneratedApksLoading ? (
           <p className='text-sm text-muted-foreground'>載入中...</p>
@@ -472,7 +473,7 @@ export default function BuildPage({
             {generatedApkGroups.map(([groupKey, items]) => {
               const groupIcon = resolveGeneratedApkGroupIcon(groupKey)
               return (
-                <div key={`generated-apk-group-${groupKey}`} className='rounded-md bg-muted/35 p-2.5'>
+                <div key={`generated-apk-group-${groupKey}`} className='rounded-md p-2.5'>
                   <div className='mb-2 inline-flex items-center gap-2 text-sm font-semibold break-all'>
                     {hasText(groupIcon) ? (
                       <img
@@ -487,14 +488,25 @@ export default function BuildPage({
                   </div>
                   <div className='space-y-1'>
                     {items.map((item) => (
-                      <div key={`${item.taskId}:${item.relativePath}:${item.fileName}`} className='flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/40'>
+                      <button
+                        type='button'
+                        key={`${item.taskId}:${item.relativePath}:${item.fileName}`}
+                        className='flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-muted/40'
+                        onClick={() => {
+                          if (typeof onOpenGeneratedApkDir === "function") {
+                            onOpenGeneratedApkDir(item)
+                          }
+                        }}
+                        title='打開此 APK 所在資料夾'
+                        aria-label='打開此 APK 所在資料夾'
+                      >
                         <span className='inline-flex min-w-0 flex-1 items-center gap-2'>
                           <Package className='h-3.5 w-3.5 shrink-0 text-muted-foreground' />
                           <span className='min-w-0 truncate'>{item.fileName}</span>
                         </span>
                         <span className='shrink-0 text-xs text-muted-foreground'>{formatBytes(item.sizeBytes)}</span>
                         <span className='shrink-0 text-xs text-muted-foreground'>{formatApkModifiedAt(item.modifiedAt)}</span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>

@@ -295,11 +295,12 @@ export default function AssetsPage({
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent className='space-y-3'>
-              <div className='flex items-center gap-2'>
+            <CardContent>
+              <div className='space-y-2.5 rounded-xl bg-slate-100/85 p-2.5 dark:bg-slate-800/70'>
+                <div className='flex items-center gap-2'>
                   <div className='min-w-0 flex-1'>
                   <Select value={morpheRepoMode === "local" ? MORPHE_LOCAL_SOURCE_VALUE : hasText(morpheSourceRepo) ? morpheSourceRepo : "MorpheApp/morphe-cli"} onValueChange={onChangeMorpheRepo}>
-                    <SelectTrigger className='border-0 bg-slate-50 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800'>
+                    <SelectTrigger className='border-0 bg-transparent shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent'>
                       <span className='inline-flex items-center gap-2 whitespace-nowrap  pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                         <FolderGit2 className='h-3.5 w-3.5' />
                         {t("source.repo")}
@@ -321,13 +322,13 @@ export default function AssetsPage({
                     </SelectContent>
                   </Select>
                   </div>
-              </div>
-              {morpheRepoMode === "local" ? (
-                <div className='space-y-2'>
+                </div>
+                {morpheRepoMode === "local" ? (
+                  <div className='space-y-2'>
                   {morpheLocalFiles.length === 0 ? (
                     <p className='text-sm text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
                   ) : (
-                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1 dark:bg-slate-800/70'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                       {morpheLocalFiles.map((file) => (
                         <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                           <div className='min-w-0'>
@@ -352,11 +353,11 @@ export default function AssetsPage({
                       ))}
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className='space-y-2'>
+                  </div>
+                ) : (
+                  <div className='space-y-2'>
                   {morpheMixedItems.length === 0 ? null : (
-                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1 dark:bg-slate-800/70'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                       {morpheMixedItems.map((item) => {
                         const isDownloading = morpheSourceDownloading && String(morpheSourceVersion || "").trim() === String(item.fileName || "").trim()
                         const canDownload = item.isRemote && !item.hasLocal
@@ -384,8 +385,9 @@ export default function AssetsPage({
                       })}
                     </div>
                   )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </CardContent>
       </Card>
 
@@ -401,11 +403,12 @@ export default function AssetsPage({
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent className='space-y-3'>
-              <div className='flex items-center gap-2'>
+            <CardContent>
+              <div className='space-y-2.5 rounded-xl bg-slate-100/85 p-2.5 dark:bg-slate-800/70'>
+                <div className='flex items-center gap-2'>
                   <div className='min-w-0 flex-1'>
                   <Select value={patchesRepoMode === "local" ? PATCHES_LOCAL_SOURCE_VALUE : hasText(patchesSourceRepo) ? patchesSourceRepo : "MorpheApp/morphe-patches"} onValueChange={onChangePatchesRepo}>
-                    <SelectTrigger className='border-0 bg-slate-50 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800'>
+                    <SelectTrigger className='border-0 bg-transparent shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent'>
                       <span className='inline-flex items-center gap-2 whitespace-nowrap  pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                         <FolderGit2 className='h-3.5 w-3.5' />
                         {t("source.repo")}
@@ -427,13 +430,13 @@ export default function AssetsPage({
                     </SelectContent>
                   </Select>
                   </div>
-              </div>
-              {patchesRepoMode === "local" ? (
-                <div className='space-y-2'>
+                </div>
+                {patchesRepoMode === "local" ? (
+                  <div className='space-y-2'>
                   {patchesLocalFiles.length === 0 ? (
                     <p className='text-sm text-muted-foreground'>{t("patches.noLocalFiles")}</p>
                   ) : (
-                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1 dark:bg-slate-800/70'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                       {patchesLocalFiles.map((file) => (
                         <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                           <div className='min-w-0'>
@@ -458,11 +461,11 @@ export default function AssetsPage({
                       ))}
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className='space-y-2'>
+                  </div>
+                ) : (
+                  <div className='space-y-2'>
                   {patchesMixedItems.length === 0 ? null : (
-                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-xl bg-slate-100/85 p-2 pr-1 dark:bg-slate-800/70'>
+                    <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                       {patchesMixedItems.map((item) => {
                         const isDownloading = patchesSourceDownloading && String(patchesSourceVersion || "").trim() === String(item.fileName || "").trim()
                         const canDownload = item.isRemote && !item.hasLocal
@@ -490,8 +493,9 @@ export default function AssetsPage({
                       })}
                     </div>
                   )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </CardContent>
       </Card>
 

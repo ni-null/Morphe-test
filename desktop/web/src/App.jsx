@@ -2132,6 +2132,18 @@ function App() {
     }
   }
 
+  async function onOpenGeneratedApkDir(item) {
+    const taskId = String(item?.taskId || "").trim()
+    const relativePath = String(item?.relativePath || "").trim()
+    if (!taskId || !relativePath) return
+    try {
+      const data = await openTaskArtifactDir(taskId, relativePath)
+      setMessage(t("msg.opened", { path: data.path || relativePath }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    }
+  }
+
   async function onDeleteTask(taskId) {
     if (!taskId) return
     setDeletingTaskId(taskId)
@@ -2749,7 +2761,7 @@ function App() {
         </div>
       </aside>
 
-      <main className='main-panel space-y-4'>
+      <main className='main-panel min-h-screen space-y-4 bg-[#f8f8f8] dark:bg-background'>
         {activeNav === NAV_BUILD ? (
           <BuildPage
             t={t}
@@ -2792,6 +2804,7 @@ function App() {
             buildGeneratedApks={buildGeneratedApks}
             buildGeneratedApksLoading={buildGeneratedApksLoading}
             formatBytes={formatBytes}
+            onOpenGeneratedApkDir={onOpenGeneratedApkDir}
           />
         ) : null}
 
