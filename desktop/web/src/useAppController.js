@@ -275,6 +275,7 @@ function useAppController() {
     appPatchOptions,
     appUnsupportedPatches,
     appPatchLoadingId,
+    appPatchStage,
     appVersionError,
     appPatchError,
     loadAppPatchOptions,
@@ -846,6 +847,51 @@ function useAppController() {
       }, 180)
     }
   }
+  const onOpenAppSettingsDialog = useCallback(
+    async (app) => {
+      const source = app && typeof app === "object" ? app : null
+      if (!source) return
+
+      setAppSettingsId(String(source.id || ""))
+      setAppSettingsOpen(true)
+
+      const loaded = await loadConfig({ silent: true })
+      const nextApps = Array.isArray(loaded?.nextForm?.apps) ? loaded.nextForm.apps : []
+      if (nextApps.length === 0) return
+      if (!useDialogStore.getState().appSettingsOpen) return
+
+      const sourcePackage = String(source.packageName || "")
+        .trim()
+        .toLowerCase()
+      const sourceName = String(source.name || "")
+        .trim()
+        .toLowerCase()
+
+      const matched =
+        (sourcePackage
+          ? nextApps.find(
+              (item) =>
+                String(item?.packageName || "")
+                  .trim()
+                  .toLowerCase() === sourcePackage,
+            )
+          : null) ||
+        (sourceName
+          ? nextApps.find(
+              (item) =>
+                String(item?.name || "")
+                  .trim()
+                  .toLowerCase() === sourceName,
+            )
+          : null) ||
+        null
+
+      if (matched && hasText(matched.id)) {
+        setAppSettingsId(String(matched.id))
+      }
+    },
+    [setAppSettingsId, setAppSettingsOpen, loadConfig, hasText],
+  )
 
   return {
     t,
@@ -898,7 +944,7 @@ function useAppController() {
       getPackageIcon,
       hasText,
       setAppSettingsId,
-      setAppSettingsOpen,
+      onOpenAppSettingsDialog,
       buildGeneratedApks,
       buildGeneratedApksLoading,
       formatBytes,
@@ -984,6 +1030,7 @@ function useAppController() {
       appPatchOptions,
       appVersionOptions,
       appPatchLoadingId,
+      appPatchStage,
       loadAppPatchOptions,
       appVerAutoValue: APP_VER_AUTO_VALUE,
       appVersionError,

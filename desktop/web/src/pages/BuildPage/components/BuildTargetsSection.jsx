@@ -7,8 +7,7 @@ export default function BuildTargetsSection({
   updateApp,
   hasText,
   getPackageIcon,
-  setAppSettingsId,
-  setAppSettingsOpen,
+  onOpenAppSettingsDialog,
   isBusy,
   onAddCustom,
   controlsLocked,
@@ -47,10 +46,7 @@ export default function BuildTargetsSection({
               <button
                 type='button'
                 className='inline-flex items-center justify-center border-l border-black/10 px-2 transition-colors hover:bg-black/5 disabled:pointer-events-none disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/5'
-                onClick={() => {
-                  setAppSettingsId(app.id)
-                  setAppSettingsOpen(true)
-                }}
+                onClick={() => onOpenAppSettingsDialog(app)}
                 disabled={controlsLocked}
                 aria-label={`${app.displayName || app.name || "app"} settings`}
                 title={`${app.displayName || app.name || "app"} settings`}>

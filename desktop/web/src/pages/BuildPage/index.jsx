@@ -42,8 +42,7 @@ export default function BuildPage({
   updateApp,
   getPackageIcon,
   hasText,
-  setAppSettingsId,
-  setAppSettingsOpen,
+  onOpenAppSettingsDialog,
   buildGeneratedApks,
   buildGeneratedApksLoading,
   formatBytes,
@@ -139,8 +138,7 @@ export default function BuildPage({
                 updateApp={updateApp}
                 hasText={hasText}
                 getPackageIcon={getPackageIcon}
-                setAppSettingsId={setAppSettingsId}
-                setAppSettingsOpen={setAppSettingsOpen}
+                onOpenAppSettingsDialog={onOpenAppSettingsDialog}
                 isBusy={isBusy}
                 onAddCustom={() => setCustomAppDialogOpen(true)}
                 controlsLocked={isBuildUiLocked}

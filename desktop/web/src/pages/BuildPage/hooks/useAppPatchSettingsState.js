@@ -18,12 +18,29 @@ export default function useAppPatchSettingsState({
   const [appPatchOptions, setAppPatchOptions] = useState({})
   const [appUnsupportedPatches, setAppUnsupportedPatches] = useState({})
   const [appPatchLoadingId, setAppPatchLoadingId] = useState("")
+  const [appPatchStage, setAppPatchStage] = useState("idle")
   const [appVersionError, setAppVersionError] = useState("")
   const [appPatchError, setAppPatchError] = useState("")
 
   const editingApp = useMemo(() => configForm.apps.find((app) => app.id === appSettingsId) || null, [configForm.apps, appSettingsId])
+  function buildAppResourceCacheKey(app) {
+    const morpheCliCfg = configForm?.morpheCli || {}
+    const patchesCfg = configForm?.patches || {}
+    return [
+      String(app?.packageName || "").trim().toLowerCase(),
+      String(app?.mode || "remote").trim().toLowerCase(),
+      String(morpheCliCfg.mode || "stable").trim().toLowerCase(),
+      String(morpheCliCfg.path || "").trim(),
+      String(morpheCliCfg.ver || "").trim(),
+      String(morpheCliCfg.patchesRepo || "").trim(),
+      String(patchesCfg.mode || "stable").trim().toLowerCase(),
+      String(patchesCfg.path || "").trim(),
+      String(patchesCfg.ver || "").trim(),
+      String(patchesCfg.patchesRepo || "").trim(),
+    ].join("|")
+  }
 
-  async function loadAppVersions(app) {
+  async function loadAppVersions(app, cacheKey = "") {
     const appId = String(app?.id || "")
     const packageName = String(app?.packageName || "").trim()
     if (!appId || !packageName) {
@@ -46,18 +63,22 @@ export default function useAppPatchSettingsState({
           versions,
           packageName: String(data?.packageName || packageName),
           patchFileName: String(data?.patchFileName || "").trim(),
+          cacheKey: String(cacheKey || ""),
         },
       }))
       if (!data?.any && versions.length === 0) {
         setAppVersionError(t("msg.noVersionsKeepAuto"))
       }
+      return { resourceDownloadTriggered: data?.resourceDownloadTriggered === true }
     } catch (error) {
       setAppVersionError(error.message || String(error))
+      return { resourceDownloadTriggered: false }
     }
   }
 
   async function loadAppPatchOptions(app, options = {}) {
     const applyDefaultSelection = options && options.applyDefaultSelection === true
+    const cacheKey = String(options?.cacheKey || "")
     const appId = String(app?.id || "")
     const packageName = String(app?.packageName || "").trim()
     if (!appId || !packageName) {
@@ -94,9 +115,11 @@ export default function useAppPatchSettingsState({
       setAppPatchOptions((prev) => ({
         ...prev,
         [appId]: {
+          loaded: true,
           entries,
           packageName: String(data?.packageName || packageName),
           patchFileName: String(data?.patchFileName || "").trim(),
+          cacheKey,
         },
       }))
       setAppUnsupportedPatches((prev) => ({
@@ -158,8 +181,10 @@ export default function useAppPatchSettingsState({
       if (entries.length === 0) {
         setAppPatchError(t("msg.noPatches"))
       }
+      return { resourceDownloadTriggered: data?.resourceDownloadTriggered === true }
     } catch (error) {
       setAppPatchError(error.message || String(error))
+      return { resourceDownloadTriggered: false }
     } finally {
       setAppPatchLoadingId("")
     }
@@ -181,13 +206,52 @@ export default function useAppPatchSettingsState({
     setAppVersionError("")
     setAppPatchError("")
     setAppUnsupportedPatches({})
+    setAppPatchStage("idle")
   }
 
   useEffect(() => {
     if (!appSettingsOpen || !editingApp) return
-    loadAppVersions(editingApp)
-    loadAppPatchOptions(editingApp)
-  }, [appSettingsOpen, editingApp?.id])
+    let canceled = false
+    const appId = String(editingApp?.id || "")
+    const packageName = String(editingApp?.packageName || "").trim().toLowerCase()
+    const cacheKey = buildAppResourceCacheKey(editingApp)
+    const versionCache = appVersionOptions[appId]
+    const patchCache = appPatchOptions[appId]
+    const hasVersionCache =
+      versionCache?.loaded === true &&
+      String(versionCache?.packageName || "").trim().toLowerCase() === packageName &&
+      String(versionCache?.cacheKey || "") === cacheKey
+    const hasPatchCache =
+      patchCache?.loaded === true &&
+      String(patchCache?.packageName || "").trim().toLowerCase() === packageName &&
+      String(patchCache?.cacheKey || "") === cacheKey
+    const hasUsableCache = hasVersionCache && hasPatchCache
+    setAppPatchStage(hasUsableCache ? "idle" : "loading")
+    ;(async () => {
+      const [versionResult, patchResult] = await Promise.all([
+        loadAppVersions(editingApp, cacheKey),
+        loadAppPatchOptions(editingApp, { cacheKey }),
+      ])
+      const needsReloadValidation = !!(versionResult?.resourceDownloadTriggered || patchResult?.resourceDownloadTriggered)
+      if (canceled) return
+      if (!needsReloadValidation) {
+        setAppPatchStage("idle")
+        return
+      }
+
+      setAppPatchStage("resolving")
+      await Promise.all([
+        loadAppVersions(editingApp, cacheKey),
+        loadAppPatchOptions(editingApp, { cacheKey }),
+      ])
+      if (canceled) return
+      setAppPatchStage("idle")
+    })()
+    return () => {
+      canceled = true
+      setAppPatchStage("idle")
+    }
+  }, [appSettingsOpen, editingApp?.id, configPath])
 
   return {
     editingApp,
@@ -195,6 +259,7 @@ export default function useAppPatchSettingsState({
     appPatchOptions,
     appUnsupportedPatches,
     appPatchLoadingId,
+    appPatchStage,
     appVersionError,
     appPatchError,
     loadAppPatchOptions,

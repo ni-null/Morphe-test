@@ -53,16 +53,23 @@ export default function useConfigLifecycle({
     ],
   )
 
-  const loadConfig = useCallback(async () => {
+  const loadConfig = useCallback(async (options = {}) => {
+    const silent = options && options.silent === true
     setIsBusy(true)
     try {
       const data = await fetchConfig(configPath)
       const content = String(data.content || "")
       const resolvedPath = String(data.path || configPath)
-      applyLoadedConfig({ content, resolvedPath })
-      setMessage(`Config loaded: ${resolvedPath}`)
+      const nextForm = applyLoadedConfig({ content, resolvedPath })
+      if (!silent) {
+        setMessage(`Config loaded: ${resolvedPath}`)
+      }
+      return { nextForm, resolvedPath, content }
     } catch (error) {
-      setMessage(error.message || String(error))
+      if (!silent) {
+        setMessage(error.message || String(error))
+      }
+      return null
     } finally {
       setIsBusy(false)
     }

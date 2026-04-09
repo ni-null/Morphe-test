@@ -36,4 +36,11 @@ function App() {
   )
 }
 
-createRoot(document.getElementById("root")).render(<App />)
+const rootElement = document.getElementById("root")
+if (rootElement) {
+  const globalKey = "__MORPHE_APP_ROOT__"
+  const host = window
+  const root = host[globalKey] || createRoot(rootElement)
+  host[globalKey] = root
+  root.render(<App />)
+}

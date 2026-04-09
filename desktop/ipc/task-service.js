@@ -843,6 +843,12 @@ class TaskService {
       cacheDir: this.workspacePaths.cache,
       logStep: () => {},
     });
+    let resourceDownloadTriggered = false;
+    const originalDownloadFile = runtime.downloadFile.bind(runtime);
+    runtime.downloadFile = async (...args) => {
+      resourceDownloadTriggered = true;
+      return originalDownloadFile(...args);
+    };
     const config = await readTomlFile(configPath, runtime.fileExists);
     const morpheCliCfg = await resolveMorpheCliCfgForApiReads(
       config["morphe-cli"] || config.morphe_cli || {},
@@ -913,6 +919,7 @@ class TaskService {
         patchFileName: versionsCached.patchFileName || path.basename(patchPath),
         any: !!compatibility.any,
         versions: Array.isArray(compatibility.versions) ? compatibility.versions : [],
+        resourceDownloadTriggered: false,
         cache: { hit: true, key: versionsCacheKey },
       };
     }
@@ -937,6 +944,7 @@ class TaskService {
       patchFileName: path.basename(patchPath),
       any: !!compatibility.any,
       versions: Array.isArray(compatibility.versions) ? compatibility.versions : [],
+      resourceDownloadTriggered,
       cache: { hit: false, key: versionsCacheKey },
     };
 
@@ -962,6 +970,12 @@ class TaskService {
       cacheDir: this.workspacePaths.cache,
       logStep: () => {},
     });
+    let resourceDownloadTriggered = false;
+    const originalDownloadFile = runtime.downloadFile.bind(runtime);
+    runtime.downloadFile = async (...args) => {
+      resourceDownloadTriggered = true;
+      return originalDownloadFile(...args);
+    };
     const config = await readTomlFile(configPath, runtime.fileExists);
     let morpheCliCfg = await resolveMorpheCliCfgForApiReads(
       config["morphe-cli"] || config.morphe_cli || {},
@@ -1032,6 +1046,7 @@ class TaskService {
         packageName: cached.packageName || app.package_name || "",
         patchFileName: cached.patchFileName || path.basename(patchPath),
         entries: cachedEntries,
+        resourceDownloadTriggered: false,
         cache: { hit: true, key: cacheKey },
       };
     }
@@ -1061,6 +1076,7 @@ class TaskService {
       packageName: String(rawResult.packageName || app.package_name || ""),
       patchFileName: path.basename(patchPath),
       entries,
+      resourceDownloadTriggered,
       cache: { hit: false, key: cacheKey },
     };
   }

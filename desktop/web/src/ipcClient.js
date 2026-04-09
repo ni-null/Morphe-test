@@ -1,3 +1,5 @@
+import { uiDownloadManager } from "./lib/uiDownloadManager"
+
 function getDesktopBridge() {
   const bridge = window.morpheDesktop
   if (!bridge || typeof bridge.invoke !== "function") {
@@ -6,9 +8,29 @@ function getDesktopBridge() {
   return bridge
 }
 
+function normalizeIpcError(error) {
+  const raw = String(error?.message || error || "").trim()
+  const text = raw.replace(/^Error invoking remote method '[^']+':\s*/u, "")
+
+  const missingLocalPatchMatch = text.match(/^\[([^\]]+)\]\s+Local patch file not found:\s*(.+)$/iu)
+  if (missingLocalPatchMatch) {
+    const appName = String(missingLocalPatchMatch[1] || "").trim()
+    const localPath = String(missingLocalPatchMatch[2] || "").trim()
+    return new Error(
+      `[${appName}] 找不到自訂本地 patches 檔案：${localPath}\n請重新選擇本地 patches，或切回 stable/dev。`,
+    )
+  }
+
+  return new Error(text || "Unknown IPC error")
+}
+
 async function requestIpc(method, payload = {}) {
   const bridge = getDesktopBridge()
-  return bridge.invoke(method, payload)
+  try {
+    return await bridge.invoke(method, payload)
+  } catch (error) {
+    throw normalizeIpcError(error)
+  }
 }
 
 export async function fetchConfig(configPath = "") {
@@ -78,20 +100,52 @@ export async function openTaskArtifactDir(taskId, relativePath) {
 }
 
 export async function fetchAppCompatibleVersions(configPath, app) {
-  return requestIpc("fetchAppCompatibleVersions", {
-    configPath: String(configPath || ""),
-    app: app && typeof app === "object" ? app : {},
-  })
+  const safeConfigPath = String(configPath || "")
+  const safeApp = app && typeof app === "object" ? app : {}
+  const packageName = String(safeApp.packageName || "").trim()
+  const methodKey = uiDownloadManager.makeInflightKey([
+    "app-compat",
+    safeConfigPath,
+    packageName,
+  ])
+  const lockKey = uiDownloadManager.makeInflightKey([
+    "app-resource",
+    safeConfigPath,
+    packageName,
+  ])
+  return uiDownloadManager.runSerial(lockKey, () =>
+    uiDownloadManager.runSingleflight(methodKey, () =>
+      requestIpc("fetchAppCompatibleVersions", {
+        configPath: safeConfigPath,
+        app: safeApp,
+      }),
+    ),
+  )
 }
 
 export async function fetchAppPatchOptions(configPath, app) {
   const safeConfigPath = String(configPath || "")
   const safeApp = app && typeof app === "object" ? app : {}
+  const packageName = String(safeApp.packageName || "").trim()
+  const methodKey = uiDownloadManager.makeInflightKey([
+    "app-patches",
+    safeConfigPath,
+    packageName,
+  ])
+  const lockKey = uiDownloadManager.makeInflightKey([
+    "app-resource",
+    safeConfigPath,
+    packageName,
+  ])
   try {
-    return await requestIpc("fetchAppPatchOptions", {
-      configPath: safeConfigPath,
-      app: safeApp,
-    })
+    return await uiDownloadManager.runSerial(lockKey, () =>
+      uiDownloadManager.runSingleflight(methodKey, () =>
+        requestIpc("fetchAppPatchOptions", {
+          configPath: safeConfigPath,
+          app: safeApp,
+        }),
+      ),
+    )
   } catch (error) {
     const text = String(error?.message || error || "")
     if (!text.includes("Unknown IPC method: fetchAppPatchOptions")) {
@@ -106,7 +160,17 @@ export async function listSourceFiles(type) {
 }
 
 export async function fetchAndSaveSource(options) {
-  return requestIpc("fetchAndSaveSource", options || {})
+  const safeOptions = options && typeof options === "object" ? options : {}
+  const inflightKey = uiDownloadManager.makeInflightKey([
+    "source-download",
+    String(safeOptions.type || ""),
+    String(safeOptions.mode || ""),
+    String(safeOptions.patchesRepo || ""),
+    String(safeOptions.version || ""),
+  ])
+  return uiDownloadManager.runSingleflight(inflightKey, () =>
+    requestIpc("fetchAndSaveSource", safeOptions),
+  )
 }
 
 export async function fetchSourceVersions(options) {
