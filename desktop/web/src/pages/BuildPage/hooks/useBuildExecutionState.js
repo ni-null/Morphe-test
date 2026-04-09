@@ -14,10 +14,8 @@ export default function useBuildExecutionState({
   buildLaunchPending,
   setBuildLaunchPending,
   setIsBusy,
-  configForm,
   configPath,
   selectedKeystorePath,
-  locale,
   t,
   hasText,
   buildTaskPayload,
@@ -89,19 +87,6 @@ export default function useBuildExecutionState({
     const isBuildRunningNow = String(liveTask?.status || "").toLowerCase() === "running"
     if (isBuildRunningNow || buildLaunchPending) {
       setMessage(t("msg.buildAlreadyRunning"))
-      return
-    }
-    const missingLocalApkApp = (configForm.apps || []).find((app) => {
-      if (String(app?.mode || "").toLowerCase() !== "local") return false
-      return !hasText(app?.localApkCustomPath) && !hasText(app?.localApkSelectedPath)
-    })
-    if (missingLocalApkApp) {
-      const appName = missingLocalApkApp.displayName || missingLocalApkApp.name || "app"
-      setMessage(
-        locale === "zh-TW"
-          ? `[${appName}] local 模式需先選擇本地 APK 或輸入自訂路徑。`
-          : `[${appName}] local mode requires a selected local APK or custom path.`,
-      )
       return
     }
     setIsBusy(true)

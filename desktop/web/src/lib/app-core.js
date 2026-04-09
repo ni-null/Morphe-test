@@ -615,7 +615,10 @@ export function configFormToToml(configForm) {
     if (!appName) continue
 
     const appEntries = []
-    appEntries.push(["mode", app.mode === "false" ? false : app.mode === "local" ? "local" : "remote"])
+    const disabledByMode = app.mode === "false"
+    const effectiveLocalApkPath = hasText(app.localApkCustomPath) ? app.localApkCustomPath : ""
+    const resolvedMode = disabledByMode ? "false" : hasText(effectiveLocalApkPath) ? "local" : "remote"
+    appEntries.push(["mode", resolvedMode === "false" ? false : resolvedMode])
     pushTomlEntry(appEntries, "package_name", true, app.packageName)
     pushTomlEntry(appEntries, "ver", hasText(app.ver), app.ver)
     if (app.patchesMode === "custom") {
@@ -624,8 +627,7 @@ export function configFormToToml(configForm) {
         appEntries.push(["patches", app.patches])
       }
     }
-    if (app.mode === "local") {
-      const effectiveLocalApkPath = hasText(app.localApkCustomPath) ? app.localApkCustomPath : app.localApkSelectedPath
+    if (resolvedMode === "local") {
       pushTomlEntry(appEntries, "local_apk", hasText(effectiveLocalApkPath), effectiveLocalApkPath)
     }
     pushTomlEntry(appEntries, "apkmirror-dlurl", hasText(app.apkmirrorDlurl), app.apkmirrorDlurl)

@@ -10,22 +10,16 @@ export default function useAppPatchSettingsState({
   t,
   hasText,
   updateApp,
-  sortFilesByVersion,
   fetchAppCompatibleVersions,
   fetchAppPatchOptions,
-  listDownloadedApks,
   browseLocalApkPath,
 }) {
   const [appVersionOptions, setAppVersionOptions] = useState({})
-  const [appVersionLoadingId, setAppVersionLoadingId] = useState("")
   const [appPatchOptions, setAppPatchOptions] = useState({})
   const [appUnsupportedPatches, setAppUnsupportedPatches] = useState({})
   const [appPatchLoadingId, setAppPatchLoadingId] = useState("")
   const [appVersionError, setAppVersionError] = useState("")
   const [appPatchError, setAppPatchError] = useState("")
-  const [appLocalApkFiles, setAppLocalApkFiles] = useState([])
-  const [appLocalApkLoading, setAppLocalApkLoading] = useState(false)
-  const [appLocalApkDir, setAppLocalApkDir] = useState("")
 
   const editingApp = useMemo(() => configForm.apps.find((app) => app.id === appSettingsId) || null, [configForm.apps, appSettingsId])
 
@@ -36,7 +30,6 @@ export default function useAppPatchSettingsState({
       setAppVersionError(t("msg.missingPackageForVersion"))
       return
     }
-    setAppVersionLoadingId(appId)
     setAppVersionError("")
     try {
       const data = await fetchAppCompatibleVersions(configPath, {
@@ -60,8 +53,6 @@ export default function useAppPatchSettingsState({
       }
     } catch (error) {
       setAppVersionError(error.message || String(error))
-    } finally {
-      setAppVersionLoadingId("")
     }
   }
 
@@ -174,34 +165,10 @@ export default function useAppPatchSettingsState({
     }
   }
 
-  async function loadAppLocalApkFiles(app) {
-    setAppLocalApkLoading(true)
-    try {
-      const data = await listDownloadedApks()
-      const files = sortFilesByVersion(Array.isArray(data?.files) ? data.files : [])
-      setAppLocalApkFiles(files)
-      setAppLocalApkDir(String(data?.dir || ""))
-      const targetApp = app && typeof app === "object" ? app : null
-      if (!targetApp || String(targetApp.mode || "").toLowerCase() !== "local") return
-      if (hasText(targetApp.localApkCustomPath)) return
-      const selected = String(targetApp.localApkSelectedPath || "").trim()
-      const hasSelected = files.some((file) => String(file?.fullPath || "") === selected)
-      if (hasSelected) return
-      const firstPath = files.length > 0 ? String(files[0].fullPath || "") : ""
-      updateApp(targetApp.id, {
-        localApkSelectedPath: firstPath,
-      })
-    } catch (error) {
-      setMessage(error.message || String(error))
-    } finally {
-      setAppLocalApkLoading(false)
-    }
-  }
-
   async function onBrowseAppLocalApkPath(app) {
     if (!app || !app.id) return
     try {
-      const current = hasText(app.localApkCustomPath) ? app.localApkCustomPath : app.localApkSelectedPath
+      const current = hasText(app.localApkCustomPath) ? app.localApkCustomPath : ""
       const data = await browseLocalApkPath(current)
       if (!data || data.canceled || !hasText(data.path)) return
       updateApp(app.id, { localApkCustomPath: String(data.path) })
@@ -220,30 +187,17 @@ export default function useAppPatchSettingsState({
     if (!appSettingsOpen || !editingApp) return
     loadAppVersions(editingApp)
     loadAppPatchOptions(editingApp)
-    loadAppLocalApkFiles(editingApp)
   }, [appSettingsOpen, editingApp?.id])
-
-  useEffect(() => {
-    if (!appSettingsOpen || !editingApp) return
-    if (String(editingApp.mode || "").toLowerCase() !== "local") return
-    loadAppLocalApkFiles(editingApp)
-  }, [appSettingsOpen, editingApp?.id, editingApp?.mode])
 
   return {
     editingApp,
     appVersionOptions,
-    appVersionLoadingId,
     appPatchOptions,
     appUnsupportedPatches,
     appPatchLoadingId,
     appVersionError,
     appPatchError,
-    appLocalApkFiles,
-    appLocalApkLoading,
-    appLocalApkDir,
-    loadAppVersions,
     loadAppPatchOptions,
-    loadAppLocalApkFiles,
     onBrowseAppLocalApkPath,
     resetAppSettingsState,
   }

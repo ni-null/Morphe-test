@@ -94,6 +94,8 @@
   "app.refreshVersions": "重新查詢可用版本",
   "app.patchAnyHint": "patch 相容版本為 Any，建議使用 auto。",
   "app.availablePatches": "可用補丁",
+  "app.tabPatches": "補丁",
+  "app.tabApkSource": "APK來源",
   "app.refreshPatches": "重新查詢可用補丁",
   "app.unsupported": "不支援",
   "app.noPatchList": "尚未載入補丁清單。",

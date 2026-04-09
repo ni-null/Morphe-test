@@ -577,13 +577,24 @@ async function run() {
 
       let versionCandidates = null;
       if (isLocalMode) {
-        versionCandidates = [
-          {
-            version: hasValue(app.ver) ? String(app.ver).trim() : null,
-            strictVersion: false,
-            source: "local",
-          },
-        ];
+        if (options.downloadOnly) {
+          versionCandidates = [
+            {
+              version: hasValue(app.ver) ? String(app.ver).trim() : null,
+              strictVersion: false,
+              source: "local-download-only",
+            },
+          ];
+        } else {
+          versionCandidates = await mpp.resolveVersionCandidates({
+            app,
+            appName,
+            jarPath,
+            patchPath,
+            dryRun: options.dryRun,
+            ctx,
+          });
+        }
       } else if (options.downloadOnly) {
         versionCandidates = hasValue(app.ver)
           ? [

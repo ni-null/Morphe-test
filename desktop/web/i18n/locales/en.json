@@ -94,6 +94,8 @@
   "app.refreshVersions": "Refresh compatible versions",
   "app.patchAnyHint": "Patch compatibility is Any, recommend using auto.",
   "app.availablePatches": "Available Patches",
+  "app.tabPatches": "Patches",
+  "app.tabApkSource": "APK Source",
   "app.refreshPatches": "Refresh available patches",
   "app.unsupported": "Unsupported",
   "app.noPatchList": "Patch list not loaded yet.",

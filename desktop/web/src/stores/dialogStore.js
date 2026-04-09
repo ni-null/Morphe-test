@@ -11,7 +11,6 @@ export const useDialogStore = create((set) => ({
   appSettingsId: "",
   morpheSettingsOpen: false,
   patchesSettingsOpen: false,
-  appDlurlPopoverOpen: false,
   confirmDialog: {
     open: false,
     action: "",
@@ -27,7 +26,6 @@ export const useDialogStore = create((set) => ({
   setAppSettingsId: (value) => set((state) => ({ appSettingsId: resolveNext(state.appSettingsId, value) })),
   setMorpheSettingsOpen: (value) => set((state) => ({ morpheSettingsOpen: resolveNext(state.morpheSettingsOpen, value) })),
   setPatchesSettingsOpen: (value) => set((state) => ({ patchesSettingsOpen: resolveNext(state.patchesSettingsOpen, value) })),
-  setAppDlurlPopoverOpen: (value) => set((state) => ({ appDlurlPopoverOpen: resolveNext(state.appDlurlPopoverOpen, value) })),
   setConfirmDialog: (value) => set((state) => ({ confirmDialog: resolveNext(state.confirmDialog, value) })),
   setConfirmDialogBusy: (value) => set((state) => ({ confirmDialogBusy: resolveNext(state.confirmDialogBusy, value) })),
 }))

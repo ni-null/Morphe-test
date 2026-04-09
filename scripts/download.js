@@ -195,6 +195,67 @@ async function resolveDownloadInfo(
   );
 }
 
+function inferVersionFromApkPath(apkPath, appName, ctx) {
+  const fileName = path.basename(String(apkPath || ""));
+  const stem = fileName.replace(/\.apk$/iu, "");
+  if (!stem) return "";
+  const appPrefix = `${ctx.safeFileName(appName)}-`.toLowerCase();
+  const lowerStem = stem.toLowerCase();
+  const candidate = lowerStem.startsWith(appPrefix) ? stem.slice(appPrefix.length) : stem;
+  const matched = candidate.match(/^([0-9]+(?:\.[0-9A-Za-z]+)+(?:[-._]?(?:dev|alpha|beta|rc)[-._]?[0-9A-Za-z]*)?)/iu);
+  return matched ? String(matched[1] || "").trim() : "";
+}
+
+function resolveLocalVersionRule(versionCandidates) {
+  const list = Array.isArray(versionCandidates) ? versionCandidates : [];
+  const strictVersions = [];
+  let allowAny = false;
+
+  for (const candidate of list) {
+    const version = candidate && candidate.version ? String(candidate.version).trim() : "";
+    const strictVersion = !!(candidate && candidate.strictVersion);
+    if (!strictVersion || !version) {
+      allowAny = true;
+      continue;
+    }
+    strictVersions.push(version);
+  }
+
+  const dedupStrictVersions = Array.from(
+    new Set(
+      strictVersions.map((version) => String(version || "").trim()).filter(Boolean),
+    ),
+  );
+  if (dedupStrictVersions.length === 0) allowAny = true;
+
+  return {
+    allowAny,
+    strictVersions: dedupStrictVersions,
+    preferredVersion: dedupStrictVersions[0] || "",
+  };
+}
+
+function validateLocalApkVersion(localVersion, versionRule, appName) {
+  if (!versionRule || versionRule.allowAny) return;
+  const expected = Array.isArray(versionRule.strictVersions) ? versionRule.strictVersions : [];
+  const expectedLower = new Set(expected.map((value) => String(value).trim().toLowerCase()).filter(Boolean));
+  const normalizedLocalVersion = String(localVersion || "").trim().toLowerCase();
+
+  if (!normalizedLocalVersion) {
+    throw new Error(
+      `[${appName}] Unable to infer local APK version from filename. ` +
+        `Expected one of: ${expected.join(", ")}.`,
+    );
+  }
+
+  if (!expectedLower.has(normalizedLocalVersion)) {
+    throw new Error(
+      `[${appName}] Local APK version (${localVersion}) is incompatible. ` +
+        `Expected one of: ${expected.join(", ")}.`,
+    );
+  }
+}
+
 async function resolveApk(params) {
   const {
     app,
@@ -210,6 +271,44 @@ async function resolveApk(params) {
   const isLocalMode = apkSource.mode === "local";
   const localApkPath = isLocalMode ? resolveLocalApkPath(app, appName, configDir, ctx) : null;
 
+  if (isLocalMode) {
+    const versionRule = resolveLocalVersionRule(versionCandidates);
+    const localApkVersion = inferVersionFromApkPath(localApkPath, appName, ctx);
+
+    if (options.dryRun) {
+      validateLocalApkVersion(localApkVersion, versionRule, appName);
+      ctx.logInfo(`DryRun: would use local APK ${localApkPath}`);
+      if (localApkVersion) {
+        ctx.logInfo(`DryRun: inferred local APK version ${localApkVersion}`);
+      }
+      return {
+        apkPath: localApkPath,
+        version: localApkVersion || versionRule.preferredVersion || "local",
+        isLocalMode: true,
+        provider: null,
+      };
+    }
+
+    if (!(await ctx.fileExists(localApkPath))) {
+      throw new Error(
+        `[${appName}] local APK not found: ${localApkPath}. ` +
+          "Set local_apk in config to a valid file path.",
+      );
+    }
+
+    validateLocalApkVersion(localApkVersion, versionRule, appName);
+    ctx.logInfo(`Using local APK: ${localApkPath}`);
+    if (localApkVersion) {
+      ctx.logInfo(`Using local APK version: ${localApkVersion}`);
+    }
+    return {
+      apkPath: localApkPath,
+      version: localApkVersion || versionRule.preferredVersion || "local",
+      isLocalMode: true,
+      provider: null,
+    };
+  }
+
   let selectedApkPath = null;
   let selectedVersion = null;
   let selectedProvider = null;
@@ -217,29 +316,10 @@ async function resolveApk(params) {
   const providerState = { disabledProviders: new Set() };
 
   for (const candidate of versionCandidates) {
-    const versionLabel = candidate.version || (isLocalMode ? "local" : "provider-default");
+    const versionLabel = candidate.version || "provider-default";
     ctx.logStep(`Processing [${appName}] (${versionLabel})`);
 
     try {
-      if (isLocalMode) {
-        if (options.dryRun) {
-          ctx.logInfo(`DryRun: would use local APK ${localApkPath}`);
-          selectedApkPath = localApkPath;
-          selectedVersion = candidate.version || "local";
-          break;
-        }
-        if (!(await ctx.fileExists(localApkPath))) {
-          throw new Error(
-            `[${appName}] local APK not found: ${localApkPath}. ` +
-              "Put APK in source-apk/<app>.apk or set local_apk in config.",
-          );
-        }
-        ctx.logInfo(`Using local APK: ${localApkPath}`);
-        selectedApkPath = localApkPath;
-        selectedVersion = candidate.version || "local";
-        break;
-      }
-
       const candidateVersion = ctx.hasValue(candidate.version)
         ? String(candidate.version).trim()
         : "";

@@ -97,8 +97,6 @@ function useAppController() {
   const setMorpheSettingsOpen = useDialogStore((state) => state.setMorpheSettingsOpen)
   const patchesSettingsOpen = useDialogStore((state) => state.patchesSettingsOpen)
   const setPatchesSettingsOpen = useDialogStore((state) => state.setPatchesSettingsOpen)
-  const appDlurlPopoverOpen = useDialogStore((state) => state.appDlurlPopoverOpen)
-  const setAppDlurlPopoverOpen = useDialogStore((state) => state.setAppDlurlPopoverOpen)
   const confirmDialog = useDialogStore((state) => state.confirmDialog)
   const setConfirmDialog = useDialogStore((state) => state.setConfirmDialog)
   const confirmDialogBusy = useDialogStore((state) => state.confirmDialogBusy)
@@ -135,6 +133,7 @@ function useAppController() {
     setSidebarMessage("")
   }, [])
   const lastSavedSignatureRef = useRef("")
+  const appSettingsCleanupTimerRef = useRef(null)
 
   const {
     tasks,
@@ -273,18 +272,12 @@ function useAppController() {
   const {
     editingApp,
     appVersionOptions,
-    appVersionLoadingId,
     appPatchOptions,
     appUnsupportedPatches,
     appPatchLoadingId,
     appVersionError,
     appPatchError,
-    appLocalApkFiles,
-    appLocalApkLoading,
-    appLocalApkDir,
-    loadAppVersions,
     loadAppPatchOptions,
-    loadAppLocalApkFiles,
     onBrowseAppLocalApkPath,
     resetAppSettingsState,
   } = useAppPatchSettingsState({
@@ -297,10 +290,8 @@ function useAppController() {
     t,
     hasText,
     updateApp,
-    sortFilesByVersion,
     fetchAppCompatibleVersions,
     fetchAppPatchOptions,
-    listDownloadedApks,
     browseLocalApkPath,
   })
 
@@ -329,10 +320,8 @@ function useAppController() {
     buildLaunchPending,
     setBuildLaunchPending,
     setIsBusy,
-    configForm,
     configPath,
     selectedKeystorePath,
-    locale,
     t,
     hasText,
     buildTaskPayload,
@@ -812,6 +801,24 @@ function useAppController() {
     loadJavaEnvironment()
   }, [])
 
+  useEffect(() => {
+    if (!appSettingsOpen) return
+    if (appSettingsCleanupTimerRef.current) {
+      clearTimeout(appSettingsCleanupTimerRef.current)
+      appSettingsCleanupTimerRef.current = null
+    }
+  }, [appSettingsOpen])
+
+  useEffect(
+    () => () => {
+      if (appSettingsCleanupTimerRef.current) {
+        clearTimeout(appSettingsCleanupTimerRef.current)
+        appSettingsCleanupTimerRef.current = null
+      }
+    },
+    [],
+  )
+
   const navItems = [
     { key: NAV_BUILD, label: t("nav.build"), icon: Hammer },
     { key: NAV_ASSETS, label: t("nav.assets"), icon: Database },
@@ -827,10 +834,16 @@ function useAppController() {
   }, [packageMetaMap, hasText])
   const onAppSettingsOpenChange = (open) => {
     setAppSettingsOpen(open)
+    if (appSettingsCleanupTimerRef.current) {
+      clearTimeout(appSettingsCleanupTimerRef.current)
+      appSettingsCleanupTimerRef.current = null
+    }
     if (!open) {
-      setAppSettingsId("")
-      setAppDlurlPopoverOpen(false)
-      resetAppSettingsState()
+      appSettingsCleanupTimerRef.current = setTimeout(() => {
+        setAppSettingsId("")
+        resetAppSettingsState()
+        appSettingsCleanupTimerRef.current = null
+      }, 180)
     }
   }
 
@@ -965,20 +978,12 @@ function useAppController() {
       t,
       locale,
       editingApp,
-      appDlurlPopoverOpen,
-      setAppDlurlPopoverOpen,
-      appLocalApkFiles,
-      appLocalApkDir,
-      appLocalApkLoading,
-      onRefreshAppLocalApkFiles: () => loadAppLocalApkFiles(editingApp),
       onBrowseAppLocalApkPath: () => onBrowseAppLocalApkPath(editingApp),
       updateApp,
       hasText,
       appPatchOptions,
       appVersionOptions,
-      appVersionLoadingId,
       appPatchLoadingId,
-      loadAppVersions,
       loadAppPatchOptions,
       appVerAutoValue: APP_VER_AUTO_VALUE,
       appVersionError,
