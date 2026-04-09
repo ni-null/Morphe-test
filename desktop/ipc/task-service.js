@@ -755,22 +755,10 @@ class TaskService {
 
   async listDownloadedApks() {
     const targetDir = this.workspacePaths.downloads;
-    const legacyDir = path.join(this.projectRoot, "downloads");
     await fsp.mkdir(targetDir, { recursive: true });
-    const primary = await collectApkFilesRecursive(targetDir).catch(() => []);
-    const legacy = path.resolve(legacyDir) === path.resolve(targetDir)
-      ? []
-      : await collectApkFilesRecursive(legacyDir).catch(() => []);
-    const seen = new Set();
-    const files = [...primary, ...legacy].filter((item) => {
-      const key = String(item.fullPath || "");
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const files = await collectApkFilesRecursive(targetDir).catch(() => []);
     return {
       dir: targetDir,
-      legacyDir,
       files: files.map((item) => ({
         name: item.fileName,
         fileName: item.fileName,
@@ -792,11 +780,9 @@ class TaskService {
       throw new Error("Only .apk files are supported.");
     }
 
-    const primaryDir = path.resolve(this.workspacePaths.downloads);
-    const legacyDir = path.resolve(path.join(this.projectRoot, "downloads"));
-    const isInsidePrimary = fullPath.startsWith(`${primaryDir}${path.sep}`);
-    const isInsideLegacy = fullPath.startsWith(`${legacyDir}${path.sep}`);
-    if (!isInsidePrimary && !isInsideLegacy) {
+    const downloadsDir = path.resolve(this.workspacePaths.downloads);
+    const isInsideDownloads = fullPath.startsWith(`${downloadsDir}${path.sep}`);
+    if (!isInsideDownloads) {
       throw new Error("APK path is outside downloads directory.");
     }
 
@@ -805,7 +791,6 @@ class TaskService {
       deleted: true,
       fullPath,
       fileName: path.basename(fullPath),
-      dirType: isInsidePrimary ? "downloads" : "legacy-downloads",
     };
   }
 
