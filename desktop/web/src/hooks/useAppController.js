@@ -52,6 +52,9 @@ import {
   MORPHE_REMOTE_DEV_VALUE,
   PATCHES_REMOTE_STABLE_VALUE,
   PATCHES_REMOTE_DEV_VALUE,
+  DEFAULT_PACKAGE_META_MAP,
+} from "../lib/app-constants"
+import {
   hasText,
   normalizePackageIconPath,
   getPackageIconFallback,
@@ -62,17 +65,18 @@ import {
   packageToSectionName,
   customAppNameToSectionName,
   resolveDisplayName,
+  pickSourceFileName,
+} from "../lib/app-utils"
+import {
+  normalizeAppMode,
   createEmptyApp,
   createDefaultConfigForm,
   configFormFromToml,
   configFormToToml,
-  buildTaskPayload,
-  isBuildTask,
-  getPatchTranslation,
-  pickSourceFileName,
-  DEFAULT_PACKAGE_META_MAP,
   getAppPresetTemplates,
-} from "../lib/app-core"
+} from "../lib/app-config"
+import { buildTaskPayload, isBuildTask } from "../lib/app-tasks"
+import { getPatchTranslation } from "../lib/app-i18n"
 
 export const NAV_BUILD = "build"
 export const NAV_HISTORY = "history"
