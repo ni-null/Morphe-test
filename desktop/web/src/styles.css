@@ -199,4 +199,48 @@
     background: #94a3b8;
     background-clip: content-box;
   }
+
+  .table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .table-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .table-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .table-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .table-scroll:hover::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    background-clip: content-box;
+  }
+
+  .dark .table-scroll {
+    scrollbar-color: #475569 transparent;
+  }
+
+  .dark .table-scroll::-webkit-scrollbar-thumb {
+    background: #475569;
+    background-clip: content-box;
+  }
+
+  .dark .table-scroll:hover::-webkit-scrollbar-thumb {
+    background: #64748b;
+    background-clip: content-box;
+  }
 }

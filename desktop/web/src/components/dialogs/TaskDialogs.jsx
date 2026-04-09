@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, Loader2, MinusCircle } from "lucide-react"
-import { Badge } from "../../components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog"
+import { Badge } from "../ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog"
 
 function resolveStatusVisual(taskStatus) {
   const normalized = String(taskStatus || "").trim().toLowerCase()

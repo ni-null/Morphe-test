@@ -8,14 +8,14 @@ import {
   Settings2,
   Smartphone,
 } from "lucide-react"
-import { Badge } from "../../components/ui/badge"
-import { Button } from "../../components/ui/button"
-import { Checkbox } from "../../components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../../components/ui/dialog"
-import { Input } from "../../components/ui/input"
-import { Label } from "../../components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger } from "../../components/ui/select"
+import { Badge } from "../../../components/ui/badge"
+import { Button } from "../../../components/ui/button"
+import { Checkbox } from "../../../components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../../../components/ui/dialog"
+import { Input } from "../../../components/ui/input"
+import { Label } from "../../../components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../../../components/ui/select"
 
 export default function AppSettingsDialog({
   open,
