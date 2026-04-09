@@ -17,6 +17,7 @@ export default function BuildSourceSection({
   onChangeKeystoreSelect,
   selectedKeystoreItem,
   keystoreSelectOptions,
+  controlsLocked,
 }) {
   return (
     <section className='space-y-3'>
@@ -28,7 +29,7 @@ export default function BuildSourceSection({
         </div>
 
         <div className='grid grid-cols-1 items-center gap-3 md:grid-cols-3'>
-          <Select value={morpheCliSelectValue} onValueChange={onChangeMorpheCliSelect}>
+          <Select value={morpheCliSelectValue} onValueChange={onChangeMorpheCliSelect} disabled={controlsLocked}>
             <SelectTrigger className='h-11 w-full border-0 bg-slate-100 px-3 shadow-sm hover:bg-slate-100 dark:bg-slate-800 dark:shadow-black/30 dark:hover:bg-slate-800'>
               <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                 <SquareChevronRight className='h-3.5 w-3.5' />
@@ -47,7 +48,7 @@ export default function BuildSourceSection({
             </SelectContent>
           </Select>
 
-          <Select value={patchesSelectValue} onValueChange={onChangePatchesSelect}>
+          <Select value={patchesSelectValue} onValueChange={onChangePatchesSelect} disabled={controlsLocked}>
             <SelectTrigger className='h-11 w-full border-0 bg-slate-100 px-3 shadow-sm hover:bg-slate-100 dark:bg-slate-800 dark:shadow-black/30 dark:hover:bg-slate-800'>
               <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                 <Boxes className='h-3.5 w-3.5' />
@@ -66,7 +67,7 @@ export default function BuildSourceSection({
             </SelectContent>
           </Select>
 
-          <Select value={keystoreSelectValue} onValueChange={onChangeKeystoreSelect}>
+          <Select value={keystoreSelectValue} onValueChange={onChangeKeystoreSelect} disabled={controlsLocked}>
             <SelectTrigger className='h-11 w-full border-0 bg-slate-100 px-3 shadow-sm hover:bg-slate-100 dark:bg-slate-800 dark:shadow-black/30 dark:hover:bg-slate-800'>
               <span className='inline-flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300'>
                 <KeyRound className='h-3.5 w-3.5' />

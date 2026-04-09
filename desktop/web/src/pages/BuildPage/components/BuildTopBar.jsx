@@ -2,7 +2,7 @@ import { Code2, Hammer, Pencil, Plus } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
 
-export default function BuildTopBar({ t, rawOverrideMode, onToggleRawMode, isBusy, setConfigPathDialogOpen, appendApp }) {
+export default function BuildTopBar({ t, rawOverrideMode, onToggleRawMode, controlsLocked, setConfigPathDialogOpen, appendApp }) {
   return (
     <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
       <div className='flex items-center gap-2 text-lg font-semibold'>
@@ -17,7 +17,7 @@ export default function BuildTopBar({ t, rawOverrideMode, onToggleRawMode, isBus
             rawOverrideMode ? "font-semibold text-foreground" : "text-muted-foreground",
           )}
           onClick={onToggleRawMode}
-          disabled={isBusy}
+          disabled={controlsLocked}
         >
           <Code2 className='h-4 w-4' />
           {t("settings.raw")}
@@ -26,7 +26,7 @@ export default function BuildTopBar({ t, rawOverrideMode, onToggleRawMode, isBus
           variant='ghost'
           className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-transparent text-muted-foreground hover:bg-transparent'
           onClick={() => setConfigPathDialogOpen(true)}
-          disabled={isBusy}
+          disabled={controlsLocked}
           aria-label={t("dialog.configPathTitle")}
           title={t("dialog.configPathTitle")}
         >
@@ -37,7 +37,7 @@ export default function BuildTopBar({ t, rawOverrideMode, onToggleRawMode, isBus
           variant='ghost'
           className='h-8 gap-1.5 px-2.5 text-xs border-0 bg-transparent text-muted-foreground hover:bg-transparent'
           onClick={appendApp}
-          disabled={isBusy}
+          disabled={controlsLocked}
         >
           <Plus className='h-4 w-4' />
           {t("settings.loadPresets")}

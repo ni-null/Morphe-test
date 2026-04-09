@@ -86,6 +86,7 @@ export default function BuildPage({
     () => (Array.isArray(keystoreSelectOptions) ? keystoreSelectOptions : []).find((item) => item?.value === keystoreSelectValue) || null,
     [keystoreSelectOptions, keystoreSelectValue],
   )
+  const isBuildUiLocked = isBusy || isBuildRunning || buildLaunchPending || isBuildStopping
 
   return (
     <>
@@ -93,7 +94,7 @@ export default function BuildPage({
         t={t}
         rawOverrideMode={rawOverrideMode}
         onToggleRawMode={onToggleRawMode}
-        isBusy={isBusy}
+        controlsLocked={isBuildUiLocked}
         setConfigPathDialogOpen={setConfigPathDialogOpen}
         appendApp={appendApp}
       />
@@ -102,7 +103,14 @@ export default function BuildPage({
         <CardContent className='space-y-6 py-5'>
           {rawOverrideMode ? (
             <div className='space-y-2'>
-              <Textarea id='raw-toml' className='min-h-[340px] font-mono text-xs' value={rawConfigInput} onChange={(event) => setRawConfigInputValue(event.target.value)} spellCheck={false} />
+              <Textarea
+                id='raw-toml'
+                className='min-h-[340px] font-mono text-xs'
+                value={rawConfigInput}
+                onChange={(event) => setRawConfigInputValue(event.target.value)}
+                spellCheck={false}
+                disabled={isBuildUiLocked}
+              />
             </div>
           ) : (
             <div className='space-y-6'>
@@ -122,6 +130,7 @@ export default function BuildPage({
                 onChangeKeystoreSelect={onChangeKeystoreSelect}
                 selectedKeystoreItem={selectedKeystoreItem}
                 keystoreSelectOptions={keystoreSelectOptions}
+                controlsLocked={isBuildUiLocked}
               />
 
               <BuildTargetsSection
@@ -134,6 +143,7 @@ export default function BuildPage({
                 setAppSettingsOpen={setAppSettingsOpen}
                 isBusy={isBusy}
                 onAddCustom={() => setCustomAppDialogOpen(true)}
+                controlsLocked={isBuildUiLocked}
               />
             </div>
           )}
