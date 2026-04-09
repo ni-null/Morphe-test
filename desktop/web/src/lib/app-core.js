@@ -1,6 +1,6 @@
 import { getPatchTranslationsForLocale } from "../i18n"
-import defaultPackageMetaMap from "../../json/package-name-meta.json"
-import appPresets from "../../json/app-presets.json"
+import defaultPackageMetaMap from "../data/package-name-meta.json"
+import appPresets from "../data/app-presets.json"
 
 export const DEFAULT_PACKAGE_META_MAP = defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}
 

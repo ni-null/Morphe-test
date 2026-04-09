@@ -1,4 +1,4 @@
-import { uiDownloadManager } from "./lib/uiDownloadManager"
+import { uiDownloadManager } from "./uiDownloadManager"
 
 function getDesktopBridge() {
   const bridge = window.morpheDesktop

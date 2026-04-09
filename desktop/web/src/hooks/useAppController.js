@@ -26,20 +26,20 @@ import {
   browseLocalApkPath,
   listSourceFiles,
   openAssetsDir,
-} from "./ipcClient"
-import { t as translate } from "./i18n"
-import { useUiStore } from "./stores/uiStore"
-import { useDialogStore } from "./stores/dialogStore"
-import useConfigLifecycle from "./hooks/useConfigLifecycle"
-import useConfigAutosave from "./hooks/useConfigAutosave"
-import useTaskRuntime from "./hooks/useTaskRuntime"
-import useTaskDialogState from "./hooks/useTaskDialogState"
-import useSourceAssetsState from "./pages/AssetsPage/hooks/useSourceAssetsState"
-import useBuildExecutionState from "./pages/BuildPage/hooks/useBuildExecutionState"
-import useAppPatchSettingsState from "./pages/BuildPage/hooks/useAppPatchSettingsState"
-import useBuildSourceSelectors from "./pages/BuildPage/hooks/useBuildSourceSelectors"
-import { BUILD_STAGE_DEFINITIONS, detectBuildStageIndexFromLine } from "./pages/BuildPage/utils/buildProgressUtils"
-import { formatBytes, formatTaskLabel, isNotFoundError, statusVariant } from "./lib/task-format-core"
+} from "../lib/ipcClient"
+import { t as translate } from "../i18n"
+import { useUiStore } from "../stores/uiStore"
+import { useDialogStore } from "../stores/dialogStore"
+import useConfigLifecycle from "./useConfigLifecycle"
+import useConfigAutosave from "./useConfigAutosave"
+import useTaskRuntime from "./useTaskRuntime"
+import useTaskDialogState from "./useTaskDialogState"
+import useSourceAssetsState from "../pages/AssetsPage/hooks/useSourceAssetsState"
+import useBuildExecutionState from "../pages/BuildPage/hooks/useBuildExecutionState"
+import useAppPatchSettingsState from "../pages/BuildPage/hooks/useAppPatchSettingsState"
+import useBuildSourceSelectors from "../pages/BuildPage/hooks/useBuildSourceSelectors"
+import { BUILD_STAGE_DEFINITIONS, detectBuildStageIndexFromLine } from "../pages/BuildPage/utils/buildProgressUtils"
+import { formatBytes, formatTaskLabel, isNotFoundError, statusVariant } from "../lib/task-format-core"
 import {
   LIVE_BUILD_TASK_ID_KEY,
   MORPHE_SOURCE_REPOS_KEY,
@@ -72,7 +72,7 @@ import {
   pickSourceFileName,
   DEFAULT_PACKAGE_META_MAP,
   getAppPresetTemplates,
-} from "./lib/app-core"
+} from "../lib/app-core"
 
 export const NAV_BUILD = "build"
 export const NAV_HISTORY = "history"

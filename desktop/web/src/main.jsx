@@ -1,6 +1,6 @@
 import React from "react"
 import { createRoot } from "react-dom/client"
-import useAppController from "./useAppController"
+import useAppController from "./hooks/useAppController"
 import BuildPage from "./pages/BuildPage"
 import HistoryPage from "./pages/HistoryPage"
 import AssetsPage from "./pages/AssetsPage"

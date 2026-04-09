@@ -261,7 +261,7 @@ function getDefaultCacheDir() {
 }
 
 function getDefaultOutputPath(locale) {
-  const webRoot = path.resolve(__dirname, "..", "..");
+  const webRoot = path.resolve(__dirname, "..", "..", "desktop", "web");
   return path.join(webRoot, "i18n", "locales", `${locale}.json`);
 }
 
