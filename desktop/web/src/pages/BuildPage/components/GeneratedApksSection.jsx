@@ -75,7 +75,7 @@ function GeneratedApksSection({
         <Package className='h-5 w-5' />
         {t("build.generated.title")}
       </div>
-      <Card className='overflow-hidden rounded-xl bg-white text-card-foreground border border-slate-200 shadow-sm dark:bg-card dark:border-slate-700'>
+      <Card className='overflow-hidden rounded-xl border-0 bg-white text-card-foreground shadow-none dark:bg-card'>
         <CardContent className='p-0'>
           {buildGeneratedApksLoading ? (
             <p className='p-3 text-sm text-muted-foreground'>{t("build.generated.loading")}</p>
@@ -84,7 +84,7 @@ function GeneratedApksSection({
           ) : (
             <div className='table-scroll max-h-[380px] overflow-auto'>
               <table className='w-full min-w-[720px] text-sm'>
-                <thead className='sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200'>
+                <thead className='sticky top-0 z-10 bg-slate-100 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200'>
                   <tr>
                     <th className='px-3 py-1.5 text-left font-medium'>
                       <div className='inline-flex items-center gap-2'>
@@ -163,7 +163,7 @@ function GeneratedApksSection({
                 </thead>
                 <tbody>
                   {filteredRows.map((item) => (
-                    <tr key={`${item.taskId}:${item.relativePath}:${item.fileName}`} className='border-t border-slate-100 hover:bg-muted/30 dark:border-slate-800'>
+                    <tr key={`${item.taskId}:${item.relativePath}:${item.fileName}`} className='hover:bg-muted/30'>
                       <td className='px-3 py-1.5'>
                         <span className='inline-flex min-w-0 max-w-[560px] items-center gap-2'>
                           {hasText(item.appIcon) ? (

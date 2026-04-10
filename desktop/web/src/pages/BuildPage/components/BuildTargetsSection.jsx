@@ -13,7 +13,7 @@ export default function BuildTargetsSection({
   controlsLocked,
 }) {
   return (
-    <section className='space-y-3 border-t border-slate-200 pt-4 dark:border-slate-700'>
+    <section className='space-y-3 pt-4'>
       <p className='text-sm text-slate-700 dark:text-slate-300'>{t("build.targets")}</p>
       <div className='flex flex-wrap gap-2'>
         {apps.map((app) => {
@@ -45,7 +45,7 @@ export default function BuildTargetsSection({
               </button>
               <button
                 type='button'
-                className='inline-flex items-center justify-center border-l border-black/10 px-2 transition-colors hover:bg-black/5 disabled:pointer-events-none disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/5'
+                className='inline-flex items-center justify-center px-2 transition-colors hover:bg-black/5 disabled:pointer-events-none disabled:opacity-60 dark:hover:bg-white/5'
                 onClick={() => onOpenAppSettingsDialog(app)}
                 disabled={controlsLocked}
                 aria-label={`${app.displayName || app.name || "app"} settings`}

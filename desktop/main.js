@@ -5,6 +5,28 @@ const fs = require("fs");
 const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const { registerIpcHandlers } = require("./ipc/handlers");
 
+// Load environment variables from .env file
+const envPath = path.join(__dirname, ".env");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf8");
+  envContent.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const match = trimmed.match(/^([^=]+)=(.*)$/);
+    if (match) {
+      const key = match[1].trim();
+      let value = match[2].trim();
+      // Remove surrounding quotes if present
+      if (/^["'].*["']$/.test(value)) {
+        value = value.slice(1, -1);
+      }
+      if (!process.env.hasOwnProperty(key)) {
+        process.env[key] = value;
+      }
+    }
+  });
+}
+
 const APP_CONTENT_ROOT = app.isPackaged
   ? path.join(process.resourcesPath, "app.asar")
   : path.resolve(__dirname, "..");

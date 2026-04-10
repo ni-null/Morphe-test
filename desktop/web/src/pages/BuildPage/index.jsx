@@ -98,7 +98,7 @@ export default function BuildPage({
         appendApp={appendApp}
       />
 
-      <Card className='rounded-xl bg-white dark:bg-card text-card-foreground border border-slate-200 dark:border-slate-700 shadow-sm'>
+      <Card className='rounded-xl border-0 bg-white dark:bg-card text-card-foreground shadow-none'>
         <CardContent className='space-y-6 py-5'>
           {rawOverrideMode ? (
             <div className='space-y-2'>

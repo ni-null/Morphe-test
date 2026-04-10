@@ -1,7 +1,6 @@
 import { Check, Download, FolderGit2, FolderOpen, Loader2, Package, Settings2, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "../../components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "../../components/ui/select"
 import packageNameMetaMap from "../../data/package-name-meta.json"
 import DownloadedApkCard from "./components/DownloadedApkCard"
@@ -140,20 +139,17 @@ export default function AssetsPage({
 
   return (
     <div className='space-y-4'>
-      <Card className='border-0 bg-card shadow-sm'>
-        <CardHeader className='py-3'>
-          <CardTitle className='text-base flex items-center justify-between gap-2'>
-            <span className='inline-flex items-center gap-2'>
-              <Settings2 className='h-4 w-4' />
-              {t("assets.cli")}
-            </span>
-            <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("morphe-cli")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
-              <FolderOpen className='h-4 w-4' />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className='space-y-2.5 rounded-xl bg-slate-100/85 p-2.5 dark:bg-slate-800/70'>
+      <section className='space-y-2'>
+        <div className='flex items-center justify-between gap-2 px-1'>
+          <h2 className='text-base flex items-center gap-2 font-semibold'>
+            <Settings2 className='h-4 w-4' />
+            {t("assets.cli")}
+          </h2>
+          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("morphe-cli")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+            <FolderOpen className='h-4 w-4' />
+          </Button>
+        </div>
+        <div className='space-y-2.5 rounded-xl bg-white p-2.5 dark:bg-slate-800/70'>
             <div className='flex items-center gap-2'>
               <div className='min-w-0 flex-1'>
                 <Select value={morpheRepoMode === "local" ? MORPHE_LOCAL_SOURCE_VALUE : hasText(morpheSourceRepo) ? morpheSourceRepo : "MorpheApp/morphe-cli"} onValueChange={onChangeMorpheRepo}>
@@ -244,24 +240,20 @@ export default function AssetsPage({
                 )}
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card className='border-0 bg-card shadow-sm'>
-        <CardHeader className='py-3'>
-          <CardTitle className='text-base flex items-center justify-between gap-2'>
-            <span className='inline-flex items-center gap-2'>
-              <Package className='h-4 w-4' />
-              {t("assets.patches")}
-            </span>
-            <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("patches")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
-              <FolderOpen className='h-4 w-4' />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className='space-y-2.5 rounded-xl bg-slate-100/85 p-2.5 dark:bg-slate-800/70'>
+      <section className='space-y-2'>
+        <div className='flex items-center justify-between gap-2 px-1'>
+          <h2 className='text-base flex items-center gap-2 font-semibold'>
+            <Package className='h-4 w-4' />
+            {t("assets.patches")}
+          </h2>
+          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("patches")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+            <FolderOpen className='h-4 w-4' />
+          </Button>
+        </div>
+        <div className='space-y-2.5 rounded-xl bg-white p-2.5 dark:bg-slate-800/70'>
             <div className='flex items-center gap-2'>
               <div className='min-w-0 flex-1'>
                 <Select value={patchesRepoMode === "local" ? PATCHES_LOCAL_SOURCE_VALUE : hasText(patchesSourceRepo) ? patchesSourceRepo : "MorpheApp/morphe-patches"} onValueChange={onChangePatchesRepo}>
@@ -352,9 +344,8 @@ export default function AssetsPage({
                 )}
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <DownloadedApkCard
         t={t}

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "language": "en-US",
+  "convention": "conventional-commits",
+  "format": "<type>(<scope>): <subject>",
+  "types": [
+    "feat",
+    "fix",
+    "refactor",
+    "style",
+    "docs",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "perf",
+    "revert"
+  ],
+  "rules": {
+    "subjectMaxLength": 72,
+    "subjectCase": "lower",
+    "subjectImperativeMood": true,
+    "subjectEndPunctuation": "forbidden",
+    "scopeOptional": true,
+    "bodyOptional": true,
+    "footerOptional": true
+  },
+  "languagePolicy": {
+    "commitMessageLanguage": "English only",
+    "allowNonEnglishInCodeAndPaths": true
+  },
+  "examples": [
+    "fix(build-page): restore patch list scrolling in app settings dialog",
+    "style(assets-page): remove card wrappers and switch list blocks to white background",
+    "style(history-page): remove button borders and task item container borders"
+  ]
+}

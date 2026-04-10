@@ -9,7 +9,29 @@ const { spawn } = require("child_process");
 const ACCEPT_LANGUAGE = "en-US,en;q=0.9";
 const CURL_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0";
 const HTTP_STATUS_MARKER = "__MORPHE_HTTP_STATUS__:";
-const PAGE_TIMEOUT_MS = 10000;
+
+function getGitHubApiTimeoutMs() {
+  const raw = String(process.env.GITHUB_API_TIMEOUT || "").trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 30000; // 預設 30 秒
+}
+
+function getPageTimeoutMs() {
+  const raw = String(process.env.MORPHE_PAGE_TIMEOUT_MS || "").trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 10000; // 預設 10 秒
+}
+
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_HTTP_CACHE_TTL_MS = 15 * 60 * 1000;
 const RATE_LIMIT_CACHE_TTL_MS = 60 * 1000;
@@ -136,9 +158,10 @@ function createRuntime(params) {
 
   function buildCurlArgs(url, outputPath, requestOptions) {
     const opts = requestOptions || {};
+    const isGitHubApi = String(url || "").toLowerCase().startsWith("https://api.github.com/");
     const timeoutMs = Number.isFinite(opts.timeoutMs)
       ? opts.timeoutMs
-      : (outputPath ? getDownloadTimeoutMs() : PAGE_TIMEOUT_MS);
+      : (outputPath ? getDownloadTimeoutMs() : (isGitHubApi ? getGitHubApiTimeoutMs() : getPageTimeoutMs()));
     const timeoutSec = Math.max(10, Math.ceil(timeoutMs / 1000));
     const headers = buildRuntimeHeaders(url, opts);
 

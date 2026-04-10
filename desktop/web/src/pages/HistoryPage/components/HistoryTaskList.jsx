@@ -14,12 +14,12 @@ export default function HistoryTaskList({
   deletingTaskId,
 }) {
   return (
-    <div className='grid gap-2 max-h-[520px] overflow-auto'>
+    <div className='assets-scroll grid gap-2 max-h-[520px] overflow-auto pr-1'>
       {tasks.map((task) => {
         return (
           <div key={task.id} className='w-full'>
             <div
-              className='rounded-md border px-3 py-2 cursor-pointer'
+              className='rounded-xl bg-white px-3 py-2 cursor-pointer hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/70'
               role='button'
               tabIndex={0}
               onClick={() => onOpenTaskLog(task.id)}

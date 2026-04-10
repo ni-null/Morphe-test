@@ -69,7 +69,7 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 220 16% 10%;
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
@@ -240,6 +240,46 @@
   }
 
   .dark .table-scroll:hover::-webkit-scrollbar-thumb {
+    background: #64748b;
+    background-clip: content-box;
+  }
+
+  /* Patch list scrollbar styling */
+  .patch-list-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .patch-list-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .patch-list-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .patch-list-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: content-box;
+  }
+
+  .patch-list-scroll:hover::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    background-clip: content-box;
+  }
+
+  .dark .patch-list-scroll {
+    scrollbar-color: #475569 transparent;
+  }
+
+  .dark .patch-list-scroll::-webkit-scrollbar-thumb {
+    background: #475569;
+    background-clip: content-box;
+  }
+
+  .dark .patch-list-scroll:hover::-webkit-scrollbar-thumb {
     background: #64748b;
     background-clip: content-box;
   }

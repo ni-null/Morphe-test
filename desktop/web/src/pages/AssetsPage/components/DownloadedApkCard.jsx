@@ -1,6 +1,5 @@
 import { ChevronDown, FolderOpen, Loader2, Package, Trash2 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 
 export default function DownloadedApkCard({
   t,
@@ -15,19 +14,17 @@ export default function DownloadedApkCard({
   apkDeletePath,
 }) {
   return (
-    <Card className='border-0 bg-card shadow-sm'>
-      <CardHeader className='py-3'>
-        <CardTitle className='text-base flex items-center justify-between gap-2'>
-          <span className='inline-flex items-center gap-2'>
-            <Package className='h-4 w-4' />
-            {t("assets.apk")}
-          </span>
-          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("downloads")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
-            <FolderOpen className='h-4 w-4' />
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className='space-y-3'>
+    <section className='space-y-2'>
+      <div className='flex items-center justify-between gap-2 px-1'>
+        <h2 className='text-base flex items-center gap-2 font-semibold'>
+          <Package className='h-4 w-4' />
+          {t("assets.apk")}
+        </h2>
+        <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("downloads")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+          <FolderOpen className='h-4 w-4' />
+        </Button>
+      </div>
+      <div className='space-y-3'>
         {apkGroups.length === 0 ? (
           <p className='text-sm text-muted-foreground'>{t("assets.noApkFiles")}</p>
         ) : (
@@ -40,10 +37,10 @@ export default function DownloadedApkCard({
               const key = String(groupKey || "__unknown__")
               const expanded = apkExpandedByGroup[key] === true
               return (
-                <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-xl bg-slate-100/85 p-2.5 dark:bg-slate-800/70'>
+                <div key={`apk-group-${groupKey}`} className='space-y-2 rounded-xl bg-white p-2.5 dark:bg-slate-800/70'>
                   <button
                     type='button'
-                    className='flex h-10 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left hover:bg-slate-100/80 dark:hover:bg-slate-700/70'
+                    className='flex h-10 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/70'
                     onClick={() => {
                       setApkExpandedByGroup((prev) => ({
                         ...prev,
@@ -57,9 +54,9 @@ export default function DownloadedApkCard({
                     <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
                   </button>
                   {expanded ? (
-                    <div className='space-y-1 rounded-lg bg-slate-100/80 p-1.5 dark:bg-slate-800/75'>
+                    <div className='space-y-1 rounded-lg bg-white p-1.5 dark:bg-slate-800/75'>
                       {files.map((file) => (
-                        <div key={`apk-file-${file.fullPath}`} className='flex items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 hover:bg-slate-200/80 dark:hover:bg-slate-700/70'>
+                        <div key={`apk-file-${file.fullPath}`} className='flex items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/70'>
                           <span className='min-w-0 flex-1 truncate text-sm'>{file.name}</span>
                           <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(file.sizeBytes)}</span>
                           <button
@@ -80,7 +77,7 @@ export default function DownloadedApkCard({
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

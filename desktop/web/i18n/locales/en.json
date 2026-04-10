@@ -98,7 +98,6 @@
   "app.tabApkSource": "APK Source",
   "app.refreshPatches": "Refresh available patches",
   "app.customPatchesToggle": "Custom Patches",
-  "app.patchesReadOnlyHint": "Default mode is read-only for patch selections.",
   "app.patchLoading": "Loading CLI / patches information...",
   "app.patchPreparing": "Downloading CLI / patches, please wait...",
   "app.patchResolving": "Validating...",
@@ -177,11 +176,5 @@
   "confirm.deletePatchesTitle": "Delete patches file",
   "confirm.deletePatchesDesc": "Delete patches file {{path}}?",
   "confirm.deleteApkTitle": "Delete APK file",
-  "confirm.deleteApkDesc": "Delete APK file {{path}}?",
-  "__patchTranslations": {
-    "_meta": {
-      "note": "Per-locale patch translation entries. If no match, UI falls back to original text."
-    },
-    "entries": {}
-  }
+  "confirm.deleteApkDesc": "Delete APK file {{path}}?"
 }
