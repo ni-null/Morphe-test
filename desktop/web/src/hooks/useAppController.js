@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Archive, Database, Hammer } from "lucide-react"
+import { Archive, Database, Download, Hammer } from "lucide-react"
 import {
   fetchConfig,
   fetchPackageMap,
@@ -26,6 +26,7 @@ import {
   browseLocalApkPath,
   listSourceFiles,
   openAssetsDir,
+  openSourceFile,
 } from "../lib/ipcClient"
 import { t as translate } from "../i18n"
 import { useUiStore } from "../stores/uiStore"
@@ -44,9 +45,11 @@ import {
   LIVE_BUILD_TASK_ID_KEY,
   MORPHE_SOURCE_REPOS_KEY,
   PATCHES_SOURCE_REPOS_KEY,
+  MICROG_SOURCE_REPOS_KEY,
   KEYSTORE_SELECTED_PATH_KEY,
   DEFAULT_MORPHE_SOURCE_REPO,
   DEFAULT_PATCHES_SOURCE_REPO,
+  DEFAULT_MICROG_SOURCE_REPO,
   APP_VER_AUTO_VALUE,
   MORPHE_REMOTE_STABLE_VALUE,
   MORPHE_REMOTE_DEV_VALUE,
@@ -79,6 +82,7 @@ import { buildTaskPayload, isBuildTask } from "../lib/app-tasks"
 import { getPatchTranslation } from "../lib/app-i18n"
 
 export const NAV_BUILD = "build"
+export const NAV_MIRCROG = "mircrog"
 export const NAV_HISTORY = "history"
 export const NAV_ASSETS = "assets"
 
@@ -125,6 +129,24 @@ function useAppController() {
     version: "",
     error: "",
   })
+  const [mircrogVersions, setMircrogVersions] = useState([])
+  const [mircrogLocalFiles, setMircrogLocalFiles] = useState([])
+  const [mircrogLoading, setMircrogLoading] = useState(false)
+  const [mircrogSourceRepoOptions, setMircrogSourceRepoOptions] = useState(() => {
+    try {
+      const raw = String(globalThis?.localStorage?.getItem(MICROG_SOURCE_REPOS_KEY) || "")
+      if (!raw) return [DEFAULT_MICROG_SOURCE_REPO]
+      const parsed = JSON.parse(raw)
+      return mergeRepoOptions(parsed, DEFAULT_MICROG_SOURCE_REPO, DEFAULT_MICROG_SOURCE_REPO)
+    } catch {
+      return [DEFAULT_MICROG_SOURCE_REPO]
+    }
+  })
+  const [mircrogSourceRepo, setMircrogSourceRepo] = useState(DEFAULT_MICROG_SOURCE_REPO)
+  const [mircrogSourceRepoDraft, setMircrogSourceRepoDraft] = useState("")
+  const [mircrogSourceVersion, setMircrogSourceVersion] = useState("")
+  const [mircrogDownloadingNames, setMircrogDownloadingNames] = useState([])
+  const [mircrogDeleteName, setMircrogDeleteName] = useState("")
 
   const [isBusy, setIsBusy] = useState(false)
   const [message, setSidebarMessage] = useState("")
@@ -197,7 +219,7 @@ function useAppController() {
     morpheSourceVersions,
     morpheSourceVersion,
     setMorpheSourceVersion,
-    morpheSourceDownloading,
+    morpheSourceDownloadingNames,
     patchesSourceRepoOptions,
     setPatchesSourceRepoOptions,
     patchesSourceRepo,
@@ -207,7 +229,7 @@ function useAppController() {
     patchesSourceVersions,
     patchesSourceVersion,
     setPatchesSourceVersion,
-    patchesSourceDownloading,
+    patchesSourceDownloadingNames,
     onOpenAssetsDir,
     onAddMorpheSourceRepo,
     onSelectMorpheSourceRepo,
@@ -705,6 +727,147 @@ function useAppController() {
     }
   }
 
+  async function loadMircrogVersions(repoOverride = "") {
+    setMircrogLoading(true)
+    try {
+      const repo = String(repoOverride || mircrogSourceRepo || "").trim()
+      if (!repo) {
+        setMircrogVersions([])
+        setMircrogSourceVersion("")
+        return
+      }
+      const [remoteData, localData] = await Promise.all([
+        fetchSourceVersions({ type: "microg", repo }),
+        listSourceFiles("microg"),
+      ])
+      const versions = dedupeSourceVersions(remoteData?.versions)
+      const localFiles = sortFilesByVersion(Array.isArray(localData?.files) ? localData.files : [])
+      const repoDir = repo.replace(/\//g, "@").toLowerCase()
+      const localFileNameSet = new Set(
+        localFiles
+          .filter((file) => String(file?.relativePath || "").trim().replace(/\\/g, "/").toLowerCase().startsWith(`${repoDir}/`))
+          .map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase())
+          .filter(Boolean),
+      )
+      const firstUndownloaded = versions.find(
+        (item) =>
+          !localFileNameSet.has(
+            String(item?.fileName || "")
+              .trim()
+              .toLowerCase(),
+          ),
+      )
+      setMircrogVersions(versions)
+      setMircrogSourceVersion(firstUndownloaded ? String(firstUndownloaded.fileName || "") : "")
+      setMircrogLocalFiles(localFiles)
+    } catch (error) {
+      setMircrogVersions([])
+      setMircrogSourceVersion("")
+      setMessage(error.message || String(error))
+    } finally {
+      setMircrogLoading(false)
+    }
+  }
+
+  async function onAddMircrogSourceRepo() {
+    const repo = String(mircrogSourceRepoDraft || "").trim()
+    if (!repo) return false
+    try {
+      await fetchSourceVersions({ type: "microg", repo })
+    } catch (error) {
+      setMessage(error.message || String(error))
+      return false
+    }
+    const nextOptions = mergeRepoOptions(mircrogSourceRepoOptions, repo, DEFAULT_MICROG_SOURCE_REPO)
+    setMircrogSourceRepoOptions(nextOptions)
+    setMircrogSourceRepo(repo)
+    setMircrogSourceRepoDraft("")
+    await loadMircrogVersions(repo)
+    return true
+  }
+
+  function onSelectMircrogSourceRepo(value) {
+    const repo = String(value || "").trim()
+    const nextOptions = mergeRepoOptions(mircrogSourceRepoOptions, repo, DEFAULT_MICROG_SOURCE_REPO)
+    setMircrogSourceRepoOptions(nextOptions)
+    setMircrogSourceRepo(repo)
+    loadMircrogVersions(repo)
+  }
+
+  function onDeleteMircrogSourceRepo(value) {
+    const target = String(value || "").trim()
+    if (!target) return
+    if (target.toLowerCase() === DEFAULT_MICROG_SOURCE_REPO.toLowerCase()) return
+    const nextOptions = mergeRepoOptions(
+      mircrogSourceRepoOptions.filter(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() !== target.toLowerCase(),
+      ),
+      "",
+      DEFAULT_MICROG_SOURCE_REPO,
+    )
+    const currentSelected = String(mircrogSourceRepo || "").trim()
+    const nextRepo = currentSelected.toLowerCase() === target.toLowerCase() ? String(nextOptions[0] || DEFAULT_MICROG_SOURCE_REPO) : currentSelected
+    setMircrogSourceRepoOptions(nextOptions)
+    setMircrogSourceRepo(nextRepo)
+    loadMircrogVersions(nextRepo)
+  }
+
+  async function onDownloadMircrogFile(fileName) {
+    const targetName = String(fileName || mircrogSourceVersion || "").trim()
+    if (!targetName) return
+    setMircrogDownloadingNames((prev) => {
+      const next = new Set(Array.isArray(prev) ? prev : [])
+      next.add(targetName)
+      return Array.from(next)
+    })
+    try {
+      const data = await fetchAndSaveSource({
+        type: "microg",
+        repo: mircrogSourceRepo,
+        version: targetName,
+      })
+      setMessage(t("msg.downloadSaved", { name: data?.fileName || targetName }))
+      setMircrogSourceVersion("")
+      await loadMircrogVersions(mircrogSourceRepo)
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setMircrogDownloadingNames((prev) =>
+        (Array.isArray(prev) ? prev : []).filter((name) => String(name || "").trim() !== targetName),
+      )
+    }
+  }
+
+  async function onDeleteMircrogFile(file) {
+    const relativePath = String(file?.relativePath || file?.name || "").trim()
+    if (!relativePath) return
+    setMircrogDeleteName(relativePath)
+    try {
+      await deleteSourceFile("microg", relativePath)
+      await loadMircrogVersions(mircrogSourceRepo)
+      setMessage(t("msg.deleted", { name: relativePath }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setMircrogDeleteName("")
+    }
+  }
+
+  async function onOpenSourceFile(type, file) {
+    const sourceType = String(type || "").trim()
+    const relativePath = String(file?.relativePath || "").trim()
+    if (!sourceType || !relativePath) return
+    try {
+      const data = await openSourceFile(sourceType, relativePath)
+      setMessage(t("msg.opened", { path: String(data?.relativePath || relativePath) }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    }
+  }
+
   function openConfirmDialog(action, title, description, payload = null) {
     setConfirmDialog({
       open: true,
@@ -787,6 +950,8 @@ function useAppController() {
         await onDeletePatchesFile(payload)
       } else if (action === "delete-apk-file") {
         await onDeleteDownloadedApkFile(payload)
+      } else if (action === "delete-microg-file") {
+        await onDeleteMircrogFile(payload)
       } else if (action === "delete-task") {
         await onDeleteTask(String(payload || ""))
       } else if (action === "delete-all-tasks") {
@@ -805,6 +970,15 @@ function useAppController() {
   useEffect(() => {
     loadJavaEnvironment()
   }, [])
+
+  useEffect(() => {
+    if (activeNav !== NAV_MIRCROG) return
+    loadMircrogVersions()
+  }, [activeNav])
+
+  useEffect(() => {
+    localStorage.setItem(MICROG_SOURCE_REPOS_KEY, JSON.stringify(mircrogSourceRepoOptions))
+  }, [mircrogSourceRepoOptions])
 
   useEffect(() => {
     if (!appSettingsOpen) return
@@ -826,6 +1000,7 @@ function useAppController() {
 
   const navItems = [
     { key: NAV_BUILD, label: t("nav.build"), icon: Hammer },
+    { key: NAV_MIRCROG, label: t("nav.mircrog"), icon: Download },
     { key: NAV_ASSETS, label: t("nav.assets"), icon: Database },
     { key: NAV_HISTORY, label: t("nav.history"), icon: Archive },
   ]
@@ -911,8 +1086,33 @@ function useAppController() {
     navItems,
     navKeys: {
       build: NAV_BUILD,
+      mircrog: NAV_MIRCROG,
       assets: NAV_ASSETS,
       history: NAV_HISTORY,
+    },
+    mircrogPageProps: {
+      t,
+      hasText,
+      formatBytes,
+      loading: mircrogLoading,
+      repo: mircrogSourceRepo,
+      repoOptions: mircrogSourceRepoOptions,
+      repoDraft: mircrogSourceRepoDraft,
+      setRepoDraft: setMircrogSourceRepoDraft,
+      sourceVersion: mircrogSourceVersion,
+      setSourceVersion: setMircrogSourceVersion,
+      versions: mircrogVersions,
+      localFiles: mircrogLocalFiles,
+      downloadingNames: mircrogDownloadingNames,
+      onRefresh: loadMircrogVersions,
+      onDownload: onDownloadMircrogFile,
+      onSelectRepo: onSelectMircrogSourceRepo,
+      onAddRepo: onAddMircrogSourceRepo,
+      onDeleteRepo: onDeleteMircrogSourceRepo,
+      openConfirmDialog,
+      mircrogDeleteName,
+      onOpenSourceFile,
+      onOpenAssetsDir,
     },
     buildPageProps: {
       t,
@@ -969,7 +1169,7 @@ function useAppController() {
       setMorpheSourceVersion,
       morpheSourceVersions,
       onDownloadMorpheFromSource,
-      morpheSourceDownloading,
+      morpheSourceDownloadingNames,
       morpheLocalFiles,
       openConfirmDialog,
       morpheDeleteName,
@@ -984,10 +1184,11 @@ function useAppController() {
       setPatchesSourceVersion,
       patchesSourceVersions,
       onDownloadPatchesFromSource,
-      patchesSourceDownloading,
+      patchesSourceDownloadingNames,
       patchesLocalFiles,
       patchesDeleteName,
       downloadedApkFiles,
+      onOpenSourceFile,
       onOpenAssetsDir,
       apkDeletePath,
     },

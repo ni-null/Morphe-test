@@ -32,7 +32,7 @@ export default function AssetsPage({
   setMorpheSourceVersion,
   morpheSourceVersions,
   onDownloadMorpheFromSource,
-  morpheSourceDownloading,
+  morpheSourceDownloadingNames,
   morpheLocalFiles,
   openConfirmDialog,
   morpheDeleteName,
@@ -47,10 +47,11 @@ export default function AssetsPage({
   setPatchesSourceVersion,
   patchesSourceVersions,
   onDownloadPatchesFromSource,
-  patchesSourceDownloading,
+  patchesSourceDownloadingNames,
   patchesLocalFiles,
   patchesDeleteName,
   downloadedApkFiles,
+  onOpenSourceFile,
   onOpenAssetsDir,
   apkDeletePath,
 }) {
@@ -186,7 +187,7 @@ export default function AssetsPage({
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {morpheLocalFiles.map((file) => (
                       <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
-                        <div className='min-w-0'>
+                        <div className='min-w-0 cursor-pointer' onClick={() => onOpenSourceFile("morphe-cli", file)}>
                           <div className='flex min-w-0 items-center gap-2 text-sm'>
                             <span className='shrink-0 font-medium'>{file.name}</span>
                             <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{formatRepoPathOnly(file.relativePath)}</span>
@@ -214,13 +215,14 @@ export default function AssetsPage({
                 {morpheMixedItems.length === 0 ? null : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {morpheMixedItems.map((item) => {
-                      const isDownloading = morpheSourceDownloading && String(morpheSourceVersion || "").trim() === String(item.fileName || "").trim()
+                      const isDownloading = (Array.isArray(morpheSourceDownloadingNames) ? morpheSourceDownloadingNames : []).includes(String(item.fileName || "").trim())
                       const canDownload = item.isRemote && !item.hasLocal
+                      const canOpenLocal = item.hasLocal && hasText(item.relativePath)
                       return (
                         <div
                           key={`assets-morphe-mixed-${item.key}`}
-                          className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/40" : ""}`}
-                          onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : undefined}>
+                          className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${(canDownload || canOpenLocal) ? "cursor-pointer hover:bg-muted/40" : ""}`}
+                          onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : canOpenLocal ? () => onOpenSourceFile("morphe-cli", { relativePath: item.relativePath }) : undefined}>
                           <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                             {item.hasLocal ? (
                               <Check className='h-4 w-4 shrink-0 text-emerald-600' />
@@ -232,7 +234,6 @@ export default function AssetsPage({
                             <span className='min-w-0 truncate font-medium'>{item.fileName}</span>
                             <span className='shrink-0 whitespace-nowrap text-right text-xs text-muted-foreground'>{hasText(item.publishedAt) ? formatPublishedAt(item.publishedAt) : ""}</span>
                           </div>
-                          {item.hasLocal && item.relativePath ? <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(item.sizeBytes)}</span> : null}
                         </div>
                       )
                     })}
@@ -290,7 +291,7 @@ export default function AssetsPage({
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {patchesLocalFiles.map((file) => (
                       <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
-                        <div className='min-w-0'>
+                        <div className='min-w-0 cursor-pointer' onClick={() => onOpenSourceFile("patches", file)}>
                           <div className='flex min-w-0 items-center gap-2 text-sm'>
                             <span className='shrink-0 font-medium'>{file.name}</span>
                             <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{formatRepoPathOnly(file.relativePath)}</span>
@@ -318,13 +319,14 @@ export default function AssetsPage({
                 {patchesMixedItems.length === 0 ? null : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {patchesMixedItems.map((item) => {
-                      const isDownloading = patchesSourceDownloading && String(patchesSourceVersion || "").trim() === String(item.fileName || "").trim()
+                      const isDownloading = (Array.isArray(patchesSourceDownloadingNames) ? patchesSourceDownloadingNames : []).includes(String(item.fileName || "").trim())
                       const canDownload = item.isRemote && !item.hasLocal
+                      const canOpenLocal = item.hasLocal && hasText(item.relativePath)
                       return (
                         <div
                           key={`assets-patches-mixed-${item.key}`}
-                          className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${canDownload ? "cursor-pointer hover:bg-muted/40" : ""}`}
-                          onClick={canDownload ? () => onDownloadPatchesItem(item.fileName) : undefined}>
+                          className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${(canDownload || canOpenLocal) ? "cursor-pointer hover:bg-muted/40" : ""}`}
+                          onClick={canDownload ? () => onDownloadPatchesItem(item.fileName) : canOpenLocal ? () => onOpenSourceFile("patches", { relativePath: item.relativePath }) : undefined}>
                           <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                             {item.hasLocal ? (
                               <Check className='h-4 w-4 shrink-0 text-emerald-600' />
@@ -336,7 +338,6 @@ export default function AssetsPage({
                             <span className='min-w-0 truncate font-medium'>{item.fileName}</span>
                             <span className='shrink-0 whitespace-nowrap text-right text-xs text-muted-foreground'>{hasText(item.publishedAt) ? formatPublishedAt(item.publishedAt) : ""}</span>
                           </div>
-                          {item.hasLocal && item.relativePath ? <span className='shrink-0 whitespace-nowrap text-xs text-muted-foreground'>{formatBytes(item.sizeBytes)}</span> : null}
                         </div>
                       )
                     })}

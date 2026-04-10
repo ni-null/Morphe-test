@@ -50,7 +50,7 @@ export default function useSourceAssetsState({
   const [morpheSourceRepoDraft, setMorpheSourceRepoDraft] = useState("")
   const [morpheSourceVersions, setMorpheSourceVersions] = useState([])
   const [morpheSourceVersion, setMorpheSourceVersion] = useState("")
-  const [morpheSourceDownloading, setMorpheSourceDownloading] = useState(false)
+  const [morpheSourceDownloadingNames, setMorpheSourceDownloadingNames] = useState([])
   const [patchesSourceRepoOptions, setPatchesSourceRepoOptions] = useState(() => {
     try {
       const raw = String(globalThis?.localStorage?.getItem(storageKeys.patchesSourceReposKey) || "")
@@ -65,7 +65,7 @@ export default function useSourceAssetsState({
   const [patchesSourceRepoDraft, setPatchesSourceRepoDraft] = useState("")
   const [patchesSourceVersions, setPatchesSourceVersions] = useState([])
   const [patchesSourceVersion, setPatchesSourceVersion] = useState("")
-  const [patchesSourceDownloading, setPatchesSourceDownloading] = useState(false)
+  const [patchesSourceDownloadingNames, setPatchesSourceDownloadingNames] = useState([])
 
   async function loadMorpheLocalFiles() {
     try {
@@ -343,7 +343,11 @@ export default function useSourceAssetsState({
   async function onDownloadMorpheFromSource(versionOverride = "") {
     const targetVersion = hasText(versionOverride) ? String(versionOverride).trim() : String(morpheSourceVersion || "").trim()
     if (!hasText(morpheSourceRepo) || !hasText(targetVersion)) return
-    setMorpheSourceDownloading(true)
+    setMorpheSourceDownloadingNames((prev) => {
+      const next = new Set(Array.isArray(prev) ? prev : [])
+      next.add(targetVersion)
+      return Array.from(next)
+    })
     try {
       const data = await fetchAndSaveSource({
         type: "morphe-cli",
@@ -360,14 +364,20 @@ export default function useSourceAssetsState({
     } catch (error) {
       setMessage(error.message || String(error))
     } finally {
-      setMorpheSourceDownloading(false)
+      setMorpheSourceDownloadingNames((prev) =>
+        (Array.isArray(prev) ? prev : []).filter((name) => String(name || "").trim() !== targetVersion),
+      )
     }
   }
 
   async function onDownloadPatchesFromSource(versionOverride = "") {
     const targetVersion = hasText(versionOverride) ? String(versionOverride).trim() : String(patchesSourceVersion || "").trim()
     if (!hasText(patchesSourceRepo) || !hasText(targetVersion)) return
-    setPatchesSourceDownloading(true)
+    setPatchesSourceDownloadingNames((prev) => {
+      const next = new Set(Array.isArray(prev) ? prev : [])
+      next.add(targetVersion)
+      return Array.from(next)
+    })
     try {
       const data = await fetchAndSaveSource({
         type: "patches",
@@ -384,7 +394,9 @@ export default function useSourceAssetsState({
     } catch (error) {
       setMessage(error.message || String(error))
     } finally {
-      setPatchesSourceDownloading(false)
+      setPatchesSourceDownloadingNames((prev) =>
+        (Array.isArray(prev) ? prev : []).filter((name) => String(name || "").trim() !== targetVersion),
+      )
     }
   }
 
@@ -502,7 +514,7 @@ export default function useSourceAssetsState({
     morpheSourceVersions,
     morpheSourceVersion,
     setMorpheSourceVersion,
-    morpheSourceDownloading,
+    morpheSourceDownloadingNames,
     patchesSourceRepoOptions,
     setPatchesSourceRepoOptions,
     patchesSourceRepo,
@@ -512,7 +524,7 @@ export default function useSourceAssetsState({
     patchesSourceVersions,
     patchesSourceVersion,
     setPatchesSourceVersion,
-    patchesSourceDownloading,
+    patchesSourceDownloadingNames,
     loadMorpheLocalFiles,
     loadPatchesLocalFiles,
     loadKeystoreFiles,

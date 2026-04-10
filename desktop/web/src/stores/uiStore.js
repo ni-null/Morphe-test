@@ -21,6 +21,7 @@ export const useUiStore = create(
       setActiveNav: (activeNav) =>
         set(() => {
           const value = String(activeNav || "").trim()
+          if (value === "mircrog") return { activeNav: "mircrog" }
           if (value === "history") return { activeNav: "history" }
           if (value === "assets") return { activeNav: "assets" }
           return { activeNav: "build" }

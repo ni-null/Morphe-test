@@ -1,7 +1,9 @@
 export const MORPHE_ADD_CUSTOM_REPO_VALUE = "__ADD_CUSTOM_MORPHE_REPO__"
 export const PATCHES_ADD_CUSTOM_REPO_VALUE = "__ADD_CUSTOM_PATCHES_REPO__"
+export const MICROG_ADD_CUSTOM_REPO_VALUE = "__ADD_CUSTOM_MICROG_REPO__"
 export const MORPHE_LOCAL_SOURCE_VALUE = "__MORPHE_LOCAL_SOURCE__"
 export const PATCHES_LOCAL_SOURCE_VALUE = "__PATCHES_LOCAL_SOURCE__"
+export const MICROG_LOCAL_SOURCE_VALUE = "__MICROG_LOCAL_SOURCE__"
 
 export function normalizePackageIconPath(value) {
   const text = String(value || "").trim()

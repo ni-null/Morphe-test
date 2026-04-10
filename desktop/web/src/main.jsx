@@ -2,6 +2,7 @@ import React from "react"
 import { createRoot } from "react-dom/client"
 import useAppController from "./hooks/useAppController"
 import BuildPage from "./pages/BuildPage"
+import MircrogPage from "./pages/MircrogPage"
 import HistoryPage from "./pages/HistoryPage"
 import AssetsPage from "./pages/AssetsPage"
 import Sidebar from "./components/layout/sidebar/Sidebar"
@@ -22,6 +23,7 @@ function App() {
 
       <main className='main-panel min-h-screen space-y-4 bg-[#f8f8f8] dark:bg-background'>
         {c.activeNav === c.navKeys.build ? <BuildPage {...c.buildPageProps} /> : null}
+        {c.activeNav === c.navKeys.mircrog ? <MircrogPage {...c.mircrogPageProps} /> : null}
         {c.activeNav === c.navKeys.assets ? <AssetsPage {...c.assetsPageProps} /> : null}
         {c.activeNav === c.navKeys.history ? <HistoryPage {...c.historyPageProps} /> : null}
 

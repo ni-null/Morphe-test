@@ -1,7 +1,8 @@
 {
   "nav.build": "1. 打包",
-  "nav.assets": "2. 資產",
-  "nav.history": "3. 歷史任務",
+  "nav.mircrog": "2. Mircrog",
+  "nav.assets": "3. 資產",
+  "nav.history": "4. 歷史任務",
   "sidebar.subtitle": "shadcn UI / Web 附加工具",
   "sidebar.language": "語言",
   "sidebar.environment": "環境檢測",
@@ -62,6 +63,8 @@
   "assets.versionCount": "{{count}}個版本",
   "assets.noApkFiles": "尚無本地 APK 檔案。",
   "assets.unknownPackage": "未知包名",
+  "mircrog.title": "Mircrog",
+  "mircrog.empty": "目前沒有可下載的 MicroG-RE 發布檔案。",
   "dialog.currentProgress": "當前打包進度",
   "dialog.taskId": "任務 ID: {{id}}",
   "dialog.noLiveTask": "尚未啟動完整打包任務。",
@@ -175,6 +178,8 @@
   "confirm.deleteAllPatchesDesc": "確定要刪除全部 patches 本地檔案嗎？",
   "confirm.deletePatchesTitle": "刪除 patches 檔案",
   "confirm.deletePatchesDesc": "刪除 patches 檔案 {{path}}？",
+  "confirm.deleteMicrogTitle": "刪除 microg 檔案",
+  "confirm.deleteMicrogDesc": "刪除 microg 檔案 {{path}}？",
   "confirm.deleteApkTitle": "刪除 APK 檔案",
   "confirm.deleteApkDesc": "刪除 APK 檔案 {{path}}？"
 }

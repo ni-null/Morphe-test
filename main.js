@@ -43,6 +43,7 @@ const {
 const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
 const TASK_STATUS_COMPLETED_MARKER = "__TASK_STATUS__:completed";
 const TASK_STATUS_FAILED_MARKER = "__TASK_STATUS__:failed";
+const PATCH_TEMP_DIR_SUFFIX = "-patched-temporary-files";
 const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli", "signing", "sign"]);
 const REMOVED_APP_KEYS = new Set([
   "apk",
@@ -182,7 +183,8 @@ async function runPatchFlow(params) {
     patchPath,
     apkPath,
     apkVersion,
-    outputDir,
+    finalOutputDir,
+    patchWorkDir,
     appName,
     runtime,
     signingConfig,
@@ -199,9 +201,10 @@ async function runPatchFlow(params) {
     throw new Error(`APK not found for [${appName}]: ${apkPath}`);
   }
 
-  await runtime.ensureDir(outputDir);
+  await runtime.ensureDir(finalOutputDir);
+  await runtime.ensureDir(patchWorkDir);
   const apkBase = path.basename(apkPath, path.extname(apkPath));
-  const tempDir = path.join(outputDir, `${apkBase}-patched-temporary-files`);
+  const tempDir = path.join(patchWorkDir, `${apkBase}-patched-temporary-files`);
   if (await runtime.fileExists(tempDir)) {
     logWarn(`Removing stale morphe temp directory: ${tempDir}`);
     await runtime.removeDirRecursive(tempDir);
@@ -209,27 +212,35 @@ async function runPatchFlow(params) {
 
   try {
     logStep(`Patching [${appName}] with morphe-cli`);
-    await runJavaPatch(jarPath, patchPath, apkPath, outputDir, signingConfig, patchSelection);
+    await runJavaPatch(jarPath, patchPath, apkPath, patchWorkDir, signingConfig, patchSelection);
 
-    const patchedSource = await findPatchedApkFile(outputDir, apkPath, runtime);
+    const patchedSource = await findPatchedApkFile(patchWorkDir, apkPath, runtime);
     if (!patchedSource) {
-      throw new Error(`Patched APK not found in output directory: ${outputDir}`);
+      throw new Error(`Patched APK not found in patch work directory: ${patchWorkDir}`);
     }
 
     const renamedName = buildPatchedApkName(appName, apkVersion, patchPath);
-    const renamedPath = path.join(outputDir, renamedName);
+    const renamedPath = path.join(patchWorkDir, renamedName);
     if (path.normalize(patchedSource) !== path.normalize(renamedPath)) {
       if (await runtime.fileExists(renamedPath)) {
         await fsp.unlink(renamedPath);
       }
       await fsp.rename(patchedSource, renamedPath);
     }
-    logInfo(`Patched APK saved: ${renamedPath}`);
-    return renamedPath;
+    const finalApkPath = path.join(finalOutputDir, renamedName);
+    if (await runtime.fileExists(finalApkPath)) {
+      await fsp.unlink(finalApkPath);
+    }
+    await fsp.rename(renamedPath, finalApkPath);
+    logInfo(`Patched APK saved: ${finalApkPath}`);
+    return finalApkPath;
   } finally {
     if (await runtime.fileExists(tempDir)) {
       logInfo(`Cleanup morphe temp directory: ${tempDir}`);
       await runtime.removeDirRecursive(tempDir);
+    }
+    if (await runtime.fileExists(patchWorkDir)) {
+      await runtime.removeDirRecursive(patchWorkDir);
     }
   }
 }
@@ -344,6 +355,37 @@ async function clearWorkspaceCache(workspacePaths) {
   await fsp.mkdir(workspacePaths.cache, { recursive: true });
 }
 
+async function cleanupStalePatchTemporaryDirs(outputRootDir, runtime) {
+  const targetRoot = String(outputRootDir || "").trim();
+  if (!targetRoot) return 0;
+  if (!(await runtime.fileExists(targetRoot))) return 0;
+
+  const entries = await fsp.readdir(targetRoot, { withFileTypes: true });
+  const taskFolders = entries
+    .filter((entry) => entry.isDirectory() && /^task-/u.test(entry.name))
+    .map((entry) => path.join(targetRoot, entry.name));
+
+  let cleaned = 0;
+  for (const folderPath of taskFolders) {
+    const subEntries = await fsp.readdir(folderPath, { withFileTypes: true }).catch(() => []);
+    for (const entry of subEntries) {
+      if (!entry.isDirectory() || !entry.name.endsWith(PATCH_TEMP_DIR_SUFFIX)) continue;
+      const tempDir = path.join(folderPath, entry.name);
+      await runtime.removeDirRecursive(tempDir);
+      cleaned += 1;
+    }
+  }
+  return cleaned;
+}
+
+async function cleanupPatchWorkRoot(runtimeRoot, runtime) {
+  const targetRoot = path.join(String(runtimeRoot || "").trim(), "patch-work");
+  if (!targetRoot) return false;
+  if (!(await runtime.fileExists(targetRoot))) return false;
+  await runtime.removeDirRecursive(targetRoot);
+  return true;
+}
+
 async function run() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help) {
@@ -385,6 +427,14 @@ async function run() {
   });
   const workspacePaths = buildWorkspacePaths(workspaceRoot);
   await ensureWorkspaceDirs(workspacePaths);
+  const staleTempCleaned = await cleanupStalePatchTemporaryDirs(workspacePaths.output, bootstrapRuntime);
+  if (staleTempCleaned > 0) {
+    logInfo(`Cleaned stale patch temporary directories: ${staleTempCleaned}`);
+  }
+  const patchWorkCleaned = await cleanupPatchWorkRoot(workspacePaths.runtime, bootstrapRuntime);
+  if (patchWorkCleaned) {
+    logInfo(`Cleaned stale patch work root: ${path.join(workspacePaths.runtime, "patch-work")}`);
+  }
   if (options.migrateWorkspace) {
     await migrateLegacyDirs(process.cwd(), workspacePaths, logInfo);
   }
@@ -657,7 +707,8 @@ async function run() {
         patchPath,
         apkPath: apkResult.apkPath,
         apkVersion: apkResult.version,
-        outputDir: path.join(taskOutputDir, safeFileName(appName)),
+        finalOutputDir: path.join(taskOutputDir, safeFileName(appName)),
+        patchWorkDir: path.join(workspacePaths.runtime, "patch-work", taskId, safeFileName(appName)),
         appName,
         runtime,
         signingConfig,

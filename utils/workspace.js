@@ -73,6 +73,7 @@ function buildWorkspacePaths(workspaceRoot) {
     downloads: path.join(root, "downloads"),
     patches: path.join(root, "patches"),
     morpheCli: path.join(root, "morphe-cli"),
+    microg: path.join(root, "microg"),
     output: path.join(root, "output"),
     cache: path.join(root, "cache"),
     runtime: path.join(root, "runtime"),
@@ -85,6 +86,7 @@ async function ensureWorkspaceDirs(workspacePaths) {
   await fsp.mkdir(workspacePaths.downloads, { recursive: true });
   await fsp.mkdir(workspacePaths.patches, { recursive: true });
   await fsp.mkdir(workspacePaths.morpheCli, { recursive: true });
+  await fsp.mkdir(workspacePaths.microg, { recursive: true });
   await fsp.mkdir(workspacePaths.output, { recursive: true });
   await fsp.mkdir(workspacePaths.cache, { recursive: true });
   await fsp.mkdir(workspacePaths.runtime, { recursive: true });
@@ -133,6 +135,7 @@ async function migrateLegacyDirs(legacyRoot, workspacePaths, logInfo) {
     ["downloads", workspacePaths.downloads],
     ["patches", workspacePaths.patches],
     ["morphe-cli", workspacePaths.morpheCli],
+    ["microg", workspacePaths.microg],
     ["output", workspacePaths.output],
     ["cache", workspacePaths.cache],
   ];

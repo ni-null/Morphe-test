@@ -165,6 +165,7 @@ export async function fetchAndSaveSource(options) {
     "source-download",
     String(safeOptions.type || ""),
     String(safeOptions.mode || ""),
+    String(safeOptions.repo || ""),
     String(safeOptions.patchesRepo || ""),
     String(safeOptions.version || ""),
   ])
@@ -203,6 +204,13 @@ export async function browseLocalApkPath(defaultPath = "") {
 
 export async function deleteSourceFile(type, relativePath) {
   return requestIpc("deleteSourceFile", {
+    type: String(type || ""),
+    relativePath: String(relativePath || ""),
+  })
+}
+
+export async function openSourceFile(type, relativePath) {
+  return requestIpc("openSourceFile", {
     type: String(type || ""),
     relativePath: String(relativePath || ""),
   })

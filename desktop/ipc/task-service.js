@@ -18,6 +18,7 @@ const PACKAGE_NAME_MAP = require("../../utils/package-name-map.json");
 const MAX_IN_MEMORY_LINES = 2000;
 const TASK_STATUS_COMPLETED_MARKER = "__TASK_STATUS__:completed";
 const TASK_STATUS_FAILED_MARKER = "__TASK_STATUS__:failed";
+const PATCH_TEMP_DIR_SUFFIX = "-patched-temporary-files";
 const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
 const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli", "signing", "sign"]);
 
@@ -293,6 +294,9 @@ function getSourceSpec(type) {
   if (key === "patches") {
     return { type: key, ext: ".mpp", folderKey: "patches" };
   }
+  if (key === "microg") {
+    return { type: key, ext: ".apk", folderKey: "microg" };
+  }
   if (key === "keystore") {
     return { type: key, ext: ".keystore", folderKey: "keystore" };
   }
@@ -368,6 +372,16 @@ class TaskService {
     this.sourceReleaseMetadataPath = path.join(this.workspacePaths.runtime, "source-release-times.json");
     this.patchEntriesParserVersion = "v5";
     this.tasks = new Map();
+    this.startupCleanupPromise = this.cleanupStalePatchTemporaryDirs().catch(() => {});
+  }
+
+  async ensureStartupCleanup() {
+    if (!this.startupCleanupPromise) return;
+    try {
+      await this.startupCleanupPromise;
+    } finally {
+      this.startupCleanupPromise = null;
+    }
   }
 
   resolveConfigPath(configPathInput) {
@@ -437,6 +451,7 @@ class TaskService {
     let targetDir = "";
     if (key === "morphe-cli") targetDir = this.workspacePaths.morpheCli;
     if (key === "patches") targetDir = this.workspacePaths.patches;
+    if (key === "microg") targetDir = this.workspacePaths.microg;
     if (key === "downloads" || key === "apk") targetDir = this.workspacePaths.downloads;
     if (key === "keystore") targetDir = this.workspacePaths.keystore;
     if (!targetDir) {
@@ -445,29 +460,7 @@ class TaskService {
 
     await fsp.mkdir(targetDir, { recursive: true });
 
-    let command = "";
-    let args = [];
-    if (process.platform === "win32") {
-      command = "explorer";
-      args = [targetDir];
-    } else if (process.platform === "darwin") {
-      command = "open";
-      args = [targetDir];
-    } else {
-      command = "xdg-open";
-      args = [targetDir];
-    }
-
-    await new Promise((resolve, reject) => {
-      const child = spawn(command, args, {
-        stdio: "ignore",
-        detached: true,
-        shell: false,
-      });
-      child.on("error", (err) => reject(err));
-      child.unref();
-      resolve();
-    });
+    await this.openPathInFileManager(targetDir);
 
     return {
       opened: true,
@@ -674,6 +667,72 @@ class TaskService {
         };
       }
 
+      if (spec.type === "microg") {
+        const repo = String(
+          options && (options.repo || options.patchesRepo) ? (options.repo || options.patchesRepo) : "",
+        ).trim();
+        const targetFileName = String(options && options.version ? options.version : "").trim();
+        if (!repo) throw new Error("repo is required.");
+
+        const releases = await fetchGitHubReleases(repo, runtime);
+        const candidates = [];
+        for (const release of releases) {
+          if (release && release.draft) continue;
+          const assets = Array.isArray(release.assets) ? release.assets : [];
+          for (const asset of assets) {
+            const name = String(asset && asset.name ? asset.name : "").trim();
+            const url = String(asset && asset.browser_download_url ? asset.browser_download_url : "").trim();
+            if (!name || !url || !name.toLowerCase().endsWith(".apk")) continue;
+            candidates.push({
+              fileName: name,
+              url,
+              publishedAt: String(release && release.published_at ? release.published_at : ""),
+              tag: String(release && release.tag_name ? release.tag_name : ""),
+            });
+          }
+        }
+
+        if (candidates.length === 0) {
+          throw new Error(`No APK assets found for ${repo}.`);
+        }
+
+        const matched = targetFileName
+          ? candidates.find(
+            (item) =>
+              String(item.fileName || "").trim().toLowerCase() === targetFileName.toLowerCase(),
+          )
+          : candidates[0];
+
+        if (!matched) {
+          throw new Error(`Version not found in ${repo}: ${targetFileName}`);
+        }
+
+        const repoDir = repoToDirName(repo);
+        const targetDir = path.join(this.workspacePaths.microg, repoDir);
+        await fsp.mkdir(targetDir, { recursive: true });
+        const fullPath = path.join(targetDir, safeFileName(matched.fileName));
+
+        const exists = await runtime.fileExists(fullPath);
+        if (exists && !force) {
+          await this.upsertSourceReleaseMetadata(spec.type, repo, [matched]);
+          return {
+            type: spec.type,
+            fileName: path.basename(fullPath),
+            fullPath,
+            reusedLocal: true,
+          };
+        }
+
+        await runtime.downloadFile(matched.url, fullPath, "microg APK");
+        await this.upsertSourceReleaseMetadata(spec.type, repo, [matched]);
+        return {
+          type: spec.type,
+          fileName: path.basename(fullPath),
+          fullPath,
+          reusedLocal: false,
+        };
+      }
+
       const patchesCfg = {
         mode: String(options && options.mode ? options.mode : "stable").trim(),
         patches_repo: String(options && options.patchesRepo ? options.patchesRepo : "").trim(),
@@ -817,6 +876,103 @@ class TaskService {
       fileName: path.basename(fullPath),
       relativePath: path.relative(targetDir, fullPath),
       fullPath,
+    };
+  }
+
+  async openPathInFileManager(targetPath) {
+    let command = "";
+    let args = [];
+    if (process.platform === "win32") {
+      command = "explorer";
+      args = [targetPath];
+    } else if (process.platform === "darwin") {
+      command = "open";
+      args = [targetPath];
+    } else {
+      command = "xdg-open";
+      args = [targetPath];
+    }
+
+    await new Promise((resolve, reject) => {
+      const child = spawn(command, args, {
+        stdio: "ignore",
+        detached: true,
+        shell: false,
+      });
+      child.on("error", (err) => reject(err));
+      child.unref();
+      resolve();
+    });
+  }
+
+  async cleanupStalePatchTemporaryDirs() {
+    if (!(await fileExists(this.outputDir))) {
+      return { cleaned: 0 };
+    }
+
+    const entries = await fsp.readdir(this.outputDir, { withFileTypes: true });
+    const taskFolders = entries
+      .filter((entry) => entry.isDirectory() && /^task-/u.test(entry.name))
+      .map((entry) => entry.name);
+
+    let cleaned = 0;
+
+    for (const folderName of taskFolders) {
+      const folderPath = path.join(this.outputDir, folderName);
+      const subEntries = await fsp.readdir(folderPath, { withFileTypes: true }).catch(() => []);
+      const tempDirs = subEntries
+        .filter((entry) => entry.isDirectory() && entry.name.endsWith(PATCH_TEMP_DIR_SUFFIX))
+        .map((entry) => path.join(folderPath, entry.name));
+
+      for (const tempDir of tempDirs) {
+        await fsp.rm(tempDir, { recursive: true, force: true });
+        cleaned += 1;
+      }
+    }
+
+    return { cleaned };
+  }
+
+  resolveSourceFileAbsolutePath(options) {
+    const spec = getSourceSpec(options && options.type);
+    const relativePath = String(options && options.relativePath ? options.relativePath : "").trim();
+    if (!relativePath) throw new Error("relativePath is required.");
+    if (path.isAbsolute(relativePath)) throw new Error("relativePath must not be absolute.");
+
+    const normalizedRelative = relativePath.replace(/\\/g, "/");
+    if (!normalizedRelative.toLowerCase().endsWith(spec.ext)) {
+      throw new Error(`Invalid file extension for ${spec.type}: ${relativePath}`);
+    }
+
+    const targetDir = this.workspacePaths[spec.folderKey];
+    const fullPath = path.resolve(targetDir, normalizedRelative);
+    if (fullPath !== targetDir && !fullPath.startsWith(`${targetDir}${path.sep}`)) {
+      throw new Error("relativePath is outside source directory.");
+    }
+    return {
+      type: spec.type,
+      relativePath: path.relative(targetDir, fullPath),
+      fullPath,
+    };
+  }
+
+  async openSourceFile(options, openPathFn) {
+    const resolved = this.resolveSourceFileAbsolutePath(options);
+    if (!(await fileExists(resolved.fullPath))) {
+      throw new Error(`Source file not found: ${resolved.relativePath}`);
+    }
+    if (typeof openPathFn !== "function") {
+      throw new Error("openPathFn is required.");
+    }
+    const openResult = await openPathFn(resolved.fullPath);
+    if (hasValue(openResult)) {
+      throw new Error(`Failed to open file: ${openResult}`);
+    }
+    return {
+      opened: true,
+      type: resolved.type,
+      relativePath: resolved.relativePath,
+      fullPath: resolved.fullPath,
     };
   }
 
@@ -1124,6 +1280,7 @@ class TaskService {
   }
 
   async listTasks(limit = 50) {
+    await this.ensureStartupCleanup();
     const live = Array.from(this.tasks.values()).map((task) => toTaskSummary(task));
     const history = await this.readHistoricalTasks(limit);
 
@@ -1143,6 +1300,7 @@ class TaskService {
   }
 
   async getTask(taskId) {
+    await this.ensureStartupCleanup();
     if (this.tasks.has(taskId)) {
       return toTaskSummary(this.tasks.get(taskId));
     }
@@ -1181,6 +1339,7 @@ class TaskService {
   }
 
   async getTaskLog(taskId, tailCount = 200) {
+    await this.ensureStartupCleanup();
     const tail = sanitizeTailCount(tailCount);
 
     if (this.tasks.has(taskId)) {
@@ -1218,6 +1377,7 @@ class TaskService {
   }
 
   async resolveTaskOutputDir(taskId) {
+    await this.ensureStartupCleanup();
     if (this.tasks.has(taskId)) {
       const live = this.tasks.get(taskId);
       if (live && live.taskOutputDir) {
@@ -1259,29 +1419,7 @@ class TaskService {
       throw new Error(`Task output directory not found: ${taskId}`);
     }
 
-    let command = "";
-    let args = [];
-    if (process.platform === "win32") {
-      command = "explorer";
-      args = [outputDir];
-    } else if (process.platform === "darwin") {
-      command = "open";
-      args = [outputDir];
-    } else {
-      command = "xdg-open";
-      args = [outputDir];
-    }
-
-    await new Promise((resolve, reject) => {
-      const child = spawn(command, args, {
-        stdio: "ignore",
-        detached: true,
-        shell: false,
-      });
-      child.on("error", (err) => reject(err));
-      child.unref();
-      resolve();
-    });
+    await this.openPathInFileManager(outputDir);
 
     return {
       opened: true,
@@ -1309,29 +1447,7 @@ class TaskService {
       throw new Error(`Artifact directory not found: ${folderPath}`);
     }
 
-    let command = "";
-    let args = [];
-    if (process.platform === "win32") {
-      command = "explorer";
-      args = [folderPath];
-    } else if (process.platform === "darwin") {
-      command = "open";
-      args = [folderPath];
-    } else {
-      command = "xdg-open";
-      args = [folderPath];
-    }
-
-    await new Promise((resolve, reject) => {
-      const child = spawn(command, args, {
-        stdio: "ignore",
-        detached: true,
-        shell: false,
-      });
-      child.on("error", (err) => reject(err));
-      child.unref();
-      resolve();
-    });
+    await this.openPathInFileManager(folderPath);
 
     return {
       opened: true,

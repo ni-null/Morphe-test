@@ -1,7 +1,8 @@
 {
   "nav.build": "1. Build",
-  "nav.assets": "2. Assets",
-  "nav.history": "3. Task History",
+  "nav.mircrog": "2. Mircrog",
+  "nav.assets": "3. Assets",
+  "nav.history": "4. Task History",
   "sidebar.subtitle": "shadcn UI / Desktop companion",
   "sidebar.language": "Language",
   "sidebar.environment": "Environment",
@@ -62,6 +63,8 @@
   "assets.versionCount": "{{count}} versions",
   "assets.noApkFiles": "No local APK files found.",
   "assets.unknownPackage": "Unknown package",
+  "mircrog.title": "Mircrog",
+  "mircrog.empty": "No downloadable MicroG-RE release files found.",
   "dialog.currentProgress": "Current Build Progress",
   "dialog.taskId": "Task ID: {{id}}",
   "dialog.noLiveTask": "No full build task started yet.",
@@ -175,6 +178,8 @@
   "confirm.deleteAllPatchesDesc": "Are you sure you want to delete all local patches files?",
   "confirm.deletePatchesTitle": "Delete patches file",
   "confirm.deletePatchesDesc": "Delete patches file {{path}}?",
+  "confirm.deleteMicrogTitle": "Delete microg file",
+  "confirm.deleteMicrogDesc": "Delete microg file {{path}}?",
   "confirm.deleteApkTitle": "Delete APK file",
   "confirm.deleteApkDesc": "Delete APK file {{path}}?"
 }

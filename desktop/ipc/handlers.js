@@ -2,7 +2,7 @@
 
 const fsp = require("fs").promises;
 const path = require("path");
-const { BrowserWindow, dialog } = require("electron");
+const { BrowserWindow, dialog, shell } = require("electron");
 const fs = require("fs");
 const { TaskService } = require("./task-service");
 const { IPC_CHANNEL } = require("./constants");
@@ -164,6 +164,7 @@ function createInvokeHandler(projectRoot) {
       return await taskService.fetchAndSaveSource({
         type: payload.type,
         mode: payload.mode,
+        repo: payload.repo,
         patchesRepo: payload.patchesRepo,
         version: payload.version,
         force: normalizeBoolean(payload.force),
@@ -213,6 +214,16 @@ function createInvokeHandler(projectRoot) {
         fileName: payload.fileName,
         relativePath: payload.relativePath,
       });
+    }
+
+    if (method === "openSourceFile") {
+      return await taskService.openSourceFile(
+        {
+          type: payload.type,
+          relativePath: payload.relativePath,
+        },
+        async (targetPath) => shell.openPath(targetPath),
+      );
     }
 
     throw new Error(`Unknown IPC method: ${method}`);
