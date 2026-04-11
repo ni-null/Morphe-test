@@ -21,41 +21,33 @@ function getGitHubApiTimeoutMs() {
   return 30000; // 預設 30 秒
 }
 
-function getPageTimeoutMs() {
-  const raw = String(process.env.MORPHE_PAGE_TIMEOUT_MS || "").trim();
-  if (raw) {
-    const parsed = Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-  return 10000; // 預設 10 秒
+function parsePositiveInt(raw, fallback) {
+  const text = String(raw || "").trim();
+  if (!text) return fallback;
+  const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getPageTimeoutMs(envInput = process.env, warn = null) {
+  const env = envInput && typeof envInput === "object" ? envInput : process.env;
+  void warn;
+  return parsePositiveInt(env.PATCH_PAGE_TIMEOUT_MS, 10000); // 預設 10 秒
 }
 
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_HTTP_CACHE_TTL_MS = 15 * 60 * 1000;
 const RATE_LIMIT_CACHE_TTL_MS = 60 * 1000;
 
-function getDownloadTimeoutMs() {
-  const raw = String(process.env.MORPHE_DOWNLOAD_TIMEOUT_MS || "").trim();
-  if (raw) {
-    const parsed = Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-  return DEFAULT_DOWNLOAD_TIMEOUT_MS;
+function getDownloadTimeoutMs(envInput = process.env, warn = null) {
+  const env = envInput && typeof envInput === "object" ? envInput : process.env;
+  void warn;
+  return parsePositiveInt(env.PATCH_DOWNLOAD_TIMEOUT_MS, DEFAULT_DOWNLOAD_TIMEOUT_MS);
 }
 
-function getHttpCacheTtlMs() {
-  const raw = String(process.env.MORPHE_HTTP_CACHE_TTL_MS || "").trim();
-  if (raw) {
-    const parsed = Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-  return DEFAULT_HTTP_CACHE_TTL_MS;
+function getHttpCacheTtlMs(envInput = process.env, warn = null) {
+  const env = envInput && typeof envInput === "object" ? envInput : process.env;
+  void warn;
+  return parsePositiveInt(env.PATCH_HTTP_CACHE_TTL_MS, DEFAULT_HTTP_CACHE_TTL_MS);
 }
 
 function buildRuntimeHeaders(url, requestOptions) {
@@ -114,7 +106,9 @@ function summarizeRequestError(url, statusCode, responsePreview, originalMessage
 }
 
 function createRuntime(params) {
-  const { cookieJarPath, logStep, cacheDir } = params;
+  const { cookieJarPath, logStep, cacheDir, logWarn } = params;
+  const runtimeEnv = params && typeof params === "object" && params.env ? params.env : process.env;
+  const runtimeWarn = typeof logWarn === "function" ? logWarn : null;
   const httpCacheDir = cacheDir ? path.join(cacheDir, "http-url") : "";
 
   async function ensureDir(dirPath) {
@@ -161,7 +155,9 @@ function createRuntime(params) {
     const isGitHubApi = String(url || "").toLowerCase().startsWith("https://api.github.com/");
     const timeoutMs = Number.isFinite(opts.timeoutMs)
       ? opts.timeoutMs
-      : (outputPath ? getDownloadTimeoutMs() : (isGitHubApi ? getGitHubApiTimeoutMs() : getPageTimeoutMs()));
+      : (outputPath
+        ? getDownloadTimeoutMs(runtimeEnv, runtimeWarn)
+        : (isGitHubApi ? getGitHubApiTimeoutMs() : getPageTimeoutMs(runtimeEnv, runtimeWarn)));
     const timeoutSec = Math.max(10, Math.ceil(timeoutMs / 1000));
     const headers = buildRuntimeHeaders(url, opts);
 
@@ -326,7 +322,7 @@ function createRuntime(params) {
     if (enableCache && statusCode >= 200 && statusCode < 300) {
       await writeUrlCache(url, opts, {
         savedAt: Date.now(),
-        expiresAt: Date.now() + getHttpCacheTtlMs(),
+        expiresAt: Date.now() + getHttpCacheTtlMs(runtimeEnv, runtimeWarn),
         statusCode,
         body: String(body || ""),
         error: false,
@@ -352,7 +348,7 @@ function createRuntime(params) {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const tmpFile = `${outFile}.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       try {
-        await runCurl(url, tmpFile, { timeoutMs: getDownloadTimeoutMs() });
+        await runCurl(url, tmpFile, { timeoutMs: getDownloadTimeoutMs(runtimeEnv, runtimeWarn) });
         await fsp.rename(tmpFile, outFile);
         lastError = null;
         break;
@@ -392,4 +388,7 @@ function createRuntime(params) {
 
 module.exports = {
   createRuntime,
+  getPageTimeoutMs,
+  getDownloadTimeoutMs,
+  getHttpCacheTtlMs,
 };

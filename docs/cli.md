@@ -3,7 +3,7 @@
 目前建議使用入口：
 
 ```bash
-node ./main.js [options]
+node ./cli/main.js [options]
 ```
 
 ## 支援參數
@@ -36,36 +36,45 @@ node ./main.js [options]
 
 ```bash
 # 使用預設 config.toml 完整流程執行
-node ./main.js
+node ./cli/main.js
 
 # 指定設定檔
-node ./main.js --config ./config.toml
+node ./cli/main.js --config ./config.toml
 
 # 只下載 APK（不 patch）
-node ./main.js --download-only
+node ./cli/main.js --download-only
 
 # 只測試 morphe-cli 下載/解析
-node ./main.js --morphe-cli
+node ./cli/main.js --morphe-cli
 
 # 模擬執行，不做實際變更
-node ./main.js --dry-run
+node ./cli/main.js --dry-run
 
 # 強制重抓資源
-node ./main.js --force
+node ./cli/main.js --force
 
 # 指定 workspace
-node ./main.js --workspace ./workspace
+node ./cli/main.js --workspace ./workspace
 
 # 清空 cache 後執行
-node ./main.js --clear-cache
+node ./cli/main.js --clear-cache
 ```
 
 ## 簽章路徑來源優先序
 
-`main.js` 最終使用的 keystore 路徑優先序如下（由高到低）：
+`cli/main.js` 最終使用的 keystore 路徑優先序如下（由高到低）：
 
-1. 環境變數 `MORPHE_KEYSTORE_PATH`
+1. 環境變數 `PATCH_KEYSTORE_PATH`（舊版相容：`MORPHE_KEYSTORE_PATH`）
 2. `config.toml` 的 `[signing].keystore_path`
-3. `MORPHE_KEYSTORE_BASE64`（會產生暫存 keystore）
+3. `PATCH_KEYSTORE_BASE64`（舊版相容：`MORPHE_KEYSTORE_BASE64`，會產生暫存 keystore）
 4. workspace 預設 `workspace/keystore/morphe-test.keystore`（有啟用 workspace 參數時）
 5. `config.toml` 同層的 `morphe-test.keystore`
+
+補充：
+- 若使用 legacy 環境變數（`MORPHE_*`），程式會提示 deprecation warning，但仍維持相容。
+
+## Runtime 網路參數（可選）
+
+1. `PATCH_PAGE_TIMEOUT_MS`（舊版相容：`MORPHE_PAGE_TIMEOUT_MS`）
+2. `PATCH_DOWNLOAD_TIMEOUT_MS`（舊版相容：`MORPHE_DOWNLOAD_TIMEOUT_MS`）
+3. `PATCH_HTTP_CACHE_TTL_MS`（舊版相容：`MORPHE_HTTP_CACHE_TTL_MS`）

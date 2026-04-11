@@ -11,15 +11,6 @@ function hasValue(value) {
   return String(value).trim().length > 0;
 }
 
-function resolveEnvKey(env, keys) {
-  for (const key of keys) {
-    if (hasValue(env[key])) {
-      return String(env[key]).trim();
-    }
-  }
-  return null;
-}
-
 function resolveConfigKey(config, keys) {
   const target = config && typeof config === "object" ? config : {};
   for (const key of keys) {
@@ -65,10 +56,10 @@ async function writeKeystoreFromBase64(keystorePath, base64Data, runtime) {
   try {
     decoded = Buffer.from(normalized, "base64");
   } catch {
-    throw new Error("MORPHE_KEYSTORE_BASE64 is not valid base64.");
+    throw new Error("PATCH_KEYSTORE_BASE64 is not valid base64.");
   }
   if (!decoded || decoded.length === 0) {
-    throw new Error("MORPHE_KEYSTORE_BASE64 decoded to empty content.");
+    throw new Error("PATCH_KEYSTORE_BASE64 decoded to empty content.");
   }
   await runtime.ensureDir(path.dirname(keystorePath));
   await fsp.writeFile(keystorePath, decoded);
@@ -84,11 +75,12 @@ function buildLocalKeystoreCandidates(configDir, projectRoot) {
 }
 
 async function resolveSigningConfig(params) {
-  const { configDir, projectRoot, workspaceDir, preferWorkspaceKeystore, signingCfg, runtime, dryRun, env, logInfo } = params;
+  const { configDir, projectRoot, workspaceDir, preferWorkspaceKeystore, signingCfg, runtime, dryRun, env, logInfo, logWarn } = params;
   const effectiveEnv = env || process.env;
+  void logWarn;
   const credentialsFromConfig = resolveSigningCredentialConfig(signingCfg);
 
-  const explicitKeystorePath = resolveEnvKey(effectiveEnv, ["MORPHE_KEYSTORE_PATH"]);
+  const explicitKeystorePath = hasValue(effectiveEnv.PATCH_KEYSTORE_PATH) ? String(effectiveEnv.PATCH_KEYSTORE_PATH).trim() : "";
   if (explicitKeystorePath) {
     const resolvedPath = path.isAbsolute(explicitKeystorePath)
       ? path.normalize(explicitKeystorePath)
@@ -122,15 +114,15 @@ async function resolveSigningConfig(params) {
     };
   }
 
-  const keystoreBase64 = resolveEnvKey(effectiveEnv, ["MORPHE_KEYSTORE_BASE64"]);
+  const keystoreBase64 = hasValue(effectiveEnv.PATCH_KEYSTORE_BASE64) ? String(effectiveEnv.PATCH_KEYSTORE_BASE64).trim() : "";
 
   if (keystoreBase64) {
     const keystorePath = path.resolve(configDir, CI_KEYSTORE_REL);
     if (dryRun) {
-      logInfo(`DryRun: would write keystore from MORPHE_KEYSTORE_BASE64 to ${keystorePath}`);
+      logInfo(`DryRun: would write keystore from PATCH_KEYSTORE_BASE64 to ${keystorePath}`);
     } else {
       await writeKeystoreFromBase64(keystorePath, keystoreBase64, runtime);
-      logInfo(`Keystore written from MORPHE_KEYSTORE_BASE64: ${keystorePath}`);
+      logInfo(`Keystore written from PATCH_KEYSTORE_BASE64: ${keystorePath}`);
     }
     return {
       keystorePath,
@@ -174,7 +166,7 @@ async function resolveSigningConfig(params) {
 
     throw new Error(
       `Workspace keystore not found: ${workspaceKeystorePath}. ` +
-        `Please put ${LOCAL_KEYSTORE_NAME} under workspace/keystore or set MORPHE_KEYSTORE_BASE64.`,
+        `Please put ${LOCAL_KEYSTORE_NAME} under workspace/keystore or set PATCH_KEYSTORE_BASE64.`,
     );
   }
 
@@ -183,7 +175,7 @@ async function resolveSigningConfig(params) {
   if (!exists) {
     throw new Error(
       `Local test keystore not found: ${keystorePath}. ` +
-        `Please add ${LOCAL_KEYSTORE_NAME} in config directory or set MORPHE_KEYSTORE_BASE64.`,
+        `Please add ${LOCAL_KEYSTORE_NAME} in config directory or set PATCH_KEYSTORE_BASE64.`,
     );
   } else {
     logInfo(`Using signing keystore: ${keystorePath}`);

@@ -3,22 +3,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "../../../compo
 
 export default function BuildSourceSection({
   t,
-  morpheCliSelectValue,
-  onChangeMorpheCliSelect,
-  selectedMorpheItem,
+  engineSelectValue,
+  onChangeEngineSelect,
+  selectedEngineItem,
+  engineSelectOptions,
+  patchBundleSelectValue,
+  onChangePatchBundleSelect,
+  selectedPatchBundleItem,
+  patchBundleSelectOptions,
   resolveSourceLabels,
-  morpheCliSelectOptions,
   renderSourceOption,
-  patchesSelectValue,
-  onChangePatchesSelect,
-  selectedPatchesItem,
-  patchesSelectOptions,
   keystoreSelectValue,
   onChangeKeystoreSelect,
   selectedKeystoreItem,
   keystoreSelectOptions,
   controlsLocked,
 }) {
+  const currentEngineSelectValue = String(engineSelectValue || "")
+  const currentPatchBundleSelectValue = String(patchBundleSelectValue || "")
+
   return (
     <section className='space-y-3'>
       <div className='space-y-2'>
@@ -29,18 +32,18 @@ export default function BuildSourceSection({
         </div>
 
         <div className='grid grid-cols-1 items-center gap-3 md:grid-cols-3'>
-          <Select value={morpheCliSelectValue} onValueChange={onChangeMorpheCliSelect} disabled={controlsLocked}>
+          <Select value={currentEngineSelectValue} onValueChange={onChangeEngineSelect} disabled={controlsLocked}>
             <SelectTrigger className='h-11 w-full border-0 bg-slate-100 px-3 shadow-sm hover:bg-slate-100 dark:bg-slate-800 dark:shadow-black/30 dark:hover:bg-slate-800'>
               <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                 <SquareChevronRight className='h-3.5 w-3.5' />
               </span>
               <span className='pointer-events-none flex min-w-0 flex-1 flex-col items-start px-3 text-left leading-tight'>
-                <span className='block min-w-0 truncate text-sm font-semibold'>{resolveSourceLabels(selectedMorpheItem).primary}</span>
-                <span className='block min-w-0 truncate text-xs text-muted-foreground'>{resolveSourceLabels(selectedMorpheItem).secondary}</span>
+                <span className='block min-w-0 truncate text-sm font-semibold'>{resolveSourceLabels(selectedEngineItem).primary}</span>
+                <span className='block min-w-0 truncate text-xs text-muted-foreground'>{resolveSourceLabels(selectedEngineItem).secondary}</span>
               </span>
             </SelectTrigger>
             <SelectContent position='popper' side='bottom' align='start'>
-              {(Array.isArray(morpheCliSelectOptions) ? morpheCliSelectOptions : []).map((item) => (
+              {(Array.isArray(engineSelectOptions) ? engineSelectOptions : []).map((item) => (
                 <SelectItem key={`morphe-cli-select-${item.value}`} value={item.value}>
                   {renderSourceOption(item)}
                 </SelectItem>
@@ -48,14 +51,14 @@ export default function BuildSourceSection({
             </SelectContent>
           </Select>
 
-          <Select value={patchesSelectValue} onValueChange={onChangePatchesSelect} disabled={controlsLocked}>
+          <Select value={currentPatchBundleSelectValue} onValueChange={onChangePatchBundleSelect} disabled={controlsLocked}>
             <SelectTrigger className='h-12 w-full border-0 bg-slate-100 px-3 shadow-sm hover:bg-slate-100 dark:bg-slate-800 dark:shadow-black/30 dark:hover:bg-slate-800'>
               <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                 <Boxes className='h-3.5 w-3.5' />
               </span>
               <span className='pointer-events-none flex min-w-0 flex-1 flex-col items-start px-3 text-left leading-tight'>
-                <span className='block min-w-0 truncate text-sm font-semibold'>{resolveSourceLabels(selectedPatchesItem).primary}</span>
-                <span className='block min-w-0 truncate text-xs text-muted-foreground'>{resolveSourceLabels(selectedPatchesItem).secondary}</span>
+                <span className='block min-w-0 truncate text-sm font-semibold'>{resolveSourceLabels(selectedPatchBundleItem).primary}</span>
+                <span className='block min-w-0 truncate text-xs text-muted-foreground'>{resolveSourceLabels(selectedPatchBundleItem).secondary}</span>
               </span>
             </SelectTrigger>
             <SelectContent
@@ -64,7 +67,7 @@ export default function BuildSourceSection({
               align='start'
               className='max-h-[28rem]'
               viewportClassName='h-auto max-h-[26rem]'>
-              {(Array.isArray(patchesSelectOptions) ? patchesSelectOptions : []).map((item) => (
+              {(Array.isArray(patchBundleSelectOptions) ? patchBundleSelectOptions : []).map((item) => (
                 <SelectItem key={`patches-select-${item.value}`} value={item.value}>
                   {renderSourceOption(item)}
                 </SelectItem>

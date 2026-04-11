@@ -16,6 +16,8 @@ import "./styles.css"
 
 function App() {
   const c = useAppController()
+  const engineSettingsDialogProps = c.engineSettingsDialogProps || c.morpheSettingsDialogProps || {}
+  const patchBundleSettingsDialogProps = c.patchBundleSettingsDialogProps || c.patchesSettingsDialogProps || {}
 
   return (
     <div className='shell-layout'>
@@ -30,8 +32,8 @@ function App() {
         <TaskDialogs {...c.taskDialogsProps} />
         <ConfigPathDialog {...c.configPathDialogProps} />
         <AppSettingsDialog {...c.appSettingsDialogProps} />
-        <MorpheSettingsDialog {...c.morpheSettingsDialogProps} />
-        <PatchesSettingsDialog {...c.patchesSettingsDialogProps} />
+        <MorpheSettingsDialog {...engineSettingsDialogProps} />
+        <PatchesSettingsDialog {...patchBundleSettingsDialogProps} />
         <ConfirmActionDialog {...c.confirmActionDialogProps} />
       </main>
     </div>
@@ -40,7 +42,7 @@ function App() {
 
 const rootElement = document.getElementById("root")
 if (rootElement) {
-  const globalKey = "__MORPHE_APP_ROOT__"
+  const globalKey = "__PATCHER_APP_ROOT__"
   const host = window
   const root = host[globalKey] || createRoot(rootElement)
   host[globalKey] = root

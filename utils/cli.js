@@ -3,11 +3,11 @@
 function printUsage() {
   console.log(`
 Usage:
-  node ./main.js [options]
+  node ./cli/main.js [options]
 
 Options:
   -c, --config <path>  config.toml path (default: ./config.toml)
-      --morphe-cli     test morphe-cli jar module only (skip APK/patches flow)
+      --engine-cli     test engine-cli jar module only (skip APK/patches flow)
       --download-only  test APK module only (skip patches module)
       --patches-only   test patches module only (skip APK/patch flow)
       --dry-run        print actions without downloading/patching
@@ -15,7 +15,7 @@ Options:
       --clear-cache    clear workspace cache directory before run
       --no-task-log    disable task folder/log persistence for this run
       --workspace <path>      set workspace directory for downloads/patches/output/runtime
-      --migrate-workspace     migrate legacy root folders (downloads/patches/morphe-cli/output) into workspace
+      --migrate-workspace     migrate legacy root folders (downloads/patches/engine-cli/output) into workspace
   -h, --help           show this help
 `);
 }
@@ -23,7 +23,7 @@ Options:
 function parseArgs(argv) {
   const options = {
     configPath: "./config.toml",
-    morpheCliOnly: false,
+    engineCliOnly: false,
     downloadOnly: false,
     patchesOnly: false,
     dryRun: false,
@@ -50,8 +50,8 @@ function parseArgs(argv) {
       options.downloadOnly = true;
       continue;
     }
-    if (arg === "--morphe-cli") {
-      options.morpheCliOnly = true;
+    if (arg === "--engine-cli") {
+      options.engineCliOnly = true;
       continue;
     }
     if (arg === "--patches-only") {

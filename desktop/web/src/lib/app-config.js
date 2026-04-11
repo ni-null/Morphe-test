@@ -1,8 +1,8 @@
 import { hasText, resolveDisplayName, mergeRepoOptions, packageToSectionName } from "./app-utils"
 import {
   RESERVED_SECTIONS,
-  DEFAULT_MORPHE_SOURCE_REPO,
-  DEFAULT_PATCHES_SOURCE_REPO,
+  DEFAULT_ENGINE_SOURCE_REPO,
+  DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
 } from "./app-constants"
 import appPresets from "../data/app-presets.json"
 
@@ -147,6 +147,15 @@ function createLegacyDefaultApps() {
   return [youtube, youtubeMusic, reddit]
 }
 
+function createDefaultPatchCliConfig() {
+  return {
+    mode: "stable",
+    patchesRepo: DEFAULT_ENGINE_SOURCE_REPO,
+    repoOptions: [DEFAULT_ENGINE_SOURCE_REPO],
+    path: "",
+  }
+}
+
 function createDefaultAppsFromPresets() {
   const templates = Array.isArray(appPresets) ? appPresets : []
   if (templates.length === 0) return createLegacyDefaultApps()
@@ -182,12 +191,20 @@ function createDefaultAppsFromPresets() {
 }
 
 export function createDefaultConfigForm() {
+  const defaultPatchCli = createDefaultPatchCliConfig()
   return {
-    morpheCli: { mode: "stable", patchesRepo: DEFAULT_MORPHE_SOURCE_REPO, repoOptions: [DEFAULT_MORPHE_SOURCE_REPO], path: "" },
-    patches: { mode: "stable", patchesRepo: DEFAULT_PATCHES_SOURCE_REPO, repoOptions: [DEFAULT_PATCHES_SOURCE_REPO], path: "" },
+    patchCli: { ...defaultPatchCli },
+    patches: { mode: "stable", patchesRepo: DEFAULT_PATCH_BUNDLE_SOURCE_REPO, repoOptions: [DEFAULT_PATCH_BUNDLE_SOURCE_REPO], path: "" },
     signing: { keystorePath: "" },
     apps: createDefaultAppsFromPresets(),
   }
+}
+
+export function resolvePatchCliConfig(configForm) {
+  const source = configForm && typeof configForm === "object" ? configForm : {}
+  const patchCli = source.patchCli && typeof source.patchCli === "object" ? source.patchCli : null
+  if (patchCli) return patchCli
+  return createDefaultPatchCliConfig()
 }
 
 export function getAppPresetTemplates() {
@@ -218,24 +235,52 @@ export function configFormFromToml(content) {
   const parsed = parseSimpleToml(content)
   const defaults = createDefaultConfigForm()
 
-  const morpheCliCfg = parsed["morphe-cli"] || parsed.morphe_cli || {}
-  const patchesCfg = parsed.patches || {}
+  const engineSourceCfg = parsed.engine || {}
+  const patchBundleCfg = parsed.patches || parsed["patch-bundle"] || parsed.patch_bundle || {}
 
-  const morpheMode = readTomlString(morpheCliCfg, ["mode"]).toLowerCase()
-  if (morpheMode === "stable" || morpheMode === "dev" || morpheMode === "local") defaults.morpheCli.mode = morpheMode
-  const morpheRepo = readTomlString(morpheCliCfg, ["patches_repo"])
-  if (hasText(morpheRepo)) defaults.morpheCli.patchesRepo = morpheRepo
-  const morpheRepoOptions = readTomlStringArray(morpheCliCfg, ["repo_options", "repo-options", "repos"])
-  defaults.morpheCli.repoOptions = mergeRepoOptions(morpheRepoOptions, defaults.morpheCli.patchesRepo, DEFAULT_MORPHE_SOURCE_REPO)
-  defaults.morpheCli.path = readTomlString(morpheCliCfg, ["path"])
+  const engineSourceMode = readTomlString(engineSourceCfg, ["mode"]).toLowerCase()
+  if (engineSourceMode === "stable" || engineSourceMode === "dev" || engineSourceMode === "local") {
+    defaults.patchCli.mode = engineSourceMode
+  }
+  const engineSourceRepo = readTomlString(engineSourceCfg, ["source_repo", "source-repo", "repo", "patches_repo"])
+  if (hasText(engineSourceRepo)) defaults.patchCli.patchesRepo = engineSourceRepo
+  const engineSourceRepoOptions = readTomlStringArray(engineSourceCfg, [
+    "source_repo_options",
+    "source-repo-options",
+    "source_repos",
+    "source-repos",
+    "repo_options",
+    "repo-options",
+    "repos",
+  ])
+  defaults.patchCli.repoOptions = mergeRepoOptions(
+    engineSourceRepoOptions,
+    defaults.patchCli.patchesRepo,
+    DEFAULT_ENGINE_SOURCE_REPO,
+  )
+  defaults.patchCli.path = readTomlString(engineSourceCfg, ["path"])
 
-  const patchesMode = readTomlString(patchesCfg, ["mode"]).toLowerCase()
-  if (patchesMode === "stable" || patchesMode === "dev" || patchesMode === "local") defaults.patches.mode = patchesMode
-  const patchesRepo = readTomlString(patchesCfg, ["patches_repo"])
-  if (hasText(patchesRepo)) defaults.patches.patchesRepo = patchesRepo
-  const patchesRepoOptions = readTomlStringArray(patchesCfg, ["repo_options", "repo-options", "repos"])
-  defaults.patches.repoOptions = mergeRepoOptions(patchesRepoOptions, defaults.patches.patchesRepo, DEFAULT_PATCHES_SOURCE_REPO)
-  defaults.patches.path = readTomlString(patchesCfg, ["path"])
+  const patchBundleMode = readTomlString(patchBundleCfg, ["mode"]).toLowerCase()
+  if (patchBundleMode === "stable" || patchBundleMode === "dev" || patchBundleMode === "local") {
+    defaults.patches.mode = patchBundleMode
+  }
+  const patchBundleRepo = readTomlString(patchBundleCfg, ["source_repo", "source-repo", "repo", "patches_repo"])
+  if (hasText(patchBundleRepo)) defaults.patches.patchesRepo = patchBundleRepo
+  const patchBundleRepoOptions = readTomlStringArray(patchBundleCfg, [
+    "source_repo_options",
+    "source-repo-options",
+    "source_repos",
+    "source-repos",
+    "repo_options",
+    "repo-options",
+    "repos",
+  ])
+  defaults.patches.repoOptions = mergeRepoOptions(
+    patchBundleRepoOptions,
+    defaults.patches.patchesRepo,
+    DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
+  )
+  defaults.patches.path = readTomlString(patchBundleCfg, ["path"])
 
   const signingCfg = parsed.signing || parsed.sign || {}
   defaults.signing.keystorePath = readTomlString(signingCfg, ["keystore_path", "keystore-path", "path"])
@@ -260,28 +305,38 @@ function buildTomlSectionLines(title, entries) {
 
 export function configFormToToml(configForm) {
   const blocks = []
+  const patchCliCfg = resolvePatchCliConfig(configForm)
+  const patchBundleCfg = configForm?.patches || {}
 
-  const morpheEntries = []
-  pushTomlEntry(morpheEntries, "mode", true, configForm.morpheCli.mode || "stable")
-  if ((configForm.morpheCli.mode || "stable") === "local") {
-    pushTomlEntry(morpheEntries, "path", true, configForm.morpheCli.path)
+  const engineSourceEntries = []
+  pushTomlEntry(engineSourceEntries, "mode", true, patchCliCfg.mode || "stable")
+  if ((patchCliCfg.mode || "stable") === "local") {
+    pushTomlEntry(engineSourceEntries, "path", true, patchCliCfg.path)
   } else {
-    pushTomlEntry(morpheEntries, "patches_repo", true, configForm.morpheCli.patchesRepo)
+    pushTomlEntry(engineSourceEntries, "patches_repo", true, patchCliCfg.patchesRepo)
+    pushTomlEntry(engineSourceEntries, "source_repo", true, patchCliCfg.patchesRepo)
   }
-  const morpheRepoOptions = mergeRepoOptions(configForm?.morpheCli?.repoOptions, configForm?.morpheCli?.patchesRepo, DEFAULT_MORPHE_SOURCE_REPO)
-  if (morpheRepoOptions.length > 0) morpheEntries.push(["repo_options", morpheRepoOptions])
-  const morpheLines = buildTomlSectionLines("morphe-cli", morpheEntries)
-  if (morpheLines.length) blocks.push(morpheLines)
+  const engineSourceRepoOptions = mergeRepoOptions(patchCliCfg.repoOptions, patchCliCfg.patchesRepo, DEFAULT_ENGINE_SOURCE_REPO)
+  if (engineSourceRepoOptions.length > 0) {
+    engineSourceEntries.push(["repo_options", engineSourceRepoOptions])
+    engineSourceEntries.push(["source_repo_options", engineSourceRepoOptions])
+  }
+  const engineSourceLines = buildTomlSectionLines("engine", engineSourceEntries)
+  if (engineSourceLines.length) blocks.push(engineSourceLines)
 
   const patchesEntries = []
-  pushTomlEntry(patchesEntries, "mode", true, configForm.patches.mode || "stable")
-  if ((configForm.patches.mode || "stable") === "local") {
-    pushTomlEntry(patchesEntries, "path", true, configForm.patches.path)
+  pushTomlEntry(patchesEntries, "mode", true, patchBundleCfg.mode || "stable")
+  if ((patchBundleCfg.mode || "stable") === "local") {
+    pushTomlEntry(patchesEntries, "path", true, patchBundleCfg.path)
   } else {
-    pushTomlEntry(patchesEntries, "patches_repo", true, configForm.patches.patchesRepo)
+    pushTomlEntry(patchesEntries, "patches_repo", true, patchBundleCfg.patchesRepo)
+    pushTomlEntry(patchesEntries, "source_repo", true, patchBundleCfg.patchesRepo)
   }
-  const patchesRepoOptions = mergeRepoOptions(configForm?.patches?.repoOptions, configForm?.patches?.patchesRepo, DEFAULT_PATCHES_SOURCE_REPO)
-  if (patchesRepoOptions.length > 0) patchesEntries.push(["repo_options", patchesRepoOptions])
+  const patchesRepoOptions = mergeRepoOptions(patchBundleCfg?.repoOptions, patchBundleCfg?.patchesRepo, DEFAULT_PATCH_BUNDLE_SOURCE_REPO)
+  if (patchesRepoOptions.length > 0) {
+    patchesEntries.push(["repo_options", patchesRepoOptions])
+    patchesEntries.push(["source_repo_options", patchesRepoOptions])
+  }
   const patchesLines = buildTomlSectionLines("patches", patchesEntries)
   if (patchesLines.length) blocks.push(patchesLines)
 

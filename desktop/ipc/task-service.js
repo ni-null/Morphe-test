@@ -10,8 +10,7 @@ const { createRuntime } = require("../../utils/runtime");
 const { hasValue, pickFirstValue, resolveAbsolutePath, safeFileName, formatError } = require("../../utils/common");
 const { readTomlFile } = require("../../utils/toml");
 const { toAbsoluteUrl, getHrefMatches, selectBestByVersion } = require("../../utils/url");
-const morpheCli = require("../../scripts/morphe-cli");
-const mpp = require("../../scripts/mpp");
+const { getPatchProvider, resolvePatchProviderIdFromEnv } = require("../../cli/providers");
 const { resolveWorkspaceRoot, buildWorkspacePaths } = require("../../utils/workspace");
 const PACKAGE_NAME_MAP = require("../../utils/package-name-map.json");
 
@@ -19,8 +18,7 @@ const MAX_IN_MEMORY_LINES = 2000;
 const TASK_STATUS_COMPLETED_MARKER = "__TASK_STATUS__:completed";
 const TASK_STATUS_FAILED_MARKER = "__TASK_STATUS__:failed";
 const PATCH_TEMP_DIR_SUFFIX = "-patched-temporary-files";
-const DEFAULT_MORPHE_PATCHES_REPO = "MorpheApp/morphe-patches";
-const RESERVED_SECTIONS = new Set(["global", "patches", "morphe-cli", "morphe_cli", "signing", "sign"]);
+const RESERVED_SECTIONS = new Set(["global", "patches", "engine", "signing", "sign"]);
 
 function getPackageMapRecord(packageName) {
   const key = String(packageName || "").trim().toLowerCase();
@@ -103,28 +101,28 @@ function resolvePatchesCfgForApiReads(patchesCfgInput) {
   return patchesCfg;
 }
 
-async function resolveMorpheCliCfgForApiReads(morpheCliCfgInput, configDir, fileExistsFn) {
-  const morpheCliCfg = morpheCliCfgInput && typeof morpheCliCfgInput === "object" ? morpheCliCfgInput : {};
-  const mode = String(pickFirstValue(morpheCliCfg, ["mode"]) || "")
+async function resolveEngineCliCfgForApiReads(engineCliCfgInput, configDir, fileExistsFn) {
+  const engineCliCfg = engineCliCfgInput && typeof engineCliCfgInput === "object" ? engineCliCfgInput : {};
+  const mode = String(pickFirstValue(engineCliCfg, ["mode"]) || "")
     .trim()
     .toLowerCase();
   if (mode !== "local") {
-    return morpheCliCfg;
+    return engineCliCfg;
   }
-  const localPathRaw = pickFirstValue(morpheCliCfg, ["path", "jar_path", "jar-path"]);
+  const localPathRaw = pickFirstValue(engineCliCfg, ["path", "jar_path", "jar-path"]);
   if (!hasValue(localPathRaw)) {
     return {
-      ...morpheCliCfg,
+      ...engineCliCfg,
       mode: "stable",
     };
   }
   const localPath = resolveAbsolutePath(String(localPathRaw).trim(), configDir);
   const exists = await fileExistsFn(localPath).catch(() => false);
   if (exists) {
-    return morpheCliCfg;
+    return engineCliCfg;
   }
   return {
-    ...morpheCliCfg,
+    ...engineCliCfg,
     mode: "stable",
   };
 }
@@ -283,13 +281,14 @@ function toTaskSummary(task) {
     stopRequested: !!task.stopRequested,
     workspacePath: task.workspacePath || null,
     signingKeystorePath: task.signingKeystorePath || null,
+    patchProviderId: hasValue(task.patchProviderId) ? String(task.patchProviderId).trim() : "",
   };
 }
 
 function getSourceSpec(type) {
   const key = String(type || "").trim().toLowerCase();
-  if (key === "morphe-cli") {
-    return { type: key, ext: ".jar", folderKey: "morpheCli" };
+  if (key === "engine-cli") {
+    return { type: key, ext: ".jar", folderKey: "engineCli" };
   }
   if (key === "patches") {
     return { type: key, ext: ".mpp", folderKey: "patches" };
@@ -358,9 +357,14 @@ async function fetchGitHubReleases(repo, runtime) {
 class TaskService {
   constructor(projectRoot) {
     this.projectRoot = projectRoot;
+    const warn = (message) => console.warn(`[task-service] ${message}`);
+    this.warn = warn;
+    this.patchProvider = getPatchProvider(resolvePatchProviderIdFromEnv(process.env, { warnLegacy: true, warn }));
+    this.patchProviderId = String(this.patchProvider && this.patchProvider.id ? this.patchProvider.id : "");
+    const envWorkspace = String(process.env.PATCH_WORKSPACE || "").trim();
     const workspaceRoot = resolveWorkspaceRoot({
       cliWorkspace: "",
-      envWorkspace: process.env.MORPHE_WORKSPACE,
+      envWorkspace,
       cwd: projectRoot,
       env: process.env,
     });
@@ -449,7 +453,7 @@ class TaskService {
       await ensureWorkspaceDefaultKeystore(this.workspacePaths, this.projectRoot);
     }
     let targetDir = "";
-    if (key === "morphe-cli") targetDir = this.workspacePaths.morpheCli;
+    if (key === "engine-cli") targetDir = this.workspacePaths.engineCli;
     if (key === "patches") targetDir = this.workspacePaths.patches;
     if (key === "microg") targetDir = this.workspacePaths.microg;
     if (key === "downloads" || key === "apk") targetDir = this.workspacePaths.downloads;
@@ -568,16 +572,16 @@ class TaskService {
 
   parsePatchEntriesFromRawPayload(rawPayload) {
     if (typeof rawPayload === "string") {
-      return mpp.parsePatchEntries(rawPayload).sort((a, b) => a.index - b.index);
+      return this.patchProvider.parsePatchEntries(rawPayload).sort((a, b) => a.index - b.index);
     }
     if (!rawPayload || typeof rawPayload !== "object") {
       return [];
     }
     const withOptions = typeof rawPayload.withOptions === "string" ? rawPayload.withOptions : "";
     const defaults = typeof rawPayload.defaults === "string" ? rawPayload.defaults : "";
-    const withOptionsEntries = mpp.parsePatchEntries(withOptions);
-    const defaultEntries = mpp.parsePatchEntries(defaults);
-    return mpp.mergePatchEntries(withOptionsEntries, defaultEntries);
+    const withOptionsEntries = this.patchProvider.parsePatchEntries(withOptions);
+    const defaultEntries = this.patchProvider.parsePatchEntries(defaults);
+    return this.patchProvider.mergePatchEntries(withOptionsEntries, defaultEntries);
   }
 
   createTaskContext(runtime) {
@@ -599,7 +603,7 @@ class TaskService {
       logInfo: () => {},
       logWarn: () => {},
       logStep: () => {},
-      defaultPatchesRepo: DEFAULT_MORPHE_PATCHES_REPO,
+      defaultPatchesRepo: this.patchProvider.defaultPatchesRepo,
     };
   }
 
@@ -636,25 +640,26 @@ class TaskService {
   async fetchAndSaveSource(options) {
     const spec = getSourceSpec(options && options.type);
     const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
+      cookieJarPath: path.join(this.workspacePaths.downloads, ".patcher-cookie.txt"),
       cacheDir: this.workspacePaths.cache,
       logStep: () => {},
+      logWarn: this.warn,
     });
     const ctx = this.createTaskContext(runtime);
     const force = !!(options && options.force);
     const configDir = this.projectRoot;
 
     try {
-      if (spec.type === "morphe-cli") {
-        const morpheCliCfg = {
+      if (spec.type === "engine-cli") {
+        const engineCliCfg = {
           mode: String(options && options.mode ? options.mode : "stable").trim(),
           patches_repo: String(options && options.patchesRepo ? options.patchesRepo : "").trim(),
           ver: String(options && options.version ? options.version : "").trim(),
         };
-        const fullPath = await morpheCli.resolveMorpheCliJar({
+        const fullPath = await this.patchProvider.resolveCliJar({
           configDir,
           workspaceDir: this.workspacePaths.root,
-          morpheCliCfg,
+          cliConfig: engineCliCfg,
           dryRun: false,
           force,
           ctx,
@@ -738,12 +743,12 @@ class TaskService {
         patches_repo: String(options && options.patchesRepo ? options.patchesRepo : "").trim(),
         ver: String(options && options.version ? options.version : "").trim(),
       };
-      const fullPath = await mpp.resolvePatchFile({
+      const fullPath = await this.patchProvider.resolvePatchFile({
         app: {},
         appName: "__source_probe__",
         configDir,
         workspaceDir: this.workspacePaths.root,
-        patchesCfg,
+        patchConfig: patchesCfg,
         dryRun: false,
         force,
         ctx,
@@ -777,9 +782,10 @@ class TaskService {
     const repo = String(options && options.repo ? options.repo : "").trim();
     if (!repo) throw new Error("repo is required.");
     const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
+      cookieJarPath: path.join(this.workspacePaths.downloads, ".patcher-cookie.txt"),
       cacheDir: this.workspacePaths.cache,
       logStep: () => {},
+      logWarn: this.warn,
     });
     const releases = await fetchGitHubReleases(repo, runtime);
     const ext = spec.ext.toLowerCase();
@@ -980,9 +986,10 @@ class TaskService {
     const configPath = this.resolveConfigPath(options && options.configPath ? options.configPath : "");
     const configDir = path.dirname(configPath);
     const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
+      cookieJarPath: path.join(this.workspacePaths.downloads, ".patcher-cookie.txt"),
       cacheDir: this.workspacePaths.cache,
       logStep: () => {},
+      logWarn: this.warn,
     });
     let resourceDownloadTriggered = false;
     const originalDownloadFile = runtime.downloadFile.bind(runtime);
@@ -991,8 +998,8 @@ class TaskService {
       return originalDownloadFile(...args);
     };
     const config = await readTomlFile(configPath, runtime.fileExists);
-    const morpheCliCfg = await resolveMorpheCliCfgForApiReads(
-      config["morphe-cli"] || config.morphe_cli || {},
+    let engineCliCfg = await resolveEngineCliCfgForApiReads(
+      config.engine || {},
       configDir,
       runtime.fileExists,
     );
@@ -1007,34 +1014,34 @@ class TaskService {
 
     let jarPath = "";
     try {
-      jarPath = await morpheCli.resolveMorpheCliJar({
+      jarPath = await this.patchProvider.resolveCliJar({
         configDir,
         workspaceDir: this.workspacePaths.root,
-        morpheCliCfg,
+        cliConfig: engineCliCfg,
         dryRun: false,
         force: false,
         ctx,
       });
     } catch (err) {
-      const mode = String(pickFirstValue(morpheCliCfg, ["mode"]) || "").trim().toLowerCase();
+      const mode = String(pickFirstValue(engineCliCfg, ["mode"]) || "").trim().toLowerCase();
       if (mode !== "local") throw err;
-      morpheCliCfg = { ...morpheCliCfg, mode: "stable" };
-      jarPath = await morpheCli.resolveMorpheCliJar({
+      engineCliCfg = { ...engineCliCfg, mode: "stable" };
+      jarPath = await this.patchProvider.resolveCliJar({
         configDir,
         workspaceDir: this.workspacePaths.root,
-        morpheCliCfg,
+        cliConfig: engineCliCfg,
         dryRun: false,
         force: false,
         ctx,
       });
     }
 
-    const patchPath = await mpp.resolvePatchFile({
+    const patchPath = await this.patchProvider.resolvePatchFile({
       app,
       appName,
       configDir,
       workspaceDir: this.workspacePaths.root,
-      patchesCfg,
+      patchConfig: patchesCfg,
       dryRun: false,
       force: false,
       ctx,
@@ -1052,7 +1059,11 @@ class TaskService {
     const versionsCached = await this.readCacheJson(this.versionsCacheDir, versionsCacheKey);
     const cachedRaw = versionsCached && typeof versionsCached.rawOutput === "string" ? versionsCached.rawOutput : "";
     if (cachedRaw.length > 0) {
-      const compatibility = mpp.resolveCompatibleVersionsFromRaw(cachedRaw, appName, versionsCached.packageName || app.package_name || null);
+      const compatibility = this.patchProvider.resolveCompatibleVersionsFromRaw(
+        cachedRaw,
+        appName,
+        versionsCached.packageName || app.package_name || null,
+      );
       return {
         configPath,
         appName,
@@ -1065,14 +1076,14 @@ class TaskService {
       };
     }
 
-    const rawResult = await mpp.listCompatibleVersionsRaw({
+    const rawResult = await this.patchProvider.listCompatibleVersionsRaw({
       app,
       appName,
       jarPath,
       patchPath,
       ctx,
     });
-    const compatibility = mpp.resolveCompatibleVersionsFromRaw(
+    const compatibility = this.patchProvider.resolveCompatibleVersionsFromRaw(
       rawResult.rawOutput,
       appName,
       rawResult.packageName || app.package_name || null,
@@ -1107,9 +1118,10 @@ class TaskService {
     const configPath = this.resolveConfigPath(options && options.configPath ? options.configPath : "");
     const configDir = path.dirname(configPath);
     const runtime = createRuntime({
-      cookieJarPath: path.join(this.workspacePaths.downloads, ".morphe-cookie.txt"),
+      cookieJarPath: path.join(this.workspacePaths.downloads, ".patcher-cookie.txt"),
       cacheDir: this.workspacePaths.cache,
       logStep: () => {},
+      logWarn: this.warn,
     });
     let resourceDownloadTriggered = false;
     const originalDownloadFile = runtime.downloadFile.bind(runtime);
@@ -1118,8 +1130,8 @@ class TaskService {
       return originalDownloadFile(...args);
     };
     const config = await readTomlFile(configPath, runtime.fileExists);
-    let morpheCliCfg = await resolveMorpheCliCfgForApiReads(
-      config["morphe-cli"] || config.morphe_cli || {},
+    let engineCliCfg = await resolveEngineCliCfgForApiReads(
+      config.engine || {},
       configDir,
       runtime.fileExists,
     );
@@ -1134,34 +1146,34 @@ class TaskService {
 
     let jarPath = "";
     try {
-      jarPath = await morpheCli.resolveMorpheCliJar({
+      jarPath = await this.patchProvider.resolveCliJar({
         configDir,
         workspaceDir: this.workspacePaths.root,
-        morpheCliCfg,
+        cliConfig: engineCliCfg,
         dryRun: false,
         force: false,
         ctx,
       });
     } catch (err) {
-      const mode = String(pickFirstValue(morpheCliCfg, ["mode"]) || "").trim().toLowerCase();
+      const mode = String(pickFirstValue(engineCliCfg, ["mode"]) || "").trim().toLowerCase();
       if (mode !== "local") throw err;
-      morpheCliCfg = { ...morpheCliCfg, mode: "stable" };
-      jarPath = await morpheCli.resolveMorpheCliJar({
+      engineCliCfg = { ...engineCliCfg, mode: "stable" };
+      jarPath = await this.patchProvider.resolveCliJar({
         configDir,
         workspaceDir: this.workspacePaths.root,
-        morpheCliCfg,
+        cliConfig: engineCliCfg,
         dryRun: false,
         force: false,
         ctx,
       });
     }
 
-    const patchPath = await mpp.resolvePatchFile({
+    const patchPath = await this.patchProvider.resolvePatchFile({
       app,
       appName,
       configDir,
       workspaceDir: this.workspacePaths.root,
-      patchesCfg,
+      patchConfig: patchesCfg,
       dryRun: false,
       force: false,
       ctx,
@@ -1192,7 +1204,7 @@ class TaskService {
       };
     }
 
-    const rawResult = await mpp.listPatchEntriesRaw({
+    const rawResult = await this.patchProvider.listPatchEntriesRaw({
       app,
       appName,
       jarPath,
@@ -1272,6 +1284,10 @@ class TaskService {
         taskFolderName: folderName,
         taskLogPath: await fileExists(taskLogPath) ? taskLogPath : null,
         args: info && Array.isArray(info.argv) ? info.argv : [],
+        patchProviderId:
+          info && hasValue(info.patchProviderId)
+            ? String(info.patchProviderId).trim()
+            : this.patchProviderId,
       });
     }
 
@@ -1335,6 +1351,10 @@ class TaskService {
       taskFolderName: String(taskId),
       taskLogPath: await fileExists(taskLogPath) ? taskLogPath : null,
       args: info && Array.isArray(info.argv) ? info.argv : [],
+      patchProviderId:
+        info && hasValue(info.patchProviderId)
+          ? String(info.patchProviderId).trim()
+          : this.patchProviderId,
     };
   }
 
@@ -1603,7 +1623,7 @@ class TaskService {
     const migrateWorkspace = !!(options && options.migrateWorkspace);
 
     const modes = {
-      morpheCliOnly: !!(options && options.morpheCliOnly),
+      engineCliOnly: !!(options && options.engineCliOnly),
       downloadOnly: !!(options && options.downloadOnly),
       patchesOnly: !!(options && options.patchesOnly),
       dryRun: !!(options && options.dryRun),
@@ -1612,9 +1632,9 @@ class TaskService {
     const persistLogs = options && Object.prototype.hasOwnProperty.call(options, "persistLogs")
       ? !!options.persistLogs
       : true;
-    const exclusiveModes = [modes.morpheCliOnly, modes.downloadOnly, modes.patchesOnly].filter(Boolean).length;
+    const exclusiveModes = [modes.engineCliOnly, modes.downloadOnly, modes.patchesOnly].filter(Boolean).length;
     if (exclusiveModes > 1) {
-      throw new Error("Options morpheCliOnly/downloadOnly/patchesOnly are mutually exclusive.");
+      throw new Error("Options engineCliOnly/downloadOnly/patchesOnly are mutually exclusive.");
     }
 
     const spawned = spawnCliTask(this.projectRoot, {
@@ -1662,6 +1682,7 @@ class TaskService {
       child: spawned.child,
       workspacePath,
       signingKeystorePath,
+      patchProviderId: this.patchProviderId,
       lines: [],
     };
 

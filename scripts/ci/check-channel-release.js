@@ -4,7 +4,7 @@
 const https = require("https");
 const fsp = require("fs").promises;
 
-const DEFAULT_MORPHE_CLI_REPO = "MorpheApp/morphe-cli";
+const DEFAULT_PATCH_CLI_REPO = "MorpheApp/morphe-cli";
 const DEFAULT_PATCHES_REPO = "MorpheApp/morphe-patches";
 const RELEASE_SOURCE_ANY = "any";
 const RELEASE_SOURCE_MANUAL = "manual";
@@ -149,7 +149,7 @@ async function main() {
     throw new Error("GITHUB_REPOSITORY is required.");
   }
 
-  const cliRepo = String(process.env.MORPHE_CLI_REPO || DEFAULT_MORPHE_CLI_REPO).trim();
+  const cliRepo = String(process.env.PATCH_CLI_REPO || DEFAULT_PATCH_CLI_REPO).trim();
   const patchesRepo = String(process.env.PATCHES_REPO || DEFAULT_PATCHES_REPO).trim();
   const releaseSourceScope = normalizeReleaseSourceScope(process.env.RELEASE_SOURCE_SCOPE);
 

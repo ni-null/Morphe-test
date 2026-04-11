@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { DEFAULT_ENGINE_SOURCE_REPO, DEFAULT_PATCH_BUNDLE_SOURCE_REPO } from "../../../lib/app-constants"
 
 export default function useBuildSourceSelectors({
   configForm,
@@ -15,10 +16,12 @@ export default function useBuildSourceSelectors({
   patchesRemoteDevValue,
   onChangeKeystoreSelect,
 }) {
-  const morpheCliSelectOptions = useMemo(() => {
+  const patchCliCfg = configForm?.patchCli || {}
+
+  const engineSelectOptions = useMemo(() => {
     const options = [
-      { value: morpheRemoteStableValue, label: "latest stable (MorpheApp/morphe-cli)", kind: "remote-stable" },
-      { value: morpheRemoteDevValue, label: "latest dev (MorpheApp/morphe-cli)", kind: "remote-dev" },
+      { value: morpheRemoteStableValue, label: `latest stable (${DEFAULT_ENGINE_SOURCE_REPO})`, kind: "remote-stable" },
+      { value: morpheRemoteDevValue, label: `latest dev (${DEFAULT_ENGINE_SOURCE_REPO})`, kind: "remote-dev" },
     ]
     const localItems = (Array.isArray(morpheLocalFiles) ? morpheLocalFiles : []).map((file) => ({
       value: String(file?.fullPath || "").trim(),
@@ -34,33 +37,33 @@ export default function useBuildSourceSelectors({
     return options
   }, [morpheLocalFiles, morpheRemoteStableValue, morpheRemoteDevValue, extractSourceFolderLabel, hasText])
 
-  const morpheCliSelectValue = useMemo(() => {
-    const mode = String(configForm?.morpheCli?.mode || "stable").trim().toLowerCase()
+  const engineSelectValue = useMemo(() => {
+    const mode = String(patchCliCfg?.mode || "stable").trim().toLowerCase()
     if (mode === "dev") return morpheRemoteDevValue
     if (mode === "stable") return morpheRemoteStableValue
-    const localValue = String(configForm?.morpheCli?.path || "").trim()
-    if (localValue && morpheCliSelectOptions.some((item) => item.value === localValue)) return localValue
+    const localValue = String(patchCliCfg?.path || "").trim()
+    if (localValue && engineSelectOptions.some((item) => item.value === localValue)) return localValue
     return morpheRemoteStableValue
-  }, [configForm?.morpheCli?.mode, configForm?.morpheCli?.path, morpheCliSelectOptions, morpheRemoteDevValue, morpheRemoteStableValue])
+  }, [patchCliCfg?.mode, patchCliCfg?.path, engineSelectOptions, morpheRemoteDevValue, morpheRemoteStableValue])
 
-  function onChangeMorpheCliSelect(value) {
+  function onChangeEngineSelect(value) {
     const selected = String(value || "").trim()
     if (!selected) return
     if (selected === morpheRemoteStableValue) {
-      updateConfigSection("morpheCli", { mode: "stable" })
+      updateConfigSection("patchCli", { mode: "stable" })
       return
     }
     if (selected === morpheRemoteDevValue) {
-      updateConfigSection("morpheCli", { mode: "dev" })
+      updateConfigSection("patchCli", { mode: "dev" })
       return
     }
-    updateConfigSection("morpheCli", { mode: "local", path: selected })
+    updateConfigSection("patchCli", { mode: "local", path: selected })
   }
 
   const patchesSelectOptions = useMemo(() => {
     const options = [
-      { value: patchesRemoteStableValue, label: "latest stable (MorpheApp/morphe-patches)", kind: "remote-stable" },
-      { value: patchesRemoteDevValue, label: "latest dev (MorpheApp/morphe-patches)", kind: "remote-dev" },
+      { value: patchesRemoteStableValue, label: `latest stable (${DEFAULT_PATCH_BUNDLE_SOURCE_REPO})`, kind: "remote-stable" },
+      { value: patchesRemoteDevValue, label: `latest dev (${DEFAULT_PATCH_BUNDLE_SOURCE_REPO})`, kind: "remote-dev" },
     ]
     const localItems = (Array.isArray(patchesLocalFiles) ? patchesLocalFiles : []).map((file) => ({
       value: String(file?.fullPath || "").trim(),
@@ -119,9 +122,12 @@ export default function useBuildSourceSelectors({
   }, [selectedKeystorePath, keystoreSelectOptions])
 
   return {
-    morpheCliSelectOptions,
-    morpheCliSelectValue,
-    onChangeMorpheCliSelect,
+    engineSelectOptions,
+    engineSelectValue,
+    onChangeEngineSelect,
+    patchBundleSelectOptions: patchesSelectOptions,
+    patchBundleSelectValue: patchesSelectValue,
+    onChangePatchBundleSelect: onChangePatchesSelect,
     patchesSelectOptions,
     patchesSelectValue,
     onChangePatchesSelect,

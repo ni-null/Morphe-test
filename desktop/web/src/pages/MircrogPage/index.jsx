@@ -10,6 +10,7 @@ import {
   formatPublishedAt,
   formatRepoPathOnly,
 } from "../AssetsPage/utils/assetsPageUtils"
+import { DEFAULT_MICROG_SOURCE_REPO } from "../../lib/app-constants"
 
 export default function MircrogPage({
   t,
@@ -199,7 +200,7 @@ export default function MircrogPage({
         addRepoOpen={addRepoDialogType === "morphe"}
         setAddRepoDialogType={setAddRepoDialogType}
         manageRepoOptions={repoOptions}
-        defaultRepo='MorpheApp/MicroG-RE'
+        defaultRepo={DEFAULT_MICROG_SOURCE_REPO}
         onDeleteManagedRepo={onDeleteRepo}
         addRepoDraft={repoDraft}
         addRepoBusy={addRepoBusy}

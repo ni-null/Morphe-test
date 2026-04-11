@@ -21,7 +21,8 @@
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |
 | `mode` | `string` | `stable` / `dev` / `local`。`local` 時需提供 `path`。 |
-| `patches_repo` | `string` | `morphe-cli` 的 GitHub repo（例如 `MorpheApp/morphe-cli`）。`stable/dev` 模式使用。 |
+| `patches_repo` / `source_repo` / `repo` | `string` | `morphe-cli` 的 GitHub repo（例如 `MorpheApp/morphe-cli`）。`stable/dev` 模式使用。 |
+| `repo_options` / `source_repo_options` | `string[]` | 可選 repo 清單，供 GUI 下拉切換。 |
 | `path` | `string` | 本地 jar 路徑。`local` 模式使用。 |
 | `ver` | `string` | 指定 jar 檔名（可選），例如 `morphe-cli-1.6.3-all.jar`。 |
 
@@ -30,7 +31,8 @@
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |
 | `mode` | `string` | `stable` / `dev` / `local`。`local` 時需提供 `path`。 |
-| `patches_repo` | `string` | patches 的 GitHub repo（例如 `MorpheApp/morphe-patches`）。`stable/dev` 模式使用。 |
+| `patches_repo` / `source_repo` / `repo` | `string` | patches 的 GitHub repo（例如 `MorpheApp/morphe-patches`）。`stable/dev` 模式使用。 |
+| `repo_options` / `source_repo_options` | `string[]` | 可選 repo 清單，供 GUI 下拉切換。 |
 | `path` | `string` | 本地 `.mpp` 路徑。`local` 模式使用。 |
 | `ver` | `string` | 指定 patches 檔名（可選），例如 `patches-1.23.0-dev.1.mpp`。 |
 
@@ -111,3 +113,10 @@ apkmirror-dlurl = "https://www.apkmirror.com/apk/google-inc/youtube"
 uptodown-dlurl = "https://youtube.en.uptodown.com/android"
 archive-dlurl = "https://dn790002.ca.archive.org/0/items/jhc-apks/apks/com.google.android.youtube/"
 ```
+
+## 相容性與遷移
+
+- 目前 GUI 採「雙讀雙寫」：
+  - 讀取時同時支援舊鍵（例如 `patches_repo`）與新鍵（例如 `source_repo`）。
+  - 儲存時會同時寫入舊鍵與新鍵，避免升級造成設定遺失。
+- 建議新設定逐步改用 `source_repo` / `source_repo_options`，舊鍵仍可持續使用。

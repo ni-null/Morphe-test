@@ -1,0 +1,11 @@
+{
+  "engine": {
+    "defaultRepo": "MorpheApp/morphe-cli"
+  },
+  "patchBundle": {
+    "defaultRepo": "MorpheApp/morphe-patches"
+  },
+  "microg": {
+    "defaultRepo": "MorpheApp/MicroG-RE"
+  }
+}

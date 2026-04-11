@@ -9,7 +9,7 @@ export function buildTaskPayload(configPath, flags, signingKeystorePath = "") {
     force: !!safeFlags.force,
     downloadOnly: false,
     patchesOnly: false,
-    morpheCliOnly: false,
+    engineCliOnly: false,
     persistLogs: true,
   }
 }
@@ -17,5 +17,5 @@ export function buildTaskPayload(configPath, flags, signingKeystorePath = "") {
 export function isBuildTask(task) {
   if (!task || !task.modes) return true
   const modes = task.modes || {}
-  return !modes.downloadOnly && !modes.patchesOnly && !modes.morpheCliOnly
+  return !modes.downloadOnly && !modes.patchesOnly && !modes.engineCliOnly
 }

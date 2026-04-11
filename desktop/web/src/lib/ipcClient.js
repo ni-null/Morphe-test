@@ -1,7 +1,7 @@
 import { uiDownloadManager } from "./uiDownloadManager"
 
 function getDesktopBridge() {
-  const bridge = window.morpheDesktop
+  const bridge = window.patcherDesktop
   if (!bridge || typeof bridge.invoke !== "function") {
     throw new Error("Desktop IPC bridge unavailable. Please launch via Electron desktop app.")
   }
@@ -123,6 +123,30 @@ export async function fetchAppCompatibleVersions(configPath, app) {
   )
 }
 
+export async function fetchEngineCompatibleVersions(configPath, app) {
+  const safeConfigPath = String(configPath || "")
+  const safeApp = app && typeof app === "object" ? app : {}
+  const packageName = String(safeApp.packageName || "").trim()
+  const methodKey = uiDownloadManager.makeInflightKey([
+    "engine-compat",
+    safeConfigPath,
+    packageName,
+  ])
+  const lockKey = uiDownloadManager.makeInflightKey([
+    "app-resource",
+    safeConfigPath,
+    packageName,
+  ])
+  return uiDownloadManager.runSerial(lockKey, () =>
+    uiDownloadManager.runSingleflight(methodKey, () =>
+      requestIpc("fetchEngineCompatibleVersions", {
+        configPath: safeConfigPath,
+        app: safeApp,
+      }),
+    ),
+  )
+}
+
 export async function fetchAppPatchOptions(configPath, app) {
   const safeConfigPath = String(configPath || "")
   const safeApp = app && typeof app === "object" ? app : {}
@@ -155,8 +179,44 @@ export async function fetchAppPatchOptions(configPath, app) {
   }
 }
 
+export async function fetchEnginePatchOptions(configPath, app) {
+  const safeConfigPath = String(configPath || "")
+  const safeApp = app && typeof app === "object" ? app : {}
+  const packageName = String(safeApp.packageName || "").trim()
+  const methodKey = uiDownloadManager.makeInflightKey([
+    "engine-patches",
+    safeConfigPath,
+    packageName,
+  ])
+  const lockKey = uiDownloadManager.makeInflightKey([
+    "app-resource",
+    safeConfigPath,
+    packageName,
+  ])
+  try {
+    return await uiDownloadManager.runSerial(lockKey, () =>
+      uiDownloadManager.runSingleflight(methodKey, () =>
+        requestIpc("fetchEnginePatchOptions", {
+          configPath: safeConfigPath,
+          app: safeApp,
+        }),
+      ),
+    )
+  } catch (error) {
+    const text = String(error?.message || error || "")
+    if (!text.includes("Unknown IPC method: fetchEnginePatchOptions")) {
+      throw error
+    }
+    throw new Error("Desktop 主程式版本過舊，請完全重啟桌面端（含 Electron 主程序）後再查詢補丁。")
+  }
+}
+
 export async function listSourceFiles(type) {
   return requestIpc("listSourceFiles", { type: String(type || "") })
+}
+
+export async function listArtifactSourceFiles(type) {
+  return requestIpc("listArtifactSourceFiles", { type: String(type || "") })
 }
 
 export async function fetchAndSaveSource(options) {
@@ -174,8 +234,27 @@ export async function fetchAndSaveSource(options) {
   )
 }
 
+export async function fetchAndSaveArtifactSource(options) {
+  const safeOptions = options && typeof options === "object" ? options : {}
+  const inflightKey = uiDownloadManager.makeInflightKey([
+    "artifact-source-download",
+    String(safeOptions.type || ""),
+    String(safeOptions.mode || ""),
+    String(safeOptions.repo || ""),
+    String(safeOptions.patchesRepo || ""),
+    String(safeOptions.version || ""),
+  ])
+  return uiDownloadManager.runSingleflight(inflightKey, () =>
+    requestIpc("fetchAndSaveArtifactSource", safeOptions),
+  )
+}
+
 export async function fetchSourceVersions(options) {
   return requestIpc("fetchSourceVersions", options || {})
+}
+
+export async function fetchArtifactSourceVersions(options) {
+  return requestIpc("fetchArtifactSourceVersions", options || {})
 }
 
 export async function listDownloadedApks() {
@@ -198,6 +277,10 @@ export async function openAssetsDir(kind) {
   return requestIpc("openAssetsDir", { kind: String(kind || "") })
 }
 
+export async function openArtifactSourceDir(kind) {
+  return requestIpc("openArtifactSourceDir", { kind: String(kind || "") })
+}
+
 export async function browseLocalApkPath(defaultPath = "") {
   return requestIpc("browseLocalApkPath", { defaultPath: String(defaultPath || "") })
 }
@@ -209,8 +292,22 @@ export async function deleteSourceFile(type, relativePath) {
   })
 }
 
+export async function deleteArtifactSourceFile(type, relativePath) {
+  return requestIpc("deleteArtifactSourceFile", {
+    type: String(type || ""),
+    relativePath: String(relativePath || ""),
+  })
+}
+
 export async function openSourceFile(type, relativePath) {
   return requestIpc("openSourceFile", {
+    type: String(type || ""),
+    relativePath: String(relativePath || ""),
+  })
+}
+
+export async function openArtifactSourceFile(type, relativePath) {
+  return requestIpc("openArtifactSourceFile", {
     type: String(type || ""),
     relativePath: String(relativePath || ""),
   })

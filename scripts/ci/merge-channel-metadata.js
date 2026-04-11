@@ -94,7 +94,7 @@ async function main() {
 
   const channels = [];
   const apps = [];
-  let morpheCli = null;
+  let patchCli = null;
 
   for (const item of channelMetadata) {
     const channel = normalizeChannel(item.channel);
@@ -107,8 +107,9 @@ async function main() {
       patchFiles: [...new Set(patchFiles)],
     });
 
-    if (!morpheCli && item.morpheCli) {
-      morpheCli = item.morpheCli;
+    const patchCliMeta = item && typeof item === "object" ? item.patchCli || null : null;
+    if (!patchCli && patchCliMeta) {
+      patchCli = patchCliMeta;
     }
 
     const itemApps = Array.isArray(item.apps) ? item.apps : [];
@@ -123,7 +124,7 @@ async function main() {
   const merged = {
     generatedAt: new Date().toISOString(),
     configPath: path.resolve(options.config),
-    morpheCli,
+    patchCli,
     channels,
     apps,
   };

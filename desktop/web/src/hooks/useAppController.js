@@ -43,18 +43,18 @@ import { BUILD_STAGE_DEFINITIONS, detectBuildStageIndexFromLine } from "../pages
 import { formatBytes, formatTaskLabel, isNotFoundError, statusVariant } from "../lib/task-format-core"
 import {
   LIVE_BUILD_TASK_ID_KEY,
-  MORPHE_SOURCE_REPOS_KEY,
-  PATCHES_SOURCE_REPOS_KEY,
+  ENGINE_SOURCE_REPOS_KEY,
+  PATCH_BUNDLE_SOURCE_REPOS_KEY,
+  SIGNING_SELECTED_KEYSTORE_PATH_KEY,
   MICROG_SOURCE_REPOS_KEY,
-  KEYSTORE_SELECTED_PATH_KEY,
-  DEFAULT_MORPHE_SOURCE_REPO,
-  DEFAULT_PATCHES_SOURCE_REPO,
+  DEFAULT_ENGINE_SOURCE_REPO,
+  DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
   DEFAULT_MICROG_SOURCE_REPO,
   APP_VER_AUTO_VALUE,
-  MORPHE_REMOTE_STABLE_VALUE,
-  MORPHE_REMOTE_DEV_VALUE,
-  PATCHES_REMOTE_STABLE_VALUE,
-  PATCHES_REMOTE_DEV_VALUE,
+  ENGINE_REMOTE_STABLE_VALUE,
+  ENGINE_REMOTE_DEV_VALUE,
+  PATCH_BUNDLE_REMOTE_STABLE_VALUE,
+  PATCH_BUNDLE_REMOTE_DEV_VALUE,
   DEFAULT_PACKAGE_META_MAP,
 } from "../lib/app-constants"
 import {
@@ -101,10 +101,14 @@ function useAppController() {
   const setAppSettingsOpen = useDialogStore((state) => state.setAppSettingsOpen)
   const appSettingsId = useDialogStore((state) => state.appSettingsId)
   const setAppSettingsId = useDialogStore((state) => state.setAppSettingsId)
-  const morpheSettingsOpen = useDialogStore((state) => state.morpheSettingsOpen)
-  const setMorpheSettingsOpen = useDialogStore((state) => state.setMorpheSettingsOpen)
-  const patchesSettingsOpen = useDialogStore((state) => state.patchesSettingsOpen)
-  const setPatchesSettingsOpen = useDialogStore((state) => state.setPatchesSettingsOpen)
+  const engineSettingsOpen = useDialogStore((state) => state.engineSettingsOpen)
+  const setEngineSettingsOpen = useDialogStore((state) => state.setEngineSettingsOpen)
+  const patchBundleSettingsOpen = useDialogStore((state) => state.patchBundleSettingsOpen)
+  const setPatchBundleSettingsOpen = useDialogStore((state) => state.setPatchBundleSettingsOpen)
+  const morpheSettingsOpen = engineSettingsOpen
+  const setMorpheSettingsOpen = setEngineSettingsOpen
+  const patchesSettingsOpen = patchBundleSettingsOpen
+  const setPatchesSettingsOpen = setPatchBundleSettingsOpen
   const confirmDialog = useDialogStore((state) => state.confirmDialog)
   const setConfirmDialog = useDialogStore((state) => state.setConfirmDialog)
   const confirmDialogBusy = useDialogStore((state) => state.confirmDialogBusy)
@@ -203,49 +207,49 @@ function useAppController() {
   })
 
   const {
-    morpheLocalFiles,
-    patchesLocalFiles,
+    engineLocalFiles,
+    patchBundleLocalFiles,
+    engineDeleteName,
+    patchBundleDeleteName,
+    engineSourceRepoOptions,
+    patchBundleSourceRepoOptions,
+    engineSourceRepo,
+    patchBundleSourceRepo,
+    engineSourceRepoDraft,
+    patchBundleSourceRepoDraft,
+    setEngineSourceRepoDraft,
+    setPatchBundleSourceRepoDraft,
+    engineSourceVersions,
+    patchBundleSourceVersions,
+    engineSourceVersion,
+    patchBundleSourceVersion,
+    setEngineSourceVersion,
+    setPatchBundleSourceVersion,
+    engineSourceDownloadingNames,
+    patchBundleSourceDownloadingNames,
+    onAddEngineSourceRepo,
+    onSelectEngineSourceRepo,
+    onDeleteEngineSourceRepo,
+    onAddPatchBundleSourceRepo,
+    onSelectPatchBundleSourceRepo,
+    onDeletePatchBundleSourceRepo,
+    onDeleteEngineFile,
+    onDeletePatchBundleFile,
+    onDownloadEngineFromSource,
+    onDownloadPatchBundleFromSource,
     keystoreFiles,
     selectedKeystorePath,
     setSelectedKeystorePath,
-    morpheDeleteName,
-    patchesDeleteName,
-    morpheSourceRepoOptions,
     setMorpheSourceRepoOptions,
-    morpheSourceRepo,
-    setMorpheSourceRepo,
-    morpheSourceRepoDraft,
-    setMorpheSourceRepoDraft,
-    morpheSourceVersions,
-    morpheSourceVersion,
-    setMorpheSourceVersion,
-    morpheSourceDownloadingNames,
-    patchesSourceRepoOptions,
     setPatchesSourceRepoOptions,
-    patchesSourceRepo,
-    setPatchesSourceRepo,
-    patchesSourceRepoDraft,
-    setPatchesSourceRepoDraft,
-    patchesSourceVersions,
-    patchesSourceVersion,
-    setPatchesSourceVersion,
-    patchesSourceDownloadingNames,
     onOpenAssetsDir,
-    onAddMorpheSourceRepo,
-    onSelectMorpheSourceRepo,
-    onDeleteMorpheSourceRepo,
-    onAddPatchesSourceRepo,
-    onSelectPatchesSourceRepo,
-    onDeletePatchesSourceRepo,
-    onDeleteMorpheFile,
-    onDeletePatchesFile,
-    onDownloadMorpheFromSource,
-    onDownloadPatchesFromSource,
     onChangeKeystoreSelect,
   } = useSourceAssetsState({
     activeNav,
     navAssetsKey: NAV_ASSETS,
     navBuildKey: NAV_BUILD,
+    engineSettingsOpen,
+    patchBundleSettingsOpen,
     morpheSettingsOpen,
     patchesSettingsOpen,
     configForm,
@@ -264,13 +268,13 @@ function useAppController() {
     deleteSourceFile,
     openAssetsDir,
     storageKeys: {
-      morpheSourceReposKey: MORPHE_SOURCE_REPOS_KEY,
-      patchesSourceReposKey: PATCHES_SOURCE_REPOS_KEY,
-      keystoreSelectedPathKey: KEYSTORE_SELECTED_PATH_KEY,
+      morpheSourceReposKey: ENGINE_SOURCE_REPOS_KEY,
+      patchesSourceReposKey: PATCH_BUNDLE_SOURCE_REPOS_KEY,
+      keystoreSelectedPathKey: SIGNING_SELECTED_KEYSTORE_PATH_KEY,
     },
     defaults: {
-      morpheSourceRepo: DEFAULT_MORPHE_SOURCE_REPO,
-      patchesSourceRepo: DEFAULT_PATCHES_SOURCE_REPO,
+      morpheSourceRepo: DEFAULT_ENGINE_SOURCE_REPO,
+      patchesSourceRepo: DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
     },
   })
 
@@ -283,7 +287,7 @@ function useAppController() {
     setRawConfigInput,
     setConfigForm,
     setSelectedKeystorePath,
-    setMorpheSourceRepoOptions,
+    setEngineSourceRepoOptions: setMorpheSourceRepoOptions,
     setPatchesSourceRepoOptions,
     lastSavedSignatureRef,
     setConfigLoaded,
@@ -291,8 +295,8 @@ function useAppController() {
     fetchConfig,
     configFormFromToml,
     mergeRepoOptions,
-    defaultMorpheSourceRepo: DEFAULT_MORPHE_SOURCE_REPO,
-    defaultPatchesSourceRepo: DEFAULT_PATCHES_SOURCE_REPO,
+    defaultEngineSourceRepo: DEFAULT_ENGINE_SOURCE_REPO,
+    defaultPatchesSourceRepo: DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
   })
 
   const {
@@ -363,9 +367,12 @@ function useAppController() {
   })
 
   const {
-    morpheCliSelectOptions,
-    morpheCliSelectValue,
-    onChangeMorpheCliSelect,
+    engineSelectOptions,
+    engineSelectValue,
+    onChangeEngineSelect,
+    patchBundleSelectOptions,
+    patchBundleSelectValue,
+    onChangePatchBundleSelect,
     patchesSelectOptions,
     patchesSelectValue,
     onChangePatchesSelect,
@@ -373,23 +380,24 @@ function useAppController() {
     keystoreSelectValue,
   } = useBuildSourceSelectors({
     configForm,
-    morpheLocalFiles,
-    patchesLocalFiles,
+    morpheLocalFiles: engineLocalFiles,
+    patchesLocalFiles: patchBundleLocalFiles,
     keystoreFiles,
     selectedKeystorePath,
     hasText,
     updateConfigSection,
     extractSourceFolderLabel,
-    morpheRemoteStableValue: MORPHE_REMOTE_STABLE_VALUE,
-    morpheRemoteDevValue: MORPHE_REMOTE_DEV_VALUE,
-    patchesRemoteStableValue: PATCHES_REMOTE_STABLE_VALUE,
-    patchesRemoteDevValue: PATCHES_REMOTE_DEV_VALUE,
+    morpheRemoteStableValue: ENGINE_REMOTE_STABLE_VALUE,
+    morpheRemoteDevValue: ENGINE_REMOTE_DEV_VALUE,
+    patchesRemoteStableValue: PATCH_BUNDLE_REMOTE_STABLE_VALUE,
+    patchesRemoteDevValue: PATCH_BUNDLE_REMOTE_DEV_VALUE,
     onChangeKeystoreSelect,
   })
 
   const {
     dialogTargetTaskId,
     dialogTargetStatus,
+    dialogTargetProviderId,
     dialogTargetLog,
     onOpenLogDialog,
     onLogDialogOpenChange,
@@ -428,14 +436,16 @@ function useAppController() {
     root.classList.remove("dark")
   }, [theme])
 
-  function updateConfigSection(sectionKey, patch) {
-    setConfigForm((prev) => ({
-      ...prev,
-      [sectionKey]: {
-        ...prev[sectionKey],
-        ...patch,
-      },
-    }))
+function updateConfigSection(sectionKey, patch) {
+    setConfigForm((prev) => {
+      return {
+        ...prev,
+        [sectionKey]: {
+          ...prev[sectionKey],
+          ...patch,
+        },
+      }
+    })
   }
 
   function updateApp(appId, patch) {
@@ -945,9 +955,9 @@ function useAppController() {
     setConfirmDialogBusy(true)
     try {
       if (action === "delete-morphe-file") {
-        await onDeleteMorpheFile(payload)
+        await onDeleteEngineFile(payload)
       } else if (action === "delete-patches-file") {
-        await onDeletePatchesFile(payload)
+        await onDeletePatchBundleFile(payload)
       } else if (action === "delete-apk-file") {
         await onDeleteDownloadedApkFile(payload)
       } else if (action === "delete-microg-file") {
@@ -1072,6 +1082,73 @@ function useAppController() {
     [setAppSettingsId, setAppSettingsOpen, loadConfig, hasText],
   )
 
+  const assetsLegacyAliasProps = {
+    morpheSourceRepo: engineSourceRepo,
+    morpheSourceRepoOptions: engineSourceRepoOptions,
+    morpheSourceRepoDraft: engineSourceRepoDraft,
+    setMorpheSourceRepoDraft: setEngineSourceRepoDraft,
+    onSelectMorpheSourceRepo: onSelectEngineSourceRepo,
+    onAddMorpheSourceRepo: onAddEngineSourceRepo,
+    onDeleteMorpheSourceRepo: onDeleteEngineSourceRepo,
+    morpheSourceVersion: engineSourceVersion,
+    setMorpheSourceVersion: setEngineSourceVersion,
+    morpheSourceVersions: engineSourceVersions,
+    onDownloadMorpheFromSource: onDownloadEngineFromSource,
+    morpheSourceDownloadingNames: engineSourceDownloadingNames,
+    morpheLocalFiles: engineLocalFiles,
+    morpheDeleteName: engineDeleteName,
+    patchesSourceRepo: patchBundleSourceRepo,
+    patchesSourceRepoOptions: patchBundleSourceRepoOptions,
+    patchesSourceRepoDraft: patchBundleSourceRepoDraft,
+    setPatchesSourceRepoDraft: setPatchBundleSourceRepoDraft,
+    onSelectPatchesSourceRepo: onSelectPatchBundleSourceRepo,
+    onAddPatchesSourceRepo: onAddPatchBundleSourceRepo,
+    onDeletePatchesSourceRepo: onDeletePatchBundleSourceRepo,
+    patchesSourceVersion: patchBundleSourceVersion,
+    setPatchesSourceVersion: setPatchBundleSourceVersion,
+    patchesSourceVersions: patchBundleSourceVersions,
+    onDownloadPatchesFromSource: onDownloadPatchBundleFromSource,
+    patchesSourceDownloadingNames: patchBundleSourceDownloadingNames,
+    patchesLocalFiles: patchBundleLocalFiles,
+    patchesDeleteName: patchBundleDeleteName,
+  }
+
+  const engineSettingsDialogSharedProps = {
+    open: morpheSettingsOpen,
+    onOpenChange: setMorpheSettingsOpen,
+    t,
+    configForm,
+    engineLocalFiles,
+    morpheLocalFiles: engineLocalFiles,
+    engineRemoteStableValue: ENGINE_REMOTE_STABLE_VALUE,
+    engineRemoteDevValue: ENGINE_REMOTE_DEV_VALUE,
+    morpheStableValue: ENGINE_REMOTE_STABLE_VALUE,
+    morpheDevValue: ENGINE_REMOTE_DEV_VALUE,
+    updateConfigSection,
+    formatBytes,
+    openConfirmDialog,
+    engineDeleteName,
+    morpheDeleteName: engineDeleteName,
+  }
+
+  const patchBundleSettingsDialogSharedProps = {
+    open: patchesSettingsOpen,
+    onOpenChange: setPatchesSettingsOpen,
+    t,
+    configForm,
+    patchBundleLocalFiles,
+    patchesLocalFiles: patchBundleLocalFiles,
+    patchBundleRemoteStableValue: PATCH_BUNDLE_REMOTE_STABLE_VALUE,
+    patchBundleRemoteDevValue: PATCH_BUNDLE_REMOTE_DEV_VALUE,
+    patchesStableValue: PATCH_BUNDLE_REMOTE_STABLE_VALUE,
+    patchesDevValue: PATCH_BUNDLE_REMOTE_DEV_VALUE,
+    updateConfigSection,
+    formatBytes,
+    openConfirmDialog,
+    patchBundleDeleteName,
+    patchesDeleteName: patchBundleDeleteName,
+  }
+
   return {
     t,
     locale,
@@ -1132,9 +1209,12 @@ function useAppController() {
       setConfigPathDialogOpen,
       rawConfigInput,
       setRawConfigInputValue: setRawConfigInput,
-      morpheCliSelectValue,
-      morpheCliSelectOptions,
-      onChangeMorpheCliSelect,
+      engineSelectValue,
+      engineSelectOptions,
+      onChangeEngineSelect,
+      patchBundleSelectValue,
+      patchBundleSelectOptions,
+      onChangePatchBundleSelect,
       patchesSelectValue,
       patchesSelectOptions,
       onChangePatchesSelect,
@@ -1158,35 +1238,36 @@ function useAppController() {
       t,
       hasText,
       formatBytes,
-      morpheSourceRepo,
-      morpheSourceRepoOptions,
-      morpheSourceRepoDraft,
-      setMorpheSourceRepoDraft,
-      onSelectMorpheSourceRepo,
-      onAddMorpheSourceRepo,
-      onDeleteMorpheSourceRepo,
-      morpheSourceVersion,
-      setMorpheSourceVersion,
-      morpheSourceVersions,
-      onDownloadMorpheFromSource,
-      morpheSourceDownloadingNames,
-      morpheLocalFiles,
+      engineSourceRepo,
+      engineSourceRepoOptions,
+      engineSourceRepoDraft,
+      setEngineSourceRepoDraft,
+      onSelectEngineSourceRepo,
+      onAddEngineSourceRepo,
+      onDeleteEngineSourceRepo,
+      engineSourceVersion,
+      setEngineSourceVersion,
+      engineSourceVersions,
+      onDownloadEngineFromSource,
+      engineSourceDownloadingNames,
+      engineLocalFiles,
+      engineDeleteName,
+      patchBundleSourceRepo,
+      patchBundleSourceRepoOptions,
+      patchBundleSourceRepoDraft,
+      setPatchBundleSourceRepoDraft,
+      onSelectPatchBundleSourceRepo,
+      onAddPatchBundleSourceRepo,
+      onDeletePatchBundleSourceRepo,
+      patchBundleSourceVersion,
+      setPatchBundleSourceVersion,
+      patchBundleSourceVersions,
+      onDownloadPatchBundleFromSource,
+      patchBundleSourceDownloadingNames,
+      patchBundleLocalFiles,
+      patchBundleDeleteName,
       openConfirmDialog,
-      morpheDeleteName,
-      patchesSourceRepo,
-      patchesSourceRepoOptions,
-      patchesSourceRepoDraft,
-      setPatchesSourceRepoDraft,
-      onSelectPatchesSourceRepo,
-      onAddPatchesSourceRepo,
-      onDeletePatchesSourceRepo,
-      patchesSourceVersion,
-      setPatchesSourceVersion,
-      patchesSourceVersions,
-      onDownloadPatchesFromSource,
-      patchesSourceDownloadingNames,
-      patchesLocalFiles,
-      patchesDeleteName,
+      ...assetsLegacyAliasProps,
       downloadedApkFiles,
       onOpenSourceFile,
       onOpenAssetsDir,
@@ -1213,6 +1294,7 @@ function useAppController() {
       setLogDialogOpen: onLogDialogOpenChange,
       taskId: dialogTargetTaskId,
       taskStatus: dialogTargetStatus,
+      taskProviderId: dialogTargetProviderId,
       statusVariant,
       taskLog: dialogTargetLog,
     },
@@ -1244,32 +1326,10 @@ function useAppController() {
       getPatchTranslation,
       toggleAppPatch,
     },
-    morpheSettingsDialogProps: {
-      open: morpheSettingsOpen,
-      onOpenChange: setMorpheSettingsOpen,
-      t,
-      configForm,
-      morpheLocalFiles,
-      morpheStableValue: MORPHE_REMOTE_STABLE_VALUE,
-      morpheDevValue: MORPHE_REMOTE_DEV_VALUE,
-      updateConfigSection,
-      formatBytes,
-      openConfirmDialog,
-      morpheDeleteName,
-    },
-    patchesSettingsDialogProps: {
-      open: patchesSettingsOpen,
-      onOpenChange: setPatchesSettingsOpen,
-      t,
-      configForm,
-      patchesLocalFiles,
-      patchesStableValue: PATCHES_REMOTE_STABLE_VALUE,
-      patchesDevValue: PATCHES_REMOTE_DEV_VALUE,
-      updateConfigSection,
-      formatBytes,
-      openConfirmDialog,
-      patchesDeleteName,
-    },
+    morpheSettingsDialogProps: engineSettingsDialogSharedProps,
+    engineSettingsDialogProps: engineSettingsDialogSharedProps,
+    patchesSettingsDialogProps: patchBundleSettingsDialogSharedProps,
+    patchBundleSettingsDialogProps: patchBundleSettingsDialogSharedProps,
     confirmActionDialogProps: {
       open: confirmDialog.open,
       onOpenChange: (open) => (!open ? closeConfirmDialog() : null),

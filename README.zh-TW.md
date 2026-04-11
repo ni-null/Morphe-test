@@ -21,7 +21,7 @@ npm ci
 
 4. 執行
 ```bash
-node ./main.js --config ./config.toml
+node ./cli/main.js --config ./config.toml
 ```
 
 5. 結果位置
@@ -34,7 +34,8 @@ node ./main.js --config ./config.toml
 - 任務資訊：`<workspace>/output/task-<...>/task-info.json`
 - 輸出 APK：`<workspace>/output/task-<...>/<app>/`
 - 建置資訊（完整 patch 流程）：`<workspace>/output/task-<...>/release-metadata.json`
-- 可用 `--workspace <path>` 或 `MORPHE_WORKSPACE` 覆寫 workspace
+- 可用 `--workspace <path>` 或 `PATCH_WORKSPACE` 覆寫 workspace（舊版相容：`MORPHE_WORKSPACE`）
+- 可用 `PATCH_PAGE_TIMEOUT_MS`、`PATCH_DOWNLOAD_TIMEOUT_MS`、`PATCH_HTTP_CACHE_TTL_MS` 微調網路逾時/快取（舊版相容：`MORPHE_*`）
 - 可用 `--migrate-workspace` 一次性遷移舊根目錄資料夾
 
 ## 最小設定範例
@@ -65,7 +66,7 @@ package_name = "com.google.android.youtube"
 現在只保留 Electron 桌面端，透過 IPC 溝通（不再使用獨立 `web-api`）：
 - 前端：`desktop/web/`（Vite + React）
 - 溝通層：`desktop/preload.js` + `desktop/ipc/handlers.js`
-- 核心流程：仍由 `main.js` CLI 執行
+- 核心流程：仍由 `cli/main.js` CLI 執行
 
 前端結構（維持適度拆分，不過度切碎）：
 - `desktop/web/src/App.jsx`：流程協調（狀態與動作串接）

@@ -11,9 +11,10 @@ function hasValue(value) {
 
 function getDefaultWorkspaceRoot(env = process.env) {
   const appName = "MorphePatcher";
+  const portableValue = String(env && env.PATCH_PORTABLE ? env.PATCH_PORTABLE : "").trim();
 
   // Portable mode: use relative workspace folder next to executable/source
-  const isPortable = env.MORPHE_PORTABLE === "1" ||
+  const isPortable = portableValue === "1" ||
     env.PORTABLE_EXECUTABLE_DIR ||
     env.DESKTOP_DEV ||
     (process.resourcesPath && process.resourcesPath);
@@ -72,7 +73,7 @@ function buildWorkspacePaths(workspaceRoot) {
     root,
     downloads: path.join(root, "downloads"),
     patches: path.join(root, "patches"),
-    morpheCli: path.join(root, "morphe-cli"),
+    engineCli: path.join(root, "engine-cli"),
     microg: path.join(root, "microg"),
     output: path.join(root, "output"),
     cache: path.join(root, "cache"),
@@ -85,7 +86,7 @@ async function ensureWorkspaceDirs(workspacePaths) {
   await fsp.mkdir(workspacePaths.root, { recursive: true });
   await fsp.mkdir(workspacePaths.downloads, { recursive: true });
   await fsp.mkdir(workspacePaths.patches, { recursive: true });
-  await fsp.mkdir(workspacePaths.morpheCli, { recursive: true });
+  await fsp.mkdir(workspacePaths.engineCli, { recursive: true });
   await fsp.mkdir(workspacePaths.microg, { recursive: true });
   await fsp.mkdir(workspacePaths.output, { recursive: true });
   await fsp.mkdir(workspacePaths.cache, { recursive: true });
@@ -134,7 +135,7 @@ async function migrateLegacyDirs(legacyRoot, workspacePaths, logInfo) {
   const mapping = [
     ["downloads", workspacePaths.downloads],
     ["patches", workspacePaths.patches],
-    ["morphe-cli", workspacePaths.morpheCli],
+    ["engine-cli", workspacePaths.engineCli],
     ["microg", workspacePaths.microg],
     ["output", workspacePaths.output],
     ["cache", workspacePaths.cache],

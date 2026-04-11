@@ -99,7 +99,8 @@ async function main() {
     throw new Error(`No app records in metadata: ${metadataPath}`);
   }
 
-  const cliFile = metadata.morpheCli && metadata.morpheCli.fileName ? metadata.morpheCli.fileName : "unknown";
+  const patchCliMetadata = metadata.patchCli || null;
+  const cliFile = patchCliMetadata && patchCliMetadata.fileName ? patchCliMetadata.fileName : "unknown";
   const channels = normalizeChannelRows(metadata, apps).sort((a, b) => compareChannel(a.channel, b.channel));
   const appsByChannel = new Map();
   for (const app of apps) {

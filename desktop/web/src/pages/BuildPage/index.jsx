@@ -27,12 +27,12 @@ export default function BuildPage({
   setConfigPathDialogOpen,
   rawConfigInput,
   setRawConfigInputValue,
-  morpheCliSelectValue,
-  morpheCliSelectOptions,
-  onChangeMorpheCliSelect,
-  patchesSelectValue,
-  patchesSelectOptions,
-  onChangePatchesSelect,
+  engineSelectValue,
+  engineSelectOptions,
+  onChangeEngineSelect,
+  patchBundleSelectValue,
+  patchBundleSelectOptions,
+  onChangePatchBundleSelect,
   keystoreSelectValue,
   keystoreSelectOptions,
   onChangeKeystoreSelect,
@@ -74,12 +74,12 @@ export default function BuildPage({
   }, [liveLastLine, t])
 
   const selectedMorpheItem = useMemo(
-    () => (Array.isArray(morpheCliSelectOptions) ? morpheCliSelectOptions : []).find((item) => item?.value === morpheCliSelectValue) || null,
-    [morpheCliSelectOptions, morpheCliSelectValue],
+    () => (Array.isArray(engineSelectOptions) ? engineSelectOptions : []).find((item) => item?.value === engineSelectValue) || null,
+    [engineSelectOptions, engineSelectValue],
   )
   const selectedPatchesItem = useMemo(
-    () => (Array.isArray(patchesSelectOptions) ? patchesSelectOptions : []).find((item) => item?.value === patchesSelectValue) || null,
-    [patchesSelectOptions, patchesSelectValue],
+    () => (Array.isArray(patchBundleSelectOptions) ? patchBundleSelectOptions : []).find((item) => item?.value === patchBundleSelectValue) || null,
+    [patchBundleSelectOptions, patchBundleSelectValue],
   )
   const selectedKeystoreItem = useMemo(
     () => (Array.isArray(keystoreSelectOptions) ? keystoreSelectOptions : []).find((item) => item?.value === keystoreSelectValue) || null,
@@ -115,16 +115,16 @@ export default function BuildPage({
             <div className='space-y-6'>
               <BuildSourceSection
                 t={t}
-                morpheCliSelectValue={morpheCliSelectValue}
-                onChangeMorpheCliSelect={onChangeMorpheCliSelect}
-                selectedMorpheItem={selectedMorpheItem}
+                engineSelectValue={engineSelectValue}
+                onChangeEngineSelect={onChangeEngineSelect}
+                selectedEngineItem={selectedMorpheItem}
+                engineSelectOptions={engineSelectOptions}
+                patchBundleSelectValue={patchBundleSelectValue}
+                onChangePatchBundleSelect={onChangePatchBundleSelect}
+                selectedPatchBundleItem={selectedPatchesItem}
+                patchBundleSelectOptions={patchBundleSelectOptions}
                 resolveSourceLabels={resolveSourceLabels}
-                morpheCliSelectOptions={morpheCliSelectOptions}
                 renderSourceOption={renderSourceOption}
-                patchesSelectValue={patchesSelectValue}
-                onChangePatchesSelect={onChangePatchesSelect}
-                selectedPatchesItem={selectedPatchesItem}
-                patchesSelectOptions={patchesSelectOptions}
                 keystoreSelectValue={keystoreSelectValue}
                 onChangeKeystoreSelect={onChangeKeystoreSelect}
                 selectedKeystoreItem={selectedKeystoreItem}

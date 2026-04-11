@@ -4,11 +4,17 @@
   "version": "0.1.0",
   "description": "Auto download APK and patch with morphe-cli on Windows",
   "workspaces": [
+    "cli",
     "desktop",
     "desktop/web"
   ],
   "scripts": {
     "test:patch-naming": "node ./tests/patch-naming.test.js",
+    "test:env-aliases": "node ./tests/env-aliases.test.js",
+    "test:providers": "node ./tests/providers.test.js",
+    "report:legacy-aliases": "node ./scripts/ci/report-legacy-aliases.js",
+    "report:legacy-aliases:check": "node ./scripts/ci/report-legacy-aliases.js --fail-on-hits",
+    "cli:start": "npm run start --workspace patcher-cli",
     "web:dev": "npm run dev --workspace morphe-web-ui",
     "web:ui": "npm run web:dev",
     "web:build": "npm run build --workspace morphe-web-ui",
@@ -18,9 +24,7 @@
     "desktop:pack": "npm run web:build && npm run pack --workspace morphe-desktop",
     "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace morphe-web-ui"
   },
-  "dependencies": {
-    "chalk": "^4.1.2"
-  },
+  "dependencies": {},
   "build": {
     "appId": "com.morphe.patcher",
     "productName": "Morphe Patcher",
@@ -34,11 +38,11 @@
       "main": "desktop/main.js"
     },
     "files": [
+      "cli/**/*",
       "desktop/main.js",
       "desktop/preload.js",
       "desktop/ipc/**/*",
       "desktop/web/dist/**/*",
-      "main.js",
       "scripts/**/*",
       "utils/**/*",
       "package.json"

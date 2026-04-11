@@ -52,7 +52,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           INPUT_FORCE: ${{ github.event.inputs.force }}
-          MORPHE_CLI_REPO: MorpheApp/morphe-cli
+          PATCH_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
           RELEASE_SOURCE_SCOPE: manual
         run: node ./scripts/ci/check-release-exists.js
@@ -98,7 +98,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           INPUT_FORCE: ${{ github.event.inputs.force }}
-          MORPHE_CLI_REPO: MorpheApp/morphe-cli
+          PATCH_CLI_REPO: MorpheApp/morphe-cli
           PATCHES_REPO: MorpheApp/morphe-patches
         run: node ./scripts/ci/check-channel-release.js --channel "${{ matrix.channel }}"
 
@@ -119,7 +119,7 @@ jobs:
       - name: Build Channel
         if: ${{ steps.channel_check.outputs.should_build == 'true' }}
         env:
-          MORPHE_KEYSTORE_BASE64: ${{ secrets.MORPHE_KEYSTORE_BASE64 }}
+          PATCH_KEYSTORE_BASE64: ${{ secrets.PATCH_KEYSTORE_BASE64 || secrets.MORPHE_KEYSTORE_BASE64 }}
           APKMIRROR_CF_RETRIES: "2"
         run: |
           configPath="${{ github.event.inputs.config_path }}"

@@ -9,7 +9,7 @@ export default function useConfigLifecycle({
   setRawConfigInput,
   setConfigForm,
   setSelectedKeystorePath,
-  setMorpheSourceRepoOptions,
+  setEngineSourceRepoOptions,
   setPatchesSourceRepoOptions,
   lastSavedSignatureRef,
   setConfigLoaded,
@@ -17,18 +17,21 @@ export default function useConfigLifecycle({
   fetchConfig,
   configFormFromToml,
   mergeRepoOptions,
-  defaultMorpheSourceRepo,
+  defaultEngineSourceRepo,
   defaultPatchesSourceRepo,
 }) {
+  const updateEngineSourceRepoOptions = setEngineSourceRepoOptions
+  const engineSourceRepoDefault = defaultEngineSourceRepo
   const applyLoadedConfig = useCallback(
     ({ content, resolvedPath }) => {
       const nextForm = configFormFromToml(content)
+      const nextPatchCli = nextForm?.patchCli || {}
       setConfigPath(resolvedPath)
       setRawConfigInput(content)
       setConfigForm(nextForm)
       setSelectedKeystorePath(String(nextForm?.signing?.keystorePath || "").trim())
-      setMorpheSourceRepoOptions(
-        mergeRepoOptions(nextForm?.morpheCli?.repoOptions, nextForm?.morpheCli?.patchesRepo, defaultMorpheSourceRepo),
+      updateEngineSourceRepoOptions(
+        mergeRepoOptions(nextPatchCli?.repoOptions, nextPatchCli?.patchesRepo, engineSourceRepoDefault),
       )
       setPatchesSourceRepoOptions(
         mergeRepoOptions(nextForm?.patches?.repoOptions, nextForm?.patches?.patchesRepo, defaultPatchesSourceRepo),
@@ -43,10 +46,10 @@ export default function useConfigLifecycle({
       setRawConfigInput,
       setConfigForm,
       setSelectedKeystorePath,
-      setMorpheSourceRepoOptions,
+      updateEngineSourceRepoOptions,
       setPatchesSourceRepoOptions,
       mergeRepoOptions,
-      defaultMorpheSourceRepo,
+      engineSourceRepoDefault,
       defaultPatchesSourceRepo,
       lastSavedSignatureRef,
       setConfigLoaded,

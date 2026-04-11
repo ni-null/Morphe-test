@@ -21,7 +21,7 @@ npm ci
 
 4. Run
 ```bash
-node ./main.js --config ./config.toml
+node ./cli/main.js --config ./config.toml
 ```
 
 5. Output
@@ -34,7 +34,8 @@ node ./main.js --config ./config.toml
 - Task info: `<workspace>/output/task-<...>/task-info.json`
 - Patched APKs: `<workspace>/output/task-<...>/<app>/`
 - Build metadata: `<workspace>/output/task-<...>/release-metadata.json`
-- Override workspace: `--workspace <path>` or `MORPHE_WORKSPACE=/path`
+- Override workspace: `--workspace <path>` or `PATCH_WORKSPACE=/path` (legacy: `MORPHE_WORKSPACE`)
+- Runtime network tuning: `PATCH_PAGE_TIMEOUT_MS`, `PATCH_DOWNLOAD_TIMEOUT_MS`, `PATCH_HTTP_CACHE_TTL_MS` (legacy: `MORPHE_*`)
 - Migrate legacy root folders once: `--migrate-workspace`
 
 ## Minimal Config Example
@@ -65,7 +66,7 @@ package_name = "com.google.android.youtube"
 Desktop UI is now Electron-only and communicates through IPC (no standalone web-api server):
 - Renderer: `desktop/web/` (Vite + React)
 - Bridge: `desktop/preload.js` + `desktop/ipc/handlers.js`
-- Core execution: still `main.js` CLI child process
+- Core execution: still `cli/main.js` CLI child process
 
 Renderer structure (kept intentionally simple):
 - `desktop/web/src/App.jsx`: orchestration only (state + action wiring)

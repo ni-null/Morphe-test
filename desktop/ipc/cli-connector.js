@@ -5,12 +5,13 @@ const { spawn } = require("child_process");
 
 const TASK_DIR_PATTERN = /Task output directory:\s*(.+)$/u;
 const TASK_LOG_PATTERN = /Task log file:\s*(.+)$/u;
+const CLI_ENTRY_RELATIVE_PATH = path.join("cli", "main.js");
 
 function buildCliArgs(projectRoot, options) {
   const configPath = options && options.configPath ? String(options.configPath) : path.join(projectRoot, "config.toml");
-  const args = [path.join(projectRoot, "main.js"), "--config", configPath];
+  const args = [path.join(projectRoot, CLI_ENTRY_RELATIVE_PATH), "--config", configPath];
 
-  if (options && options.morpheCliOnly) args.push("--morphe-cli");
+  if (options && options.engineCliOnly) args.push("--engine-cli");
   if (options && options.downloadOnly) args.push("--download-only");
   if (options && options.patchesOnly) args.push("--patches-only");
   if (options && options.dryRun) args.push("--dry-run");
@@ -29,7 +30,8 @@ function buildCliEnv(options) {
   // task status to remain "running" on the UI side.
   env.ELECTRON_RUN_AS_NODE = "1";
   if (options && options.signingKeystorePath) {
-    env.MORPHE_KEYSTORE_PATH = String(options.signingKeystorePath);
+    const keystorePath = String(options.signingKeystorePath);
+    env.PATCH_KEYSTORE_PATH = keystorePath;
   }
   return env;
 }

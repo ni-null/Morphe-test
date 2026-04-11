@@ -9,6 +9,8 @@ export const useDialogStore = create((set) => ({
   configPathDialogOpen: false,
   appSettingsOpen: false,
   appSettingsId: "",
+  engineSettingsOpen: false,
+  patchBundleSettingsOpen: false,
   morpheSettingsOpen: false,
   patchesSettingsOpen: false,
   confirmDialog: {
@@ -24,8 +26,26 @@ export const useDialogStore = create((set) => ({
   setConfigPathDialogOpen: (value) => set((state) => ({ configPathDialogOpen: resolveNext(state.configPathDialogOpen, value) })),
   setAppSettingsOpen: (value) => set((state) => ({ appSettingsOpen: resolveNext(state.appSettingsOpen, value) })),
   setAppSettingsId: (value) => set((state) => ({ appSettingsId: resolveNext(state.appSettingsId, value) })),
-  setMorpheSettingsOpen: (value) => set((state) => ({ morpheSettingsOpen: resolveNext(state.morpheSettingsOpen, value) })),
-  setPatchesSettingsOpen: (value) => set((state) => ({ patchesSettingsOpen: resolveNext(state.patchesSettingsOpen, value) })),
+  setEngineSettingsOpen: (value) =>
+    set((state) => {
+      const next = resolveNext(state.engineSettingsOpen, value)
+      return { engineSettingsOpen: next, morpheSettingsOpen: next }
+    }),
+  setPatchBundleSettingsOpen: (value) =>
+    set((state) => {
+      const next = resolveNext(state.patchBundleSettingsOpen, value)
+      return { patchBundleSettingsOpen: next, patchesSettingsOpen: next }
+    }),
+  setMorpheSettingsOpen: (value) =>
+    set((state) => {
+      const next = resolveNext(state.morpheSettingsOpen, value)
+      return { morpheSettingsOpen: next, engineSettingsOpen: next }
+    }),
+  setPatchesSettingsOpen: (value) =>
+    set((state) => {
+      const next = resolveNext(state.patchesSettingsOpen, value)
+      return { patchesSettingsOpen: next, patchBundleSettingsOpen: next }
+    }),
   setConfirmDialog: (value) => set((state) => ({ confirmDialog: resolveNext(state.confirmDialog, value) })),
   setConfirmDialogBusy: (value) => set((state) => ({ confirmDialogBusy: resolveNext(state.confirmDialogBusy, value) })),
 }))

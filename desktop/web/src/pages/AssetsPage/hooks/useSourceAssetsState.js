@@ -4,6 +4,8 @@ export default function useSourceAssetsState({
   activeNav,
   navAssetsKey,
   navBuildKey,
+  engineSettingsOpen,
+  patchBundleSettingsOpen,
   morpheSettingsOpen,
   patchesSettingsOpen,
   configForm,
@@ -24,12 +26,38 @@ export default function useSourceAssetsState({
   storageKeys,
   defaults,
 }) {
+  const currentMorpheSettingsOpen =
+    typeof engineSettingsOpen === "boolean" ? engineSettingsOpen : Boolean(morpheSettingsOpen)
+  const currentPatchesSettingsOpen =
+    typeof patchBundleSettingsOpen === "boolean" ? patchBundleSettingsOpen : Boolean(patchesSettingsOpen)
+  const currentPatchCliCfg = configForm?.patchCli || {}
+
+  const readStorageWithFallback = (primaryKey) => {
+    try {
+      const primaryValue = String(globalThis?.localStorage?.getItem(primaryKey) || "")
+      if (primaryValue) return primaryValue
+    } catch {
+      return ""
+    }
+    return ""
+  }
+
+  const writeStorageValue = (primaryKey, value) => {
+    localStorage.setItem(primaryKey, value)
+  }
+
+  const removeStorageValue = (primaryKey) => {
+    localStorage.removeItem(primaryKey)
+  }
+
   const [morpheLocalFiles, setMorpheLocalFiles] = useState([])
   const [patchesLocalFiles, setPatchesLocalFiles] = useState([])
   const [keystoreFiles, setKeystoreFiles] = useState([])
   const [selectedKeystorePath, setSelectedKeystorePath] = useState(() => {
     try {
-      return String(globalThis?.localStorage?.getItem(storageKeys.keystoreSelectedPathKey) || "").trim()
+      return String(
+        readStorageWithFallback(storageKeys.keystoreSelectedPathKey) || "",
+      ).trim()
     } catch {
       return ""
     }
@@ -38,7 +66,9 @@ export default function useSourceAssetsState({
   const [patchesDeleteName, setPatchesDeleteName] = useState("")
   const [morpheSourceRepoOptions, setMorpheSourceRepoOptions] = useState(() => {
     try {
-      const raw = String(globalThis?.localStorage?.getItem(storageKeys.morpheSourceReposKey) || "")
+      const raw = String(
+        readStorageWithFallback(storageKeys.morpheSourceReposKey) || "",
+      )
       if (!raw) return [defaults.morpheSourceRepo]
       const parsed = JSON.parse(raw)
       return mergeRepoOptions(parsed, defaults.morpheSourceRepo, defaults.morpheSourceRepo)
@@ -53,7 +83,9 @@ export default function useSourceAssetsState({
   const [morpheSourceDownloadingNames, setMorpheSourceDownloadingNames] = useState([])
   const [patchesSourceRepoOptions, setPatchesSourceRepoOptions] = useState(() => {
     try {
-      const raw = String(globalThis?.localStorage?.getItem(storageKeys.patchesSourceReposKey) || "")
+      const raw = String(
+        readStorageWithFallback(storageKeys.patchesSourceReposKey) || "",
+      )
       if (!raw) return [defaults.patchesSourceRepo]
       const parsed = JSON.parse(raw)
       return mergeRepoOptions(parsed, defaults.patchesSourceRepo, defaults.patchesSourceRepo)
@@ -69,7 +101,7 @@ export default function useSourceAssetsState({
 
   async function loadMorpheLocalFiles() {
     try {
-      const data = await listSourceFiles("morphe-cli")
+      const data = await listSourceFiles("engine-cli")
       setMorpheLocalFiles(sortFilesByVersion(Array.isArray(data?.files) ? data.files : []))
     } catch (error) {
       setMessage(error.message || String(error))
@@ -123,7 +155,7 @@ export default function useSourceAssetsState({
     }
     try {
       const data = await fetchSourceVersions({
-        type: "morphe-cli",
+        type: "engine-cli",
         repo,
       })
       const versions = dedupeSourceVersions(data?.versions)
@@ -211,12 +243,12 @@ export default function useSourceAssetsState({
   async function onAddMorpheSourceRepo() {
     const repo = String(morpheSourceRepoDraft || "").trim()
     if (!repo) return false
-    const exists = await validateSourceRepoExists("morphe-cli", repo)
+    const exists = await validateSourceRepoExists("engine-cli", repo)
     if (!exists) return false
     const nextOptions = mergeRepoOptions(morpheSourceRepoOptions, repo, defaults.morpheSourceRepo)
     setMorpheSourceRepoOptions(nextOptions)
     setMorpheSourceRepo(repo)
-    updateConfigSection("morpheCli", { repoOptions: nextOptions })
+    updateConfigSection("patchCli", { repoOptions: nextOptions })
     loadMorpheSourceVersions(repo)
     setMorpheSourceRepoDraft("")
     return true
@@ -226,7 +258,7 @@ export default function useSourceAssetsState({
     const repo = String(value || "").trim()
     const nextOptions = mergeRepoOptions(morpheSourceRepoOptions, value, defaults.morpheSourceRepo)
     setMorpheSourceRepoOptions(nextOptions)
-    updateConfigSection("morpheCli", { repoOptions: nextOptions })
+    updateConfigSection("patchCli", { repoOptions: nextOptions })
     setMorpheSourceRepo(repo)
     loadMorpheSourceVersions(repo)
   }
@@ -249,7 +281,7 @@ export default function useSourceAssetsState({
     const nextRepo = currentSelected.toLowerCase() === target.toLowerCase() ? String(nextOptions[0] || defaults.morpheSourceRepo) : currentSelected
     setMorpheSourceRepoOptions(nextOptions)
     setMorpheSourceRepo(nextRepo)
-    updateConfigSection("morpheCli", {
+    updateConfigSection("patchCli", {
       repoOptions: nextOptions,
     })
   }
@@ -306,10 +338,10 @@ export default function useSourceAssetsState({
     if (!relativePath) return
     setMorpheDeleteName(relativePath)
     try {
-      await deleteSourceFile("morphe-cli", relativePath)
-      const current = pickSourceFileName(configForm.morpheCli.path)
+      await deleteSourceFile("engine-cli", relativePath)
+      const current = pickSourceFileName(currentPatchCliCfg.path)
       if (current === fileName) {
-        updateConfigSection("morpheCli", { path: "" })
+        updateConfigSection("patchCli", { path: "" })
       }
       await loadMorpheLocalFiles()
       setMessage(t("msg.deleted", { name: relativePath }))
@@ -350,14 +382,14 @@ export default function useSourceAssetsState({
     })
     try {
       const data = await fetchAndSaveSource({
-        type: "morphe-cli",
+        type: "engine-cli",
         mode: "stable",
         patchesRepo: morpheSourceRepo,
         version: targetVersion,
       })
       await loadMorpheLocalFiles()
       if (hasText(data?.fullPath)) {
-        updateConfigSection("morpheCli", { path: String(data.fullPath) })
+        updateConfigSection("patchCli", { path: String(data.fullPath) })
       }
       setMorpheSourceVersion("")
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
@@ -421,24 +453,35 @@ export default function useSourceAssetsState({
   }
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.morpheSourceReposKey, JSON.stringify(morpheSourceRepoOptions))
+    writeStorageValue(
+      storageKeys.morpheSourceReposKey,
+      JSON.stringify(morpheSourceRepoOptions),
+    )
   }, [morpheSourceRepoOptions, storageKeys.morpheSourceReposKey])
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.patchesSourceReposKey, JSON.stringify(patchesSourceRepoOptions))
+    writeStorageValue(
+      storageKeys.patchesSourceReposKey,
+      JSON.stringify(patchesSourceRepoOptions),
+    )
   }, [patchesSourceRepoOptions, storageKeys.patchesSourceReposKey])
 
   useEffect(() => {
     if (!hasText(selectedKeystorePath)) {
-      localStorage.removeItem(storageKeys.keystoreSelectedPathKey)
+      removeStorageValue(storageKeys.keystoreSelectedPathKey)
       return
     }
-    localStorage.setItem(storageKeys.keystoreSelectedPathKey, selectedKeystorePath)
-  }, [selectedKeystorePath, hasText, storageKeys.keystoreSelectedPathKey])
+    writeStorageValue(
+      storageKeys.keystoreSelectedPathKey, selectedKeystorePath)
+  }, [
+    selectedKeystorePath,
+    hasText,
+    storageKeys.keystoreSelectedPathKey,
+  ])
 
   useEffect(() => {
-    if (morpheSettingsOpen) {
-      const nextOptions = mergeRepoOptions(configForm?.morpheCli?.repoOptions, "", defaults.morpheSourceRepo)
+    if (currentMorpheSettingsOpen) {
+      const nextOptions = mergeRepoOptions(currentPatchCliCfg?.repoOptions, "", defaults.morpheSourceRepo)
       const current = String(morpheSourceRepo || "")
         .trim()
         .toLowerCase()
@@ -453,16 +496,16 @@ export default function useSourceAssetsState({
       setMorpheSourceRepo(nextRepo)
       loadMorpheLocalFiles()
     }
-  }, [morpheSettingsOpen])
+  }, [currentMorpheSettingsOpen])
 
   useEffect(() => {
-    if (morpheSettingsOpen) {
+    if (currentMorpheSettingsOpen) {
       loadMorpheSourceVersions()
     }
-  }, [morpheSettingsOpen, morpheSourceRepo])
+  }, [currentMorpheSettingsOpen, morpheSourceRepo])
 
   useEffect(() => {
-    if (patchesSettingsOpen) {
+    if (currentPatchesSettingsOpen) {
       const nextOptions = mergeRepoOptions(configForm?.patches?.repoOptions, "", defaults.patchesSourceRepo)
       const current = String(patchesSourceRepo || "")
         .trim()
@@ -478,13 +521,13 @@ export default function useSourceAssetsState({
       setPatchesSourceRepo(nextRepo)
       loadPatchesLocalFiles()
     }
-  }, [patchesSettingsOpen])
+  }, [currentPatchesSettingsOpen])
 
   useEffect(() => {
-    if (patchesSettingsOpen) {
+    if (currentPatchesSettingsOpen) {
       loadPatchesSourceVersions()
     }
-  }, [patchesSettingsOpen, patchesSourceRepo])
+  }, [currentPatchesSettingsOpen, patchesSourceRepo])
 
   useEffect(() => {
     if (activeNav !== navAssetsKey && activeNav !== navBuildKey) return
@@ -498,6 +541,36 @@ export default function useSourceAssetsState({
   }, [activeNav])
 
   return {
+    engineLocalFiles: morpheLocalFiles,
+    patchBundleLocalFiles: patchesLocalFiles,
+    engineDeleteName: morpheDeleteName,
+    patchBundleDeleteName: patchesDeleteName,
+    engineSourceRepoOptions: morpheSourceRepoOptions,
+    patchBundleSourceRepoOptions: patchesSourceRepoOptions,
+    engineSourceRepo: morpheSourceRepo,
+    patchBundleSourceRepo: patchesSourceRepo,
+    engineSourceRepoDraft: morpheSourceRepoDraft,
+    patchBundleSourceRepoDraft: patchesSourceRepoDraft,
+    setEngineSourceRepoDraft: setMorpheSourceRepoDraft,
+    setPatchBundleSourceRepoDraft: setPatchesSourceRepoDraft,
+    engineSourceVersions: morpheSourceVersions,
+    patchBundleSourceVersions: patchesSourceVersions,
+    engineSourceVersion: morpheSourceVersion,
+    patchBundleSourceVersion: patchesSourceVersion,
+    setEngineSourceVersion: setMorpheSourceVersion,
+    setPatchBundleSourceVersion: setPatchesSourceVersion,
+    engineSourceDownloadingNames: morpheSourceDownloadingNames,
+    patchBundleSourceDownloadingNames: patchesSourceDownloadingNames,
+    onAddEngineSourceRepo: onAddMorpheSourceRepo,
+    onSelectEngineSourceRepo: onSelectMorpheSourceRepo,
+    onDeleteEngineSourceRepo: onDeleteMorpheSourceRepo,
+    onAddPatchBundleSourceRepo: onAddPatchesSourceRepo,
+    onSelectPatchBundleSourceRepo: onSelectPatchesSourceRepo,
+    onDeletePatchBundleSourceRepo: onDeletePatchesSourceRepo,
+    onDeleteEngineFile: onDeleteMorpheFile,
+    onDeletePatchBundleFile: onDeletePatchesFile,
+    onDownloadEngineFromSource: onDownloadMorpheFromSource,
+    onDownloadPatchBundleFromSource: onDownloadPatchesFromSource,
     morpheLocalFiles,
     patchesLocalFiles,
     keystoreFiles,

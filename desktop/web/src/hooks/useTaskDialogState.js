@@ -23,6 +23,11 @@ export default function useTaskDialogState({
     return tasks.find((task) => String(task?.id || "") === dialogTargetTaskId) || null
   }, [dialogTargetTaskId, liveTaskId, liveTask, selectedTask, tasks])
   const dialogTargetStatus = String(String(liveTaskId || "") === dialogTargetTaskId ? liveTaskStatus : dialogTargetTask?.status || "")
+  const dialogTargetProviderId = String(
+    String(liveTaskId || "") === dialogTargetTaskId
+      ? liveTask?.patchProviderId || dialogTargetTask?.patchProviderId || ""
+      : dialogTargetTask?.patchProviderId || "",
+  ).trim()
   const dialogTargetLog = String(
     String(liveTaskId || "") === dialogTargetTaskId ? liveTaskLog : taskLogs[dialogTargetTaskId] || selectedTaskLog || "",
   )
@@ -53,6 +58,7 @@ export default function useTaskDialogState({
   return {
     dialogTargetTaskId,
     dialogTargetStatus,
+    dialogTargetProviderId,
     dialogTargetLog,
     onOpenLogDialog,
     onLogDialogOpenChange,

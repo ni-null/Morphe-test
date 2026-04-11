@@ -228,7 +228,7 @@ async function main() {
     channel: options.channel,
     generatedAt: new Date().toISOString(),
     configPath: "",
-    morpheCli: {
+    patchCli: {
       fileName: options.cliFile,
     },
     patchFiles: [options.patchFile],

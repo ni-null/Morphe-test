@@ -123,7 +123,7 @@ function uniquePatchFiles(apps) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
-  const mainPath = path.join(cwd, "main.js");
+  const mainPath = path.join(cwd, "cli", "main.js");
   const baseConfigPath = path.resolve(cwd, options.config);
   const configDir = path.dirname(baseConfigPath);
   const outputDir = path.resolve(configDir, "output");
@@ -147,7 +147,7 @@ async function main() {
       channel: options.channel,
       generatedAt: new Date().toISOString(),
       configPath: parsed.configPath || baseConfigPath,
-      morpheCli: parsed.morpheCli || null,
+      patchCli: parsed.patchCli || null,
       patchFiles: uniquePatchFiles(apps),
       apps: apps.map((app) => ({
         ...app,

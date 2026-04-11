@@ -164,6 +164,18 @@ export default function useBuildExecutionState({
     [completedBuildTaskSignature],
   )
 
+  const taskProviderById = useMemo(() => {
+    const map = new Map()
+    for (const task of Array.isArray(tasks) ? tasks : []) {
+      const taskId = String(task?.id || "").trim()
+      if (!taskId) continue
+      const providerId = String(task?.patchProviderId || "").trim()
+      if (!providerId) continue
+      map.set(taskId, providerId)
+    }
+    return map
+  }, [tasks])
+
   useEffect(() => {
     if (activeNav !== navBuildKey) return
 
@@ -185,6 +197,7 @@ export default function useBuildExecutionState({
       completedBuildTaskIds.map(async (taskId) => {
         const data = await fetchTaskArtifacts(taskId)
         const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : []
+        const patchProviderId = String(taskProviderById.get(taskId) || "").trim()
         return artifacts.map((item) => ({
           taskId,
           fileName: String(item?.fileName || ""),
@@ -192,6 +205,7 @@ export default function useBuildExecutionState({
           relativePath: String(item?.relativePath || ""),
           sizeBytes: Number(item?.sizeBytes || 0),
           modifiedAt: String(item?.modifiedAt || ""),
+          patchProviderId,
         }))
       }),
     )
@@ -228,7 +242,7 @@ export default function useBuildExecutionState({
     return () => {
       canceled = true
     }
-  }, [activeNav, navBuildKey, completedBuildTaskIds, fetchTaskArtifacts])
+  }, [activeNav, navBuildKey, completedBuildTaskIds, fetchTaskArtifacts, taskProviderById])
 
   useEffect(() => {
     const status = String(liveTask?.status || "").toLowerCase()

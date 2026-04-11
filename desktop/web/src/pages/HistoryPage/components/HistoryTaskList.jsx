@@ -16,6 +16,7 @@ export default function HistoryTaskList({
   return (
     <div className='assets-scroll grid gap-2 max-h-[520px] overflow-auto pr-1'>
       {tasks.map((task) => {
+        const providerId = String(task?.patchProviderId || "").trim()
         return (
           <div key={task.id} className='w-full'>
             <div
@@ -30,7 +31,10 @@ export default function HistoryTaskList({
                 }
               }}>
               <div className='flex items-center justify-between gap-2'>
-                <span className='text-sm flex-1 min-w-0 break-all'>{formatTaskLabel(task)}</span>
+                <div className='min-w-0 flex-1'>
+                  <span className='block text-sm break-all'>{formatTaskLabel(task)}</span>
+                  {providerId ? <span className='block text-xs text-muted-foreground'>{t("history.patchProvider", { id: providerId })}</span> : null}
+                </div>
                 <div className='flex items-center gap-1 shrink-0'>
                   <Badge variant={statusVariant(task.status)} className='text-xs'>
                     {task.status || "unknown"}

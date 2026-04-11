@@ -162,25 +162,28 @@ function GeneratedApksSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((item) => (
-                    <tr key={`${item.taskId}:${item.relativePath}:${item.fileName}`} className='hover:bg-muted/30'>
-                      <td className='px-3 py-1.5'>
-                        <span className='inline-flex min-w-0 max-w-[560px] items-center gap-2'>
-                          {hasText(item.appIcon) ? (
-                            <img
-                              src={item.appIcon}
-                              alt={item.appKey}
-                              className='h-4 w-4 rounded-sm object-contain grayscale opacity-70 saturate-0 dark:invert dark:brightness-200 dark:opacity-90'
-                            />
-                          ) : (
-                            <Package className='h-4 w-4 text-muted-foreground' />
-                          )}
-                          <span className='min-w-0 truncate' title={`${resolveAppLabel(item.appKey)} / ${item.fileName}`}>
-                            <span className='sr-only'>{resolveAppLabel(item.appKey)} </span>
-                            {item.fileName}
+                  {filteredRows.map((item) => {
+                    const providerId = String(item?.patchProviderId || "").trim()
+                    return (
+                      <tr key={`${item.taskId}:${item.relativePath}:${item.fileName}`} className='hover:bg-muted/30'>
+                        <td className='px-3 py-1.5'>
+                          <span className='inline-flex min-w-0 max-w-[560px] items-center gap-2'>
+                            {hasText(item.appIcon) ? (
+                              <img
+                                src={item.appIcon}
+                                alt={item.appKey}
+                                className='h-4 w-4 rounded-sm object-contain grayscale opacity-70 saturate-0 dark:invert dark:brightness-200 dark:opacity-90'
+                              />
+                            ) : (
+                              <Package className='h-4 w-4 text-muted-foreground' />
+                            )}
+                            <span className='min-w-0' title={`${resolveAppLabel(item.appKey)} / ${item.fileName}`}>
+                              <span className='sr-only'>{resolveAppLabel(item.appKey)} </span>
+                              <span className='block truncate'>{item.fileName}</span>
+                              {providerId ? <span className='block text-[11px] text-muted-foreground'>{t("build.generated.provider", { id: providerId })}</span> : null}
+                            </span>
                           </span>
-                        </span>
-                      </td>
+                        </td>
                       <td className='px-3 py-1.5 text-right text-muted-foreground'>{formatBytes(item.sizeBytes)}</td>
                       <td className='px-3 py-1.5 text-right text-muted-foreground'>{formatApkModifiedAt(item.modifiedAt)}</td>
                       <td className='px-3 py-1.5 text-right'>
@@ -200,8 +203,9 @@ function GeneratedApksSection({
                           {t("build.generated.openDir")}
                         </Button>
                       </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

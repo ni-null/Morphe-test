@@ -67,7 +67,7 @@ function createInvokeHandler(projectRoot) {
         dryRun: normalizeBoolean(payload.dryRun),
         downloadOnly: normalizeBoolean(payload.downloadOnly),
         patchesOnly: normalizeBoolean(payload.patchesOnly),
-        morpheCliOnly: normalizeBoolean(payload.morpheCliOnly),
+        engineCliOnly: normalizeBoolean(payload.engineCliOnly),
         persistLogs,
       });
       return { task };
@@ -142,25 +142,25 @@ function createInvokeHandler(projectRoot) {
       return await taskService.openTaskArtifactDir(taskId, payload.relativePath);
     }
 
-    if (method === "fetchAppCompatibleVersions") {
+    if (method === "fetchAppCompatibleVersions" || method === "fetchEngineCompatibleVersions") {
       return await taskService.getAppCompatibleVersions({
         configPath: payload.configPath,
         app: payload.app && typeof payload.app === "object" ? payload.app : {},
       });
     }
 
-    if (method === "fetchAppPatchOptions") {
+    if (method === "fetchAppPatchOptions" || method === "fetchEnginePatchOptions") {
       return await taskService.getAppPatchEntries({
         configPath: payload.configPath,
         app: payload.app && typeof payload.app === "object" ? payload.app : {},
       });
     }
 
-    if (method === "listSourceFiles") {
+    if (method === "listSourceFiles" || method === "listArtifactSourceFiles") {
       return await taskService.listSourceFiles(payload.type);
     }
 
-    if (method === "fetchAndSaveSource") {
+    if (method === "fetchAndSaveSource" || method === "fetchAndSaveArtifactSource") {
       return await taskService.fetchAndSaveSource({
         type: payload.type,
         mode: payload.mode,
@@ -171,7 +171,7 @@ function createInvokeHandler(projectRoot) {
       });
     }
 
-    if (method === "fetchSourceVersions") {
+    if (method === "fetchSourceVersions" || method === "fetchArtifactSourceVersions") {
       return await taskService.listSourceRepoVersions({
         type: payload.type,
         repo: payload.repo,
@@ -188,7 +188,7 @@ function createInvokeHandler(projectRoot) {
       });
     }
 
-    if (method === "openAssetsDir") {
+    if (method === "openAssetsDir" || method === "openArtifactSourceDir") {
       return await taskService.openAssetsDir(payload.kind);
     }
 
@@ -208,7 +208,7 @@ function createInvokeHandler(projectRoot) {
       };
     }
 
-    if (method === "deleteSourceFile") {
+    if (method === "deleteSourceFile" || method === "deleteArtifactSourceFile") {
       return await taskService.deleteSourceFile({
         type: payload.type,
         fileName: payload.fileName,
@@ -216,7 +216,7 @@ function createInvokeHandler(projectRoot) {
       });
     }
 
-    if (method === "openSourceFile") {
+    if (method === "openSourceFile" || method === "openArtifactSourceFile") {
       return await taskService.openSourceFile(
         {
           type: payload.type,

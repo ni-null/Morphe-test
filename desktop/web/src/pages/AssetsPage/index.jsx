@@ -6,8 +6,8 @@ import packageNameMetaMap from "../../data/package-name-meta.json"
 import DownloadedApkCard from "./components/DownloadedApkCard"
 import ManageRepoDialog from "./components/ManageRepoDialog"
 import {
-  MORPHE_ADD_CUSTOM_REPO_VALUE,
-  MORPHE_LOCAL_SOURCE_VALUE,
+  ENGINE_ADD_CUSTOM_REPO_VALUE,
+  ENGINE_LOCAL_SOURCE_VALUE,
   PATCHES_ADD_CUSTOM_REPO_VALUE,
   PATCHES_LOCAL_SOURCE_VALUE,
   buildSectionToPackageMetaMap,
@@ -16,11 +16,40 @@ import {
   formatRepoPathOnly,
   groupApksByPackage,
 } from "./utils/assetsPageUtils"
+import { DEFAULT_ENGINE_SOURCE_REPO, DEFAULT_PATCH_BUNDLE_SOURCE_REPO } from "../../lib/app-constants"
 
 export default function AssetsPage({
   t,
   hasText,
   formatBytes,
+  engineSourceRepo,
+  engineSourceRepoOptions,
+  engineSourceRepoDraft,
+  setEngineSourceRepoDraft,
+  onSelectEngineSourceRepo,
+  onAddEngineSourceRepo,
+  onDeleteEngineSourceRepo,
+  engineSourceVersion,
+  setEngineSourceVersion,
+  engineSourceVersions,
+  onDownloadEngineFromSource,
+  engineSourceDownloadingNames,
+  engineLocalFiles,
+  engineDeleteName,
+  patchBundleSourceRepo,
+  patchBundleSourceRepoOptions,
+  patchBundleSourceRepoDraft,
+  setPatchBundleSourceRepoDraft,
+  onSelectPatchBundleSourceRepo,
+  onAddPatchBundleSourceRepo,
+  onDeletePatchBundleSourceRepo,
+  patchBundleSourceVersion,
+  setPatchBundleSourceVersion,
+  patchBundleSourceVersions,
+  onDownloadPatchBundleFromSource,
+  patchBundleSourceDownloadingNames,
+  patchBundleLocalFiles,
+  patchBundleDeleteName,
   morpheSourceRepo,
   morpheSourceRepoOptions,
   morpheSourceRepoDraft,
@@ -60,29 +89,63 @@ export default function AssetsPage({
   const [apkExpandedByGroup, setApkExpandedByGroup] = useState({})
   const [morpheRepoMode, setMorpheRepoMode] = useState("local")
   const [patchesRepoMode, setPatchesRepoMode] = useState("local")
+  const engineSourceModel = {
+    repo: hasText(engineSourceRepo) ? engineSourceRepo : morpheSourceRepo,
+    repoOptions: Array.isArray(engineSourceRepoOptions) ? engineSourceRepoOptions : morpheSourceRepoOptions,
+    repoDraft: typeof engineSourceRepoDraft === "string" ? engineSourceRepoDraft : morpheSourceRepoDraft,
+    setRepoDraft: setEngineSourceRepoDraft || setMorpheSourceRepoDraft,
+    onSelectRepo: onSelectEngineSourceRepo || onSelectMorpheSourceRepo,
+    onAddRepo: onAddEngineSourceRepo || onAddMorpheSourceRepo,
+    onDeleteRepo: onDeleteEngineSourceRepo || onDeleteMorpheSourceRepo,
+    sourceVersion: typeof engineSourceVersion === "string" ? engineSourceVersion : morpheSourceVersion,
+    setSourceVersion: setEngineSourceVersion || setMorpheSourceVersion,
+    sourceVersions: Array.isArray(engineSourceVersions) ? engineSourceVersions : morpheSourceVersions,
+    onDownloadFromSource: onDownloadEngineFromSource || onDownloadMorpheFromSource,
+    sourceDownloadingNames: Array.isArray(engineSourceDownloadingNames) ? engineSourceDownloadingNames : morpheSourceDownloadingNames,
+    localFiles: Array.isArray(engineLocalFiles) ? engineLocalFiles : morpheLocalFiles,
+    deleteName: typeof engineDeleteName === "string" ? engineDeleteName : morpheDeleteName,
+  }
+
+  const patchBundleSourceModel = {
+    repo: hasText(patchBundleSourceRepo) ? patchBundleSourceRepo : patchesSourceRepo,
+    repoOptions: Array.isArray(patchBundleSourceRepoOptions) ? patchBundleSourceRepoOptions : patchesSourceRepoOptions,
+    repoDraft: typeof patchBundleSourceRepoDraft === "string" ? patchBundleSourceRepoDraft : patchesSourceRepoDraft,
+    setRepoDraft: setPatchBundleSourceRepoDraft || setPatchesSourceRepoDraft,
+    onSelectRepo: onSelectPatchBundleSourceRepo || onSelectPatchesSourceRepo,
+    onAddRepo: onAddPatchBundleSourceRepo || onAddPatchesSourceRepo,
+    onDeleteRepo: onDeletePatchBundleSourceRepo || onDeletePatchesSourceRepo,
+    sourceVersion: typeof patchBundleSourceVersion === "string" ? patchBundleSourceVersion : patchesSourceVersion,
+    setSourceVersion: setPatchBundleSourceVersion || setPatchesSourceVersion,
+    sourceVersions: Array.isArray(patchBundleSourceVersions) ? patchBundleSourceVersions : patchesSourceVersions,
+    onDownloadFromSource: onDownloadPatchBundleFromSource || onDownloadPatchesFromSource,
+    sourceDownloadingNames: Array.isArray(patchBundleSourceDownloadingNames) ? patchBundleSourceDownloadingNames : patchesSourceDownloadingNames,
+    localFiles: Array.isArray(patchBundleLocalFiles) ? patchBundleLocalFiles : patchesLocalFiles,
+    deleteName: typeof patchBundleDeleteName === "string" ? patchBundleDeleteName : patchesDeleteName,
+  }
+
   const apkGroups = groupApksByPackage(downloadedApkFiles)
   const sectionMetaMap = buildSectionToPackageMetaMap(packageNameMetaMap)
   const addRepoOpen = addRepoDialogType === "morphe" || addRepoDialogType === "patches"
-  const addRepoDraft = addRepoDialogType === "patches" ? patchesSourceRepoDraft : morpheSourceRepoDraft
-  const morpheLocalFileNameSet = new Set(morpheLocalFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
-  const patchesLocalFileNameSet = new Set(patchesLocalFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
-  const morpheMixedItems = buildSourceMixedItems(morpheSourceVersions, morpheLocalFiles, morpheSourceRepo)
-  const patchesMixedItems = buildSourceMixedItems(patchesSourceVersions, patchesLocalFiles, patchesSourceRepo)
-  const manageRepoOptions = addRepoDialogType === "patches" ? patchesSourceRepoOptions : morpheSourceRepoOptions
+  const addRepoDraft = addRepoDialogType === "patches" ? patchBundleSourceModel.repoDraft : engineSourceModel.repoDraft
+  const morpheLocalFileNameSet = new Set(engineSourceModel.localFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
+  const patchesLocalFileNameSet = new Set(patchBundleSourceModel.localFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
+  const morpheMixedItems = buildSourceMixedItems(engineSourceModel.sourceVersions, engineSourceModel.localFiles, engineSourceModel.repo)
+  const patchesMixedItems = buildSourceMixedItems(patchBundleSourceModel.sourceVersions, patchBundleSourceModel.localFiles, patchBundleSourceModel.repo)
+  const manageRepoOptions = addRepoDialogType === "patches" ? patchBundleSourceModel.repoOptions : engineSourceModel.repoOptions
   const isPatchesManageDialog = addRepoDialogType === "patches"
-  const defaultRepo = isPatchesManageDialog ? "MorpheApp/morphe-patches" : "MorpheApp/morphe-cli"
+  const defaultRepo = isPatchesManageDialog ? DEFAULT_PATCH_BUNDLE_SOURCE_REPO : DEFAULT_ENGINE_SOURCE_REPO
 
   async function onConfirmAddRepo() {
     if (addRepoBusy) return
     setAddRepoBusy(true)
     if (addRepoDialogType === "morphe") {
-      const ok = await onAddMorpheSourceRepo()
+      const ok = await engineSourceModel.onAddRepo()
       if (ok) setAddRepoDialogType("")
       setAddRepoBusy(false)
       return
     }
     if (addRepoDialogType === "patches") {
-      const ok = await onAddPatchesSourceRepo()
+      const ok = await patchBundleSourceModel.onAddRepo()
       if (ok) setAddRepoDialogType("")
     }
     setAddRepoBusy(false)
@@ -90,23 +153,23 @@ export default function AssetsPage({
 
   function onDeleteManagedRepo(repo) {
     if (isPatchesManageDialog) {
-      onDeletePatchesSourceRepo(repo)
+      patchBundleSourceModel.onDeleteRepo(repo)
       return
     }
-    onDeleteMorpheSourceRepo(repo)
+    engineSourceModel.onDeleteRepo(repo)
   }
 
   function onChangeMorpheRepo(value) {
-    if (value === MORPHE_ADD_CUSTOM_REPO_VALUE) {
+    if (value === ENGINE_ADD_CUSTOM_REPO_VALUE) {
       setAddRepoDialogType("morphe")
       return
     }
-    if (value === MORPHE_LOCAL_SOURCE_VALUE) {
+    if (value === ENGINE_LOCAL_SOURCE_VALUE) {
       setMorpheRepoMode("local")
       return
     }
     setMorpheRepoMode("remote")
-    onSelectMorpheSourceRepo(value)
+    engineSourceModel.onSelectRepo(value)
   }
 
   function onChangePatchesRepo(value) {
@@ -119,23 +182,23 @@ export default function AssetsPage({
       return
     }
     setPatchesRepoMode("remote")
-    onSelectPatchesSourceRepo(value)
+    patchBundleSourceModel.onSelectRepo(value)
   }
 
   function onDownloadMorpheItem(fileName) {
     const next = String(fileName || "")
-    setMorpheSourceVersion(next)
+    engineSourceModel.setSourceVersion(next)
     if (!hasText(next)) return
     if (morpheLocalFileNameSet.has(next.trim().toLowerCase())) return
-    onDownloadMorpheFromSource(next)
+    engineSourceModel.onDownloadFromSource(next)
   }
 
   function onDownloadPatchesItem(fileName) {
     const next = String(fileName || "")
-    setPatchesSourceVersion(next)
+    patchBundleSourceModel.setSourceVersion(next)
     if (!hasText(next)) return
     if (patchesLocalFileNameSet.has(next.trim().toLowerCase())) return
-    onDownloadPatchesFromSource(next)
+    patchBundleSourceModel.onDownloadFromSource(next)
   }
 
   return (
@@ -146,14 +209,14 @@ export default function AssetsPage({
             <Settings2 className='h-4 w-4' />
             {t("assets.cli")}
           </h2>
-          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("morphe-cli")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
+          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => onOpenAssetsDir("engine-cli")} aria-label={t("dialog.openTaskOutput")} title={t("dialog.openTaskOutput")}>
             <FolderOpen className='h-4 w-4' />
           </Button>
         </div>
         <div className='space-y-2.5 rounded-xl bg-white p-2.5 dark:bg-slate-800/70'>
             <div className='flex items-center gap-2'>
               <div className='min-w-0 flex-1'>
-                <Select value={morpheRepoMode === "local" ? MORPHE_LOCAL_SOURCE_VALUE : hasText(morpheSourceRepo) ? morpheSourceRepo : "MorpheApp/morphe-cli"} onValueChange={onChangeMorpheRepo}>
+                <Select value={morpheRepoMode === "local" ? ENGINE_LOCAL_SOURCE_VALUE : hasText(engineSourceModel.repo) ? engineSourceModel.repo : DEFAULT_ENGINE_SOURCE_REPO} onValueChange={onChangeMorpheRepo}>
                   <SelectTrigger className='border-0 bg-transparent shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent'>
                     <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                       <FolderGit2 className='h-3.5 w-3.5' />
@@ -162,17 +225,17 @@ export default function AssetsPage({
                     <SelectValue className='min-w-0' />
                   </SelectTrigger>
                   <SelectContent position='popper' side='bottom' align='start'>
-                    <SelectItem value={MORPHE_LOCAL_SOURCE_VALUE} className='h-8'>
+                    <SelectItem value={ENGINE_LOCAL_SOURCE_VALUE} className='h-8'>
                       {t("source.localOnly")}
                     </SelectItem>
                     <SelectSeparator />
-                    {morpheSourceRepoOptions.map((repo) => (
+                    {engineSourceModel.repoOptions.map((repo) => (
                       <SelectItem key={`assets-morphe-repo-${repo}`} value={repo} className='h-8'>
                         <span className='min-w-0 truncate'>{repo}</span>
                       </SelectItem>
                     ))}
                     <SelectSeparator />
-                    <SelectItem value={MORPHE_ADD_CUSTOM_REPO_VALUE} className='h-8'>
+                    <SelectItem value={ENGINE_ADD_CUSTOM_REPO_VALUE} className='h-8'>
                       + {t("source.manageRepo")}
                     </SelectItem>
                   </SelectContent>
@@ -181,13 +244,13 @@ export default function AssetsPage({
             </div>
             {morpheRepoMode === "local" ? (
               <div className='space-y-2'>
-                {morpheLocalFiles.length === 0 ? (
+                {engineSourceModel.localFiles.length === 0 ? (
                   <p className='text-sm text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
                 ) : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
-                    {morpheLocalFiles.map((file) => (
+                    {engineSourceModel.localFiles.map((file) => (
                       <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
-                        <div className='min-w-0 cursor-pointer' onClick={() => onOpenSourceFile("morphe-cli", file)}>
+                        <div className='min-w-0 cursor-pointer' onClick={() => onOpenSourceFile("engine-cli", file)}>
                           <div className='flex min-w-0 items-center gap-2 text-sm'>
                             <span className='shrink-0 font-medium'>{file.name}</span>
                             <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{formatRepoPathOnly(file.relativePath)}</span>
@@ -200,9 +263,9 @@ export default function AssetsPage({
                             variant='ghost'
                             size='icon'
                             className='h-6 w-6 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'
-                            disabled={morpheDeleteName === file.relativePath}
+                            disabled={engineSourceModel.deleteName === file.relativePath}
                             onClick={() => openConfirmDialog("delete-morphe-file", t("confirm.deleteMorpheTitle"), t("confirm.deleteMorpheDesc", { path: file.relativePath }), file)}>
-                            {morpheDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
+                            {engineSourceModel.deleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
                           </Button>
                         </div>
                       </div>
@@ -215,14 +278,14 @@ export default function AssetsPage({
                 {morpheMixedItems.length === 0 ? null : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {morpheMixedItems.map((item) => {
-                      const isDownloading = (Array.isArray(morpheSourceDownloadingNames) ? morpheSourceDownloadingNames : []).includes(String(item.fileName || "").trim())
+                      const isDownloading = (Array.isArray(engineSourceModel.sourceDownloadingNames) ? engineSourceModel.sourceDownloadingNames : []).includes(String(item.fileName || "").trim())
                       const canDownload = item.isRemote && !item.hasLocal
                       const canOpenLocal = item.hasLocal && hasText(item.relativePath)
                       return (
                         <div
                           key={`assets-morphe-mixed-${item.key}`}
                           className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${(canDownload || canOpenLocal) ? "cursor-pointer hover:bg-muted/40" : ""}`}
-                          onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : canOpenLocal ? () => onOpenSourceFile("morphe-cli", { relativePath: item.relativePath }) : undefined}>
+                          onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : canOpenLocal ? () => onOpenSourceFile("engine-cli", { relativePath: item.relativePath }) : undefined}>
                           <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                             {item.hasLocal ? (
                               <Check className='h-4 w-4 shrink-0 text-emerald-600' />
@@ -257,7 +320,7 @@ export default function AssetsPage({
         <div className='space-y-2.5 rounded-xl bg-white p-2.5 dark:bg-slate-800/70'>
             <div className='flex items-center gap-2'>
               <div className='min-w-0 flex-1'>
-                <Select value={patchesRepoMode === "local" ? PATCHES_LOCAL_SOURCE_VALUE : hasText(patchesSourceRepo) ? patchesSourceRepo : "MorpheApp/morphe-patches"} onValueChange={onChangePatchesRepo}>
+                <Select value={patchesRepoMode === "local" ? PATCHES_LOCAL_SOURCE_VALUE : hasText(patchBundleSourceModel.repo) ? patchBundleSourceModel.repo : DEFAULT_PATCH_BUNDLE_SOURCE_REPO} onValueChange={onChangePatchesRepo}>
                   <SelectTrigger className='border-0 bg-transparent shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent'>
                     <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                       <FolderGit2 className='h-3.5 w-3.5' />
@@ -270,7 +333,7 @@ export default function AssetsPage({
                       {t("source.localOnly")}
                     </SelectItem>
                     <SelectSeparator />
-                    {patchesSourceRepoOptions.map((repo) => (
+                    {patchBundleSourceModel.repoOptions.map((repo) => (
                       <SelectItem key={`assets-patches-repo-${repo}`} value={repo} className='h-8'>
                         <span className='min-w-0 truncate'>{repo}</span>
                       </SelectItem>
@@ -285,11 +348,11 @@ export default function AssetsPage({
             </div>
             {patchesRepoMode === "local" ? (
               <div className='space-y-2'>
-                {patchesLocalFiles.length === 0 ? (
+                {patchBundleSourceModel.localFiles.length === 0 ? (
                   <p className='text-sm text-muted-foreground'>{t("patches.noLocalFiles")}</p>
                 ) : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
-                    {patchesLocalFiles.map((file) => (
+                    {patchBundleSourceModel.localFiles.map((file) => (
                       <div key={`assets-patches-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                         <div className='min-w-0 cursor-pointer' onClick={() => onOpenSourceFile("patches", file)}>
                           <div className='flex min-w-0 items-center gap-2 text-sm'>
@@ -304,9 +367,9 @@ export default function AssetsPage({
                             variant='ghost'
                             size='icon'
                             className='h-6 w-6 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'
-                            disabled={patchesDeleteName === file.relativePath}
+                            disabled={patchBundleSourceModel.deleteName === file.relativePath}
                             onClick={() => openConfirmDialog("delete-patches-file", t("confirm.deletePatchesTitle"), t("confirm.deletePatchesDesc", { path: file.relativePath }), file)}>
-                            {patchesDeleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
+                            {patchBundleSourceModel.deleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
                           </Button>
                         </div>
                       </div>
@@ -319,7 +382,7 @@ export default function AssetsPage({
                 {patchesMixedItems.length === 0 ? null : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {patchesMixedItems.map((item) => {
-                      const isDownloading = (Array.isArray(patchesSourceDownloadingNames) ? patchesSourceDownloadingNames : []).includes(String(item.fileName || "").trim())
+                      const isDownloading = (Array.isArray(patchBundleSourceModel.sourceDownloadingNames) ? patchBundleSourceModel.sourceDownloadingNames : []).includes(String(item.fileName || "").trim())
                       const canDownload = item.isRemote && !item.hasLocal
                       const canOpenLocal = item.hasLocal && hasText(item.relativePath)
                       return (
@@ -371,8 +434,8 @@ export default function AssetsPage({
         addRepoDraft={addRepoDraft}
         addRepoBusy={addRepoBusy}
         addRepoDialogType={addRepoDialogType}
-        setPatchesSourceRepoDraft={setPatchesSourceRepoDraft}
-        setMorpheSourceRepoDraft={setMorpheSourceRepoDraft}
+        setPatchesSourceRepoDraft={patchBundleSourceModel.setRepoDraft}
+        setMorpheSourceRepoDraft={engineSourceModel.setRepoDraft}
         onConfirmAddRepo={onConfirmAddRepo}
         hasText={hasText}
       />

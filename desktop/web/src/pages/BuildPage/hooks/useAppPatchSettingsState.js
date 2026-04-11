@@ -24,15 +24,15 @@ export default function useAppPatchSettingsState({
 
   const editingApp = useMemo(() => configForm.apps.find((app) => app.id === appSettingsId) || null, [configForm.apps, appSettingsId])
   function buildAppResourceCacheKey(app) {
-    const morpheCliCfg = configForm?.morpheCli || {}
+    const patchCliCfg = configForm?.patchCli || {}
     const patchesCfg = configForm?.patches || {}
     return [
       String(app?.packageName || "").trim().toLowerCase(),
       String(app?.mode || "remote").trim().toLowerCase(),
-      String(morpheCliCfg.mode || "stable").trim().toLowerCase(),
-      String(morpheCliCfg.path || "").trim(),
-      String(morpheCliCfg.ver || "").trim(),
-      String(morpheCliCfg.patchesRepo || "").trim(),
+      String(patchCliCfg.mode || "stable").trim().toLowerCase(),
+      String(patchCliCfg.path || "").trim(),
+      String(patchCliCfg.ver || "").trim(),
+      String(patchCliCfg.patchesRepo || "").trim(),
       String(patchesCfg.mode || "stable").trim().toLowerCase(),
       String(patchesCfg.path || "").trim(),
       String(patchesCfg.ver || "").trim(),
