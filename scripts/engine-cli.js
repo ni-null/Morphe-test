@@ -2,7 +2,6 @@
 
 const path = require("path");
 
-const DEFAULT_ENGINE_CLI_REPO = "MorpheApp/morphe-cli";
 const DEFAULT_ENGINE_CLI_DIR_REL = "./engine-cli";
 
 function repoToDirName(repo) {
@@ -57,7 +56,10 @@ function pickJarAssetFromRelease(release, mode, ctx) {
 }
 
 async function fetchRepoReleases(repo, ctx) {
-  const repoValue = ctx.hasValue(repo) ? String(repo).trim() : DEFAULT_ENGINE_CLI_REPO;
+  const repoValue = String(repo || "").trim();
+  if (!repoValue) {
+    throw new Error("engine repo is required. Define [engine].repo (or [engine].patches_repo).");
+  }
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repoValue)) {
     throw new Error(`Invalid engine-cli repo format: ${repoValue}. Expected owner/repo.`);
   }
@@ -145,8 +147,7 @@ async function resolveEngineCliJar(params) {
   }
 
   const repo =
-    ctx.pickFirstValue(engineCliCfg || {}, ["patches_repo", "patches-repo", "repo"]) ||
-    DEFAULT_ENGINE_CLI_REPO;
+    ctx.pickFirstValue(engineCliCfg || {}, ["patches_repo", "patches-repo", "repo"]);
   const lockedVersionName =
     ctx.pickFirstValue(engineCliCfg || {}, ["ver", "version", "jar_ver", "jar-ver"]) || null;
 
@@ -218,8 +219,7 @@ async function probeEngineCliJar(params) {
   }
 
   const repo =
-    ctx.pickFirstValue(engineCliCfg || {}, ["patches_repo", "patches-repo", "repo"]) ||
-    DEFAULT_ENGINE_CLI_REPO;
+    ctx.pickFirstValue(engineCliCfg || {}, ["patches_repo", "patches-repo", "repo"]);
   const lockedVersionName =
     ctx.pickFirstValue(engineCliCfg || {}, ["ver", "version", "jar_ver", "jar-ver"]) || null;
   const fetched = await fetchRepoReleases(repo, ctx);

@@ -1,5 +1,5 @@
 export const BUILD_STAGE_DEFINITIONS = [
-  { key: "morpheCli", labelKey: "build.stage.morpheCli" },
+  { key: "engineCli", labelKey: "build.stage.engineCli" },
   { key: "patches", labelKey: "build.stage.patches" },
   { key: "downloadApk", labelKey: "build.stage.downloadApk" },
   { key: "javaBuild", labelKey: "build.stage.javaBuild" },
@@ -27,9 +27,8 @@ export function detectBuildStageIndexFromLine(line) {
   const matchesPatches = text.includes("patch file") || text.includes("auto patch bundle") || text.includes("patches") || text.includes(" patch ")
   if (matchesPatches) return 1
 
-  const matchesMorpheCli =
-    text.includes("morphe-cli") || text.includes("morphe cli") || text.includes("locked morphe-cli") || text.includes("auto morphe-cli")
-  if (matchesMorpheCli) return 0
+  const matchesEngineCli = text.includes("engine-cli") || text.includes("locked engine-cli") || text.includes("auto engine-cli")
+  if (matchesEngineCli) return 0
 
   return -1
 }

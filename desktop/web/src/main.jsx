@@ -9,15 +9,15 @@ import Sidebar from "./components/layout/sidebar/Sidebar"
 import AppSettingsDialog from "./pages/BuildPage/components/AppSettingsDialog"
 import ConfigPathDialog from "./pages/BuildPage/components/ConfigPathDialog"
 import ConfirmActionDialog from "./components/dialogs/ConfirmActionDialog"
-import MorpheSettingsDialog from "./pages/AssetsPage/components/MorpheSettingsDialog"
+import EngineSettingsDialog from "./pages/AssetsPage/components/EngineSettingsDialog"
 import PatchesSettingsDialog from "./pages/AssetsPage/components/PatchesSettingsDialog"
 import TaskDialogs from "./components/dialogs/TaskDialogs"
 import "./styles.css"
 
 function App() {
   const c = useAppController()
-  const engineSettingsDialogProps = c.engineSettingsDialogProps || c.morpheSettingsDialogProps || {}
-  const patchBundleSettingsDialogProps = c.patchBundleSettingsDialogProps || c.patchesSettingsDialogProps || {}
+  const engineSettingsDialogProps = c.engineSettingsDialogProps || {}
+  const patchBundleSettingsDialogProps = c.patchBundleSettingsDialogProps || {}
 
   return (
     <div className='shell-layout'>
@@ -32,7 +32,7 @@ function App() {
         <TaskDialogs {...c.taskDialogsProps} />
         <ConfigPathDialog {...c.configPathDialogProps} />
         <AppSettingsDialog {...c.appSettingsDialogProps} />
-        <MorpheSettingsDialog {...engineSettingsDialogProps} />
+        <EngineSettingsDialog {...engineSettingsDialogProps} />
         <PatchesSettingsDialog {...patchBundleSettingsDialogProps} />
         <ConfirmActionDialog {...c.confirmActionDialogProps} />
       </main>

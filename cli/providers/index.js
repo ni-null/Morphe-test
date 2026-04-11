@@ -5,7 +5,6 @@ const stubProvider = require("./stub");
 
 const REQUIRED_PROVIDER_KEYS = [
   "id",
-  "defaultPatchesRepo",
   "resolveCliJar",
   "resolvePatchFile",
   "listPatchEntries",
@@ -40,10 +39,7 @@ function assertPatchProviderShape(provider, providerId) {
   if (typeof provider.id !== "string" || !provider.id.trim()) {
     throw new Error(`Invalid patch provider [${providerId}]: id must be a non-empty string.`);
   }
-  if (typeof provider.defaultPatchesRepo !== "string") {
-    throw new Error(`Invalid patch provider [${providerId}]: defaultPatchesRepo must be a string.`);
-  }
-  for (const methodName of REQUIRED_PROVIDER_KEYS.slice(2)) {
+  for (const methodName of REQUIRED_PROVIDER_KEYS.slice(1)) {
     if (typeof provider[methodName] !== "function") {
       throw new Error(`Invalid patch provider [${providerId}]: "${methodName}" must be a function.`);
     }

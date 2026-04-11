@@ -4,11 +4,9 @@
 const https = require("https");
 const fsp = require("fs").promises;
 
-const DEFAULT_REPO = "MorpheApp/MicroG-RE";
-
 function parseArgs(argv) {
   const options = {
-    repo: DEFAULT_REPO,
+    repo: "",
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -29,7 +27,7 @@ function parseArgs(argv) {
 function requestJson(url, token) {
   return new Promise((resolve, reject) => {
     const headers = {
-      "User-Agent": "morphe-ci-microg",
+      "User-Agent": "patcher-ci-microg",
       Accept: "application/vnd.github+json",
     };
     if (token && String(token).trim()) {
@@ -92,6 +90,9 @@ async function setOutput(name, value) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (!String(options.repo || "").trim()) {
+    throw new Error("--repo is required.");
+  }
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(String(options.repo || ""))) {
     throw new Error(`Invalid repo format: ${options.repo}`);
   }

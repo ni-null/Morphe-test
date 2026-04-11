@@ -11,8 +11,6 @@ export const useDialogStore = create((set) => ({
   appSettingsId: "",
   engineSettingsOpen: false,
   patchBundleSettingsOpen: false,
-  morpheSettingsOpen: false,
-  patchesSettingsOpen: false,
   confirmDialog: {
     open: false,
     action: "",
@@ -29,22 +27,12 @@ export const useDialogStore = create((set) => ({
   setEngineSettingsOpen: (value) =>
     set((state) => {
       const next = resolveNext(state.engineSettingsOpen, value)
-      return { engineSettingsOpen: next, morpheSettingsOpen: next }
+      return { engineSettingsOpen: next }
     }),
   setPatchBundleSettingsOpen: (value) =>
     set((state) => {
       const next = resolveNext(state.patchBundleSettingsOpen, value)
-      return { patchBundleSettingsOpen: next, patchesSettingsOpen: next }
-    }),
-  setMorpheSettingsOpen: (value) =>
-    set((state) => {
-      const next = resolveNext(state.morpheSettingsOpen, value)
-      return { morpheSettingsOpen: next, engineSettingsOpen: next }
-    }),
-  setPatchesSettingsOpen: (value) =>
-    set((state) => {
-      const next = resolveNext(state.patchesSettingsOpen, value)
-      return { patchesSettingsOpen: next, patchBundleSettingsOpen: next }
+      return { patchBundleSettingsOpen: next }
     }),
   setConfirmDialog: (value) => set((state) => ({ confirmDialog: resolveNext(state.confirmDialog, value) })),
   setConfirmDialogBusy: (value) => set((state) => ({ confirmDialogBusy: resolveNext(state.confirmDialogBusy, value) })),

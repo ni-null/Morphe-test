@@ -67,7 +67,7 @@ function fileExists(filePath) {
 function requestJson(url, token) {
   return new Promise((resolve, reject) => {
     const headers = {
-      "User-Agent": "morphe-ci-reuse-assets",
+      "User-Agent": "patcher-ci-reuse-assets",
       Accept: "application/vnd.github+json",
     };
     if (token && String(token).trim()) {
@@ -101,7 +101,7 @@ function downloadToFile(url, outFile, token, redirects = 0) {
       return;
     }
     const client = String(url).toLowerCase().startsWith("https://") ? https : http;
-    const headers = { "User-Agent": "morphe-ci-reuse-assets-download" };
+    const headers = { "User-Agent": "patcher-ci-reuse-assets-download" };
     if (token && String(token).trim()) {
       headers.Authorization = `Bearer ${String(token).trim()}`;
     }
@@ -153,10 +153,10 @@ function downloadToFile(url, outFile, token, redirects = 0) {
 function parseAppFromPatchedName(fileName, patchBase) {
   const name = String(fileName || "").trim();
   const suffix = `-${patchBase}.apk`;
-  if (!name.startsWith("morphe-") || !name.endsWith(suffix)) {
+  if (!name.startsWith("patcher-") || !name.endsWith(suffix)) {
     return null;
   }
-  const middle = name.slice("morphe-".length, -suffix.length);
+  const middle = name.slice("patcher-".length, -suffix.length);
   const match = middle.match(/^(.+)-([0-9][0-9A-Za-z.\-]*)$/u);
   if (!match) {
     return null;

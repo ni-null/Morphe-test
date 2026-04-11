@@ -3,15 +3,15 @@ import { DEFAULT_ENGINE_SOURCE_REPO, DEFAULT_PATCH_BUNDLE_SOURCE_REPO } from "..
 
 export default function useBuildSourceSelectors({
   configForm,
-  morpheLocalFiles,
+  engineLocalFiles,
   patchesLocalFiles,
   keystoreFiles,
   selectedKeystorePath,
   hasText,
   updateConfigSection,
   extractSourceFolderLabel,
-  morpheRemoteStableValue,
-  morpheRemoteDevValue,
+  engineRemoteStableValue,
+  engineRemoteDevValue,
   patchesRemoteStableValue,
   patchesRemoteDevValue,
   onChangeKeystoreSelect,
@@ -20,10 +20,10 @@ export default function useBuildSourceSelectors({
 
   const engineSelectOptions = useMemo(() => {
     const options = [
-      { value: morpheRemoteStableValue, label: `latest stable (${DEFAULT_ENGINE_SOURCE_REPO})`, kind: "remote-stable" },
-      { value: morpheRemoteDevValue, label: `latest dev (${DEFAULT_ENGINE_SOURCE_REPO})`, kind: "remote-dev" },
+      { value: engineRemoteStableValue, label: `latest stable (${DEFAULT_ENGINE_SOURCE_REPO})`, kind: "remote-stable" },
+      { value: engineRemoteDevValue, label: `latest dev (${DEFAULT_ENGINE_SOURCE_REPO})`, kind: "remote-dev" },
     ]
-    const localItems = (Array.isArray(morpheLocalFiles) ? morpheLocalFiles : []).map((file) => ({
+    const localItems = (Array.isArray(engineLocalFiles) ? engineLocalFiles : []).map((file) => ({
       value: String(file?.fullPath || "").trim(),
       label: String(file?.name || "").trim() || String(file?.relativePath || "").trim(),
       folderLabel: extractSourceFolderLabel(file),
@@ -35,25 +35,25 @@ export default function useBuildSourceSelectors({
       options.push(item)
     }
     return options
-  }, [morpheLocalFiles, morpheRemoteStableValue, morpheRemoteDevValue, extractSourceFolderLabel, hasText])
+  }, [engineLocalFiles, engineRemoteStableValue, engineRemoteDevValue, extractSourceFolderLabel, hasText])
 
   const engineSelectValue = useMemo(() => {
     const mode = String(patchCliCfg?.mode || "stable").trim().toLowerCase()
-    if (mode === "dev") return morpheRemoteDevValue
-    if (mode === "stable") return morpheRemoteStableValue
+    if (mode === "dev") return engineRemoteDevValue
+    if (mode === "stable") return engineRemoteStableValue
     const localValue = String(patchCliCfg?.path || "").trim()
     if (localValue && engineSelectOptions.some((item) => item.value === localValue)) return localValue
-    return morpheRemoteStableValue
-  }, [patchCliCfg?.mode, patchCliCfg?.path, engineSelectOptions, morpheRemoteDevValue, morpheRemoteStableValue])
+    return engineRemoteStableValue
+  }, [patchCliCfg?.mode, patchCliCfg?.path, engineSelectOptions, engineRemoteDevValue, engineRemoteStableValue])
 
   function onChangeEngineSelect(value) {
     const selected = String(value || "").trim()
     if (!selected) return
-    if (selected === morpheRemoteStableValue) {
+    if (selected === engineRemoteStableValue) {
       updateConfigSection("patchCli", { mode: "stable" })
       return
     }
-    if (selected === morpheRemoteDevValue) {
+    if (selected === engineRemoteDevValue) {
       updateConfigSection("patchCli", { mode: "dev" })
       return
     }

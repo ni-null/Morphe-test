@@ -73,7 +73,7 @@ export default function BuildPage({
     return message || t("build.waiting")
   }, [liveLastLine, t])
 
-  const selectedMorpheItem = useMemo(
+  const selectedEngineItem = useMemo(
     () => (Array.isArray(engineSelectOptions) ? engineSelectOptions : []).find((item) => item?.value === engineSelectValue) || null,
     [engineSelectOptions, engineSelectValue],
   )
@@ -117,7 +117,7 @@ export default function BuildPage({
                 t={t}
                 engineSelectValue={engineSelectValue}
                 onChangeEngineSelect={onChangeEngineSelect}
-                selectedEngineItem={selectedMorpheItem}
+                selectedEngineItem={selectedEngineItem}
                 engineSelectOptions={engineSelectOptions}
                 patchBundleSelectValue={patchBundleSelectValue}
                 onChangePatchBundleSelect={onChangePatchBundleSelect}

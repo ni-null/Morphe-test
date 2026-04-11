@@ -4,8 +4,6 @@
 const https = require("https");
 const fsp = require("fs").promises;
 
-const DEFAULT_PATCH_CLI_REPO = "MorpheApp/morphe-cli";
-const DEFAULT_PATCHES_REPO = "MorpheApp/morphe-patches";
 const RELEASE_SOURCE_ANY = "any";
 const RELEASE_SOURCE_MANUAL = "manual";
 const RELEASE_SOURCE_SCHEDULED = "scheduled";
@@ -40,7 +38,7 @@ function isDevIdentifier(text) {
 function requestJson(url, token) {
   return new Promise((resolve, reject) => {
     const headers = {
-      "User-Agent": "morphe-ci-channel-check",
+      "User-Agent": "patcher-ci-channel-check",
       Accept: "application/vnd.github+json",
     };
     if (token && String(token).trim()) {
@@ -139,6 +137,17 @@ async function setOutput(name, value) {
   await fsp.appendFile(outputPath, `${name}=${value}\n`, "utf8");
 }
 
+function readRequiredRepoFromEnv(name) {
+  const value = String(process.env[name] || "").trim();
+  if (!value) {
+    throw new Error(`${name} is required.`);
+  }
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(value)) {
+    throw new Error(`Invalid ${name} format: ${value}`);
+  }
+  return value;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const force = String(process.env.INPUT_FORCE || "").toLowerCase() === "true";
@@ -149,8 +158,8 @@ async function main() {
     throw new Error("GITHUB_REPOSITORY is required.");
   }
 
-  const cliRepo = String(process.env.PATCH_CLI_REPO || DEFAULT_PATCH_CLI_REPO).trim();
-  const patchesRepo = String(process.env.PATCHES_REPO || DEFAULT_PATCHES_REPO).trim();
+  const cliRepo = readRequiredRepoFromEnv("PATCH_CLI_REPO");
+  const patchesRepo = readRequiredRepoFromEnv("PATCHES_REPO");
   const releaseSourceScope = normalizeReleaseSourceScope(process.env.RELEASE_SOURCE_SCOPE);
 
   const [cliReleases, patchReleases, currentReleases] = await Promise.all([

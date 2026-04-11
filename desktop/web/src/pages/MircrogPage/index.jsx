@@ -55,7 +55,7 @@ export default function MircrogPage({
 
   function onChangeRepo(value) {
     if (value === MICROG_ADD_CUSTOM_REPO_VALUE) {
-      setAddRepoDialogType("morphe")
+      setAddRepoDialogType("engine")
       return
     }
     if (value === MICROG_LOCAL_SOURCE_VALUE) {
@@ -197,16 +197,16 @@ export default function MircrogPage({
 
       <ManageRepoDialog
         t={t}
-        addRepoOpen={addRepoDialogType === "morphe"}
+        addRepoOpen={addRepoDialogType === "engine"}
         setAddRepoDialogType={setAddRepoDialogType}
         manageRepoOptions={repoOptions}
         defaultRepo={DEFAULT_MICROG_SOURCE_REPO}
         onDeleteManagedRepo={onDeleteRepo}
         addRepoDraft={repoDraft}
         addRepoBusy={addRepoBusy}
-        addRepoDialogType='morphe'
+        addRepoDialogType='engine'
         setPatchesSourceRepoDraft={() => {}}
-        setMorpheSourceRepoDraft={setRepoDraft}
+        setEngineSourceRepoDraft={setRepoDraft}
         onConfirmAddRepo={onConfirmAddRepo}
         hasText={hasText}
       />

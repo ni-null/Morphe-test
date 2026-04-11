@@ -1,8 +1,8 @@
 {
-  "name": "morphe-test",
+  "name": "patcher-builder",
   "private": true,
   "version": "0.1.0",
-  "description": "Auto download APK and patch with morphe-cli on Windows",
+  "description": "Auto download APK and patch with engine-cli on Windows",
   "workspaces": [
     "cli",
     "desktop",
@@ -15,19 +15,19 @@
     "report:legacy-aliases": "node ./scripts/ci/report-legacy-aliases.js",
     "report:legacy-aliases:check": "node ./scripts/ci/report-legacy-aliases.js --fail-on-hits",
     "cli:start": "npm run start --workspace patcher-cli",
-    "web:dev": "npm run dev --workspace morphe-web-ui",
+    "web:dev": "npm run dev --workspace patcher-web-ui",
     "web:ui": "npm run web:dev",
-    "web:build": "npm run build --workspace morphe-web-ui",
-    "desktop:install": "npm install --workspace morphe-desktop",
-    "desktop:dev": "npm run dev --workspace morphe-desktop",
-    "desktop:start": "npm run web:build && npm run start --workspace morphe-desktop",
-    "desktop:pack": "npm run web:build && npm run pack --workspace morphe-desktop",
-    "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace morphe-web-ui"
+    "web:build": "npm run build --workspace patcher-web-ui",
+    "desktop:install": "npm install --workspace patcher-desktop",
+    "desktop:dev": "npm run dev --workspace patcher-desktop",
+    "desktop:start": "npm run web:build && npm run start --workspace patcher-desktop",
+    "desktop:pack": "npm run web:build && npm run pack --workspace patcher-desktop",
+    "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace patcher-web-ui"
   },
   "dependencies": {},
   "build": {
-    "appId": "com.morphe.patcher",
-    "productName": "Morphe Patcher",
+    "appId": "com.patcher.builder",
+    "productName": "APK Patcher",
     "asar": true,
     "compression": "maximum",
     "electronLanguages": [

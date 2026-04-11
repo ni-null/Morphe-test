@@ -603,7 +603,6 @@ class TaskService {
       logInfo: () => {},
       logWarn: () => {},
       logStep: () => {},
-      defaultPatchesRepo: this.patchProvider.defaultPatchesRepo,
     };
   }
 

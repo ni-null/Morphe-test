@@ -6,7 +6,6 @@ function throwUnsupported(operationName) {
 
 const provider = {
   id: "stub",
-  defaultPatchesRepo: "example/stub-patches",
 
   async resolveCliJar() {
     return throwUnsupported("resolveCliJar");

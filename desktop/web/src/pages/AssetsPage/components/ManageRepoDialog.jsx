@@ -15,7 +15,7 @@ export default function ManageRepoDialog({
   addRepoBusy,
   addRepoDialogType,
   setPatchesSourceRepoDraft,
-  setMorpheSourceRepoDraft,
+  setEngineSourceRepoDraft,
   onConfirmAddRepo,
   hasText,
 }) {
@@ -63,7 +63,7 @@ export default function ManageRepoDialog({
                   if (addRepoDialogType === "patches") {
                     setPatchesSourceRepoDraft(event.target.value)
                   } else {
-                    setMorpheSourceRepoDraft(event.target.value)
+                    setEngineSourceRepoDraft(event.target.value)
                   }
                 }}
                 onKeyDown={(event) => {

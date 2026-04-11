@@ -44,7 +44,7 @@ export default function BuildSourceSection({
             </SelectTrigger>
             <SelectContent position='popper' side='bottom' align='start'>
               {(Array.isArray(engineSelectOptions) ? engineSelectOptions : []).map((item) => (
-                <SelectItem key={`morphe-cli-select-${item.value}`} value={item.value}>
+                <SelectItem key={`engine-cli-select-${item.value}`} value={item.value}>
                   {renderSourceOption(item)}
                 </SelectItem>
               ))}

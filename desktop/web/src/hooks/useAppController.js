@@ -105,10 +105,6 @@ function useAppController() {
   const setEngineSettingsOpen = useDialogStore((state) => state.setEngineSettingsOpen)
   const patchBundleSettingsOpen = useDialogStore((state) => state.patchBundleSettingsOpen)
   const setPatchBundleSettingsOpen = useDialogStore((state) => state.setPatchBundleSettingsOpen)
-  const morpheSettingsOpen = engineSettingsOpen
-  const setMorpheSettingsOpen = setEngineSettingsOpen
-  const patchesSettingsOpen = patchBundleSettingsOpen
-  const setPatchesSettingsOpen = setPatchBundleSettingsOpen
   const confirmDialog = useDialogStore((state) => state.confirmDialog)
   const setConfirmDialog = useDialogStore((state) => state.setConfirmDialog)
   const confirmDialogBusy = useDialogStore((state) => state.confirmDialogBusy)
@@ -240,7 +236,7 @@ function useAppController() {
     keystoreFiles,
     selectedKeystorePath,
     setSelectedKeystorePath,
-    setMorpheSourceRepoOptions,
+    setEngineSourceRepoOptions,
     setPatchesSourceRepoOptions,
     onOpenAssetsDir,
     onChangeKeystoreSelect,
@@ -250,8 +246,6 @@ function useAppController() {
     navBuildKey: NAV_BUILD,
     engineSettingsOpen,
     patchBundleSettingsOpen,
-    morpheSettingsOpen,
-    patchesSettingsOpen,
     configForm,
     updateConfigSection,
     loadDownloadedApkFiles,
@@ -268,12 +262,12 @@ function useAppController() {
     deleteSourceFile,
     openAssetsDir,
     storageKeys: {
-      morpheSourceReposKey: ENGINE_SOURCE_REPOS_KEY,
+      engineSourceReposKey: ENGINE_SOURCE_REPOS_KEY,
       patchesSourceReposKey: PATCH_BUNDLE_SOURCE_REPOS_KEY,
       keystoreSelectedPathKey: SIGNING_SELECTED_KEYSTORE_PATH_KEY,
     },
     defaults: {
-      morpheSourceRepo: DEFAULT_ENGINE_SOURCE_REPO,
+      engineSourceRepo: DEFAULT_ENGINE_SOURCE_REPO,
       patchesSourceRepo: DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
     },
   })
@@ -287,7 +281,7 @@ function useAppController() {
     setRawConfigInput,
     setConfigForm,
     setSelectedKeystorePath,
-    setEngineSourceRepoOptions: setMorpheSourceRepoOptions,
+    setEngineSourceRepoOptions: setEngineSourceRepoOptions,
     setPatchesSourceRepoOptions,
     lastSavedSignatureRef,
     setConfigLoaded,
@@ -380,15 +374,15 @@ function useAppController() {
     keystoreSelectValue,
   } = useBuildSourceSelectors({
     configForm,
-    morpheLocalFiles: engineLocalFiles,
+    engineLocalFiles: engineLocalFiles,
     patchesLocalFiles: patchBundleLocalFiles,
     keystoreFiles,
     selectedKeystorePath,
     hasText,
     updateConfigSection,
     extractSourceFolderLabel,
-    morpheRemoteStableValue: ENGINE_REMOTE_STABLE_VALUE,
-    morpheRemoteDevValue: ENGINE_REMOTE_DEV_VALUE,
+    engineRemoteStableValue: ENGINE_REMOTE_STABLE_VALUE,
+    engineRemoteDevValue: ENGINE_REMOTE_DEV_VALUE,
     patchesRemoteStableValue: PATCH_BUNDLE_REMOTE_STABLE_VALUE,
     patchesRemoteDevValue: PATCH_BUNDLE_REMOTE_DEV_VALUE,
     onChangeKeystoreSelect,
@@ -954,7 +948,7 @@ function updateConfigSection(sectionKey, patch) {
     if (!action) return
     setConfirmDialogBusy(true)
     try {
-      if (action === "delete-morphe-file") {
+      if (action === "delete-engine-file") {
         await onDeleteEngineFile(payload)
       } else if (action === "delete-patches-file") {
         await onDeletePatchBundleFile(payload)
@@ -1083,20 +1077,20 @@ function updateConfigSection(sectionKey, patch) {
   )
 
   const assetsLegacyAliasProps = {
-    morpheSourceRepo: engineSourceRepo,
-    morpheSourceRepoOptions: engineSourceRepoOptions,
-    morpheSourceRepoDraft: engineSourceRepoDraft,
-    setMorpheSourceRepoDraft: setEngineSourceRepoDraft,
-    onSelectMorpheSourceRepo: onSelectEngineSourceRepo,
-    onAddMorpheSourceRepo: onAddEngineSourceRepo,
-    onDeleteMorpheSourceRepo: onDeleteEngineSourceRepo,
-    morpheSourceVersion: engineSourceVersion,
-    setMorpheSourceVersion: setEngineSourceVersion,
-    morpheSourceVersions: engineSourceVersions,
-    onDownloadMorpheFromSource: onDownloadEngineFromSource,
-    morpheSourceDownloadingNames: engineSourceDownloadingNames,
-    morpheLocalFiles: engineLocalFiles,
-    morpheDeleteName: engineDeleteName,
+    engineSourceRepo: engineSourceRepo,
+    engineSourceRepoOptions: engineSourceRepoOptions,
+    engineSourceRepoDraft: engineSourceRepoDraft,
+    setEngineSourceRepoDraft: setEngineSourceRepoDraft,
+    onSelectEngineSourceRepo: onSelectEngineSourceRepo,
+    onAddEngineSourceRepo: onAddEngineSourceRepo,
+    onDeleteEngineSourceRepo: onDeleteEngineSourceRepo,
+    engineSourceVersion: engineSourceVersion,
+    setEngineSourceVersion: setEngineSourceVersion,
+    engineSourceVersions: engineSourceVersions,
+    onDownloadEngineFromSource: onDownloadEngineFromSource,
+    engineSourceDownloadingNames: engineSourceDownloadingNames,
+    engineLocalFiles: engineLocalFiles,
+    engineDeleteName: engineDeleteName,
     patchesSourceRepo: patchBundleSourceRepo,
     patchesSourceRepoOptions: patchBundleSourceRepoOptions,
     patchesSourceRepoDraft: patchBundleSourceRepoDraft,
@@ -1114,39 +1108,31 @@ function updateConfigSection(sectionKey, patch) {
   }
 
   const engineSettingsDialogSharedProps = {
-    open: morpheSettingsOpen,
-    onOpenChange: setMorpheSettingsOpen,
+    open: engineSettingsOpen,
+    onOpenChange: setEngineSettingsOpen,
     t,
     configForm,
     engineLocalFiles,
-    morpheLocalFiles: engineLocalFiles,
     engineRemoteStableValue: ENGINE_REMOTE_STABLE_VALUE,
     engineRemoteDevValue: ENGINE_REMOTE_DEV_VALUE,
-    morpheStableValue: ENGINE_REMOTE_STABLE_VALUE,
-    morpheDevValue: ENGINE_REMOTE_DEV_VALUE,
     updateConfigSection,
     formatBytes,
     openConfirmDialog,
     engineDeleteName,
-    morpheDeleteName: engineDeleteName,
   }
 
   const patchBundleSettingsDialogSharedProps = {
-    open: patchesSettingsOpen,
-    onOpenChange: setPatchesSettingsOpen,
+    open: patchBundleSettingsOpen,
+    onOpenChange: setPatchBundleSettingsOpen,
     t,
     configForm,
     patchBundleLocalFiles,
-    patchesLocalFiles: patchBundleLocalFiles,
     patchBundleRemoteStableValue: PATCH_BUNDLE_REMOTE_STABLE_VALUE,
     patchBundleRemoteDevValue: PATCH_BUNDLE_REMOTE_DEV_VALUE,
-    patchesStableValue: PATCH_BUNDLE_REMOTE_STABLE_VALUE,
-    patchesDevValue: PATCH_BUNDLE_REMOTE_DEV_VALUE,
     updateConfigSection,
     formatBytes,
     openConfirmDialog,
     patchBundleDeleteName,
-    patchesDeleteName: patchBundleDeleteName,
   }
 
   return {
@@ -1326,9 +1312,7 @@ function updateConfigSection(sectionKey, patch) {
       getPatchTranslation,
       toggleAppPatch,
     },
-    morpheSettingsDialogProps: engineSettingsDialogSharedProps,
     engineSettingsDialogProps: engineSettingsDialogSharedProps,
-    patchesSettingsDialogProps: patchBundleSettingsDialogSharedProps,
     patchBundleSettingsDialogProps: patchBundleSettingsDialogSharedProps,
     confirmActionDialogProps: {
       open: confirmDialog.open,

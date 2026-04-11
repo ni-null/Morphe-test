@@ -183,10 +183,7 @@ async function runPatchFlow(params) {
   }
 }
 
-function buildContext(runtime, defaults = {}) {
-  const defaultPatchesRepo = hasValue(defaults.defaultPatchesRepo)
-    ? String(defaults.defaultPatchesRepo).trim()
-    : "MorpheApp/morphe-patches";
+function buildContext(runtime) {
   return {
     hasValue,
     pickFirstValue,
@@ -205,7 +202,6 @@ function buildContext(runtime, defaults = {}) {
     logInfo,
     logWarn,
     logStep,
-    defaultPatchesRepo,
   };
 }
 
@@ -458,9 +454,7 @@ async function run() {
     logInfo(`Ignore reserved sections: ${ignoredSections.join(", ")}`);
   }
 
-  const ctx = buildContext(runtime, {
-    defaultPatchesRepo: patchProvider.defaultPatchesRepo,
-  });
+  const ctx = buildContext(runtime);
   if (options.engineCliOnly) {
     const jarPath = await patchProvider.resolveCliJar({
       configDir,

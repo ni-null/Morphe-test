@@ -55,7 +55,7 @@ function downloadToFile(url, outFile, token, redirects = 0) {
       return;
     }
     const client = String(url).toLowerCase().startsWith("https://") ? https : http;
-    const headers = { "User-Agent": "morphe-ci-microg-download" };
+    const headers = { "User-Agent": "patcher-ci-microg-download" };
     if (token && String(token).trim()) {
       headers.Authorization = `Bearer ${String(token).trim()}`;
     }

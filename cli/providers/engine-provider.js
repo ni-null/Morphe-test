@@ -7,7 +7,6 @@ const mpp = require("../../scripts/mpp");
 
 const provider = {
   id: "engine",
-  defaultPatchesRepo: "MorpheApp/morphe-patches",
 
   async resolveCliJar(params) {
     const {

@@ -2,7 +2,7 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { DEFAULT_LOCALE } from "../i18n"
 
-const UI_STORE_KEY = "morphe.ui.state"
+const UI_STORE_KEY = "patcher.ui.state"
 
 function normalizeLocale(value) {
   return String(value || "").trim() === "zh-TW" ? "zh-TW" : DEFAULT_LOCALE

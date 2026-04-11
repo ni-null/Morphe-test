@@ -14,7 +14,7 @@ export const RESERVED_SECTIONS = new Set([
   "sign",
 ])
 
-export const LIVE_BUILD_TASK_ID_KEY = "morphe.liveBuildTaskId"
+export const LIVE_BUILD_TASK_ID_KEY = "patcher.liveBuildTaskId"
 export const ENGINE_SOURCE_REPOS_KEY = "engine.source.repos"
 export const PATCH_BUNDLE_SOURCE_REPOS_KEY = "patch-bundle.source.repos"
 export const SIGNING_SELECTED_KEYSTORE_PATH_KEY = "signing.keystore.path"

@@ -55,7 +55,10 @@ function pickMppAssetFromRelease(release, mode, ctx) {
 }
 
 async function fetchRepoReleases(repo, ctx) {
-  const repoValue = ctx.hasValue(repo) ? String(repo).trim() : ctx.defaultPatchesRepo;
+  const repoValue = String(repo || "").trim();
+  if (!repoValue) {
+    throw new Error("patches_repo is required. Define [patches].patches_repo (or [app].patches_repo).");
+  }
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repoValue)) {
     throw new Error(`Invalid patches repo format: ${repoValue}. Expected owner/repo.`);
   }
@@ -77,7 +80,7 @@ async function fetchRepoReleases(repo, ctx) {
   return { repo: repoValue, releases };
 }
 
-async function getLatestMorphePatchAsset(repo, mode, ctx) {
+async function getLatestEnginePatchAsset(repo, mode, ctx) {
   const resolvedMode = normalizePatchMode(mode);
   const fetched = await fetchRepoReleases(repo, ctx);
   const { repo: repoValue, releases } = fetched;
@@ -164,8 +167,7 @@ async function resolvePatchFile(params) {
 
   const repoName =
     ctx.pickFirstValue(app, ["patches_repo", "patches-repo"]) ||
-    ctx.pickFirstValue(patchesCfg || {}, ["patches_repo", "patches-repo"]) ||
-    ctx.defaultPatchesRepo;
+    ctx.pickFirstValue(patchesCfg || {}, ["patches_repo", "patches-repo"]);
   const repoDirName = repoToDirName(repoName);
   const lockedVersionName =
     ctx.pickFirstValue(app, ["patches_ver", "patches-ver"]) ||
@@ -210,7 +212,7 @@ async function resolvePatchFile(params) {
     return ctx.resolveAbsolutePath(path.join("patches", repoDirName, `${ctx.safeFileName(appName)}.mpp`), workspaceDir || configDir);
   }
 
-  const latest = await getLatestMorphePatchAsset(repoName, mode, ctx);
+  const latest = await getLatestEnginePatchAsset(repoName, mode, ctx);
   const latestPath = ctx.resolveAbsolutePath(path.join("patches", repoDirName, latest.name), workspaceDir || configDir);
   const exists = await ctx.fileExists(latestPath);
   if (exists && !force) {
@@ -235,8 +237,7 @@ async function probePatchBundle(params) {
   }
 
   const repoName =
-    ctx.pickFirstValue(patchesCfg || {}, ["patches_repo", "patches-repo"]) ||
-    ctx.defaultPatchesRepo;
+    ctx.pickFirstValue(patchesCfg || {}, ["patches_repo", "patches-repo"]);
   const lockedVersionName =
     ctx.pickFirstValue(patchesCfg || {}, ["ver"]) ||
     null;
@@ -258,7 +259,7 @@ async function probePatchBundle(params) {
     };
   }
 
-  const latest = await getLatestMorphePatchAsset(repoName, mode, ctx);
+  const latest = await getLatestEnginePatchAsset(repoName, mode, ctx);
   return {
     repo: latest.repo,
     mode: latest.mode,
@@ -769,8 +770,8 @@ async function resolveVersionCandidates(params) {
       return [{ version: String(app.ver).trim(), strictVersion: true, source: "config.ver-dry-run-no-jar" }];
     }
     ctx.logWarn(
-      `[${appName}] DryRun: morphe-cli jar is not present locally, skip compatibility query. ` +
-        "Run once without --dry-run to fetch latest morphe-cli jar.",
+      `[${appName}] DryRun: engine-cli jar is not present locally, skip compatibility query. ` +
+        "Run once without --dry-run to fetch latest engine-cli jar.",
     );
     return [{ version: null, strictVersion: false, source: "dry-run-no-jar" }];
   }

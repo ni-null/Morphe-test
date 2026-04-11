@@ -4,27 +4,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../compo
 import { RadioGroup, RadioGroupItem } from "../../../components/ui/radio-group"
 import { cn } from "../../../lib/utils"
 
-export default function MorpheSettingsDialog({
+export default function EngineSettingsDialog({
   open,
   onOpenChange,
   t,
   configForm,
   engineLocalFiles,
-  morpheLocalFiles,
   engineRemoteStableValue,
   engineRemoteDevValue,
-  morpheStableValue,
-  morpheDevValue,
   updateConfigSection,
   formatBytes,
   openConfirmDialog,
   engineDeleteName,
-  morpheDeleteName,
 }) {
-  const currentEngineStableValue = String(engineRemoteStableValue || morpheStableValue || "").trim()
-  const currentEngineDevValue = String(engineRemoteDevValue || morpheDevValue || "").trim()
-  const currentEngineLocalFiles = Array.isArray(engineLocalFiles) ? engineLocalFiles : morpheLocalFiles
-  const currentEngineDeleteName = typeof engineDeleteName === "string" ? engineDeleteName : morpheDeleteName
+  const currentEngineStableValue = String(engineRemoteStableValue || "").trim()
+  const currentEngineDevValue = String(engineRemoteDevValue || "").trim()
+  const currentEngineLocalFiles = Array.isArray(engineLocalFiles) ? engineLocalFiles : []
+  const currentEngineDeleteName = typeof engineDeleteName === "string" ? engineDeleteName : ""
   const patchCliConfig = configForm?.patchCli || {}
 
   return (
@@ -33,7 +29,7 @@ export default function MorpheSettingsDialog({
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             <Settings2 className='h-4 w-4' />
-            {t("morphe.settings")}
+            {t("engine.settings")}
           </DialogTitle>
         </DialogHeader>
         <div className='mt-3 flex-1 overflow-y-auto pr-1 space-y-3'>
@@ -63,7 +59,7 @@ export default function MorpheSettingsDialog({
                   <RadioGroupItem value={currentEngineStableValue} className='mt-0.5' />
                   <Cloud className='mt-0.5 h-4 w-4 text-sky-700' />
                   <span className='min-w-0'>
-                    <span className='block text-xs font-medium break-all'>stable morphe-cli</span>
+                    <span className='block text-xs font-medium break-all'>stable engine-cli</span>
                   </span>
                 </label>
               </div>
@@ -72,14 +68,14 @@ export default function MorpheSettingsDialog({
                   <RadioGroupItem value={currentEngineDevValue} className='mt-0.5' />
                   <FlaskConical className='mt-0.5 h-4 w-4 text-amber-700' />
                   <span className='min-w-0'>
-                    <span className='block text-xs font-medium break-all'>dev morphe-cli</span>
+                    <span className='block text-xs font-medium break-all'>dev engine-cli</span>
                   </span>
                 </label>
               </div>
               {currentEngineLocalFiles.length > 0 ? (
                 currentEngineLocalFiles.map((file) => (
                   <div
-                    key={`morphe-row-${file.fullPath}`}
+                    key={`engine-row-${file.fullPath}`}
                     className={cn(
                       "flex items-center justify-between gap-2 rounded-md px-2 py-1 transition-colors",
                       patchCliConfig.path === file.fullPath ? "bg-sky-100/90 text-sky-950" : "bg-background/80 hover:bg-muted/70",
@@ -99,7 +95,7 @@ export default function MorpheSettingsDialog({
                       size='icon'
                       onClick={(event) => {
                         event.stopPropagation()
-                        openConfirmDialog("delete-morphe-file", t("confirm.deleteMorpheTitle"), t("confirm.deleteMorpheDesc", { path: file.relativePath }), file)
+                        openConfirmDialog("delete-engine-file", t("confirm.deleteEngineTitle"), t("confirm.deleteEngineDesc", { path: file.relativePath }), file)
                       }}
                       disabled={currentEngineDeleteName === file.relativePath}
                       className='h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200'>
@@ -108,7 +104,7 @@ export default function MorpheSettingsDialog({
                   </div>
                 ))
               ) : (
-                <p className='text-xs text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
+                <p className='text-xs text-muted-foreground'>{t("engine.noLocalFiles")}</p>
               )}
             </RadioGroup>
           </div>

@@ -50,35 +50,7 @@ export default function AssetsPage({
   patchBundleSourceDownloadingNames,
   patchBundleLocalFiles,
   patchBundleDeleteName,
-  morpheSourceRepo,
-  morpheSourceRepoOptions,
-  morpheSourceRepoDraft,
-  setMorpheSourceRepoDraft,
-  onSelectMorpheSourceRepo,
-  onAddMorpheSourceRepo,
-  onDeleteMorpheSourceRepo,
-  morpheSourceVersion,
-  setMorpheSourceVersion,
-  morpheSourceVersions,
-  onDownloadMorpheFromSource,
-  morpheSourceDownloadingNames,
-  morpheLocalFiles,
   openConfirmDialog,
-  morpheDeleteName,
-  patchesSourceRepo,
-  patchesSourceRepoOptions,
-  patchesSourceRepoDraft,
-  setPatchesSourceRepoDraft,
-  onSelectPatchesSourceRepo,
-  onAddPatchesSourceRepo,
-  onDeletePatchesSourceRepo,
-  patchesSourceVersion,
-  setPatchesSourceVersion,
-  patchesSourceVersions,
-  onDownloadPatchesFromSource,
-  patchesSourceDownloadingNames,
-  patchesLocalFiles,
-  patchesDeleteName,
   downloadedApkFiles,
   onOpenSourceFile,
   onOpenAssetsDir,
@@ -87,49 +59,49 @@ export default function AssetsPage({
   const [addRepoDialogType, setAddRepoDialogType] = useState("")
   const [addRepoBusy, setAddRepoBusy] = useState(false)
   const [apkExpandedByGroup, setApkExpandedByGroup] = useState({})
-  const [morpheRepoMode, setMorpheRepoMode] = useState("local")
+  const [engineRepoMode, setEngineRepoMode] = useState("local")
   const [patchesRepoMode, setPatchesRepoMode] = useState("local")
   const engineSourceModel = {
-    repo: hasText(engineSourceRepo) ? engineSourceRepo : morpheSourceRepo,
-    repoOptions: Array.isArray(engineSourceRepoOptions) ? engineSourceRepoOptions : morpheSourceRepoOptions,
-    repoDraft: typeof engineSourceRepoDraft === "string" ? engineSourceRepoDraft : morpheSourceRepoDraft,
-    setRepoDraft: setEngineSourceRepoDraft || setMorpheSourceRepoDraft,
-    onSelectRepo: onSelectEngineSourceRepo || onSelectMorpheSourceRepo,
-    onAddRepo: onAddEngineSourceRepo || onAddMorpheSourceRepo,
-    onDeleteRepo: onDeleteEngineSourceRepo || onDeleteMorpheSourceRepo,
-    sourceVersion: typeof engineSourceVersion === "string" ? engineSourceVersion : morpheSourceVersion,
-    setSourceVersion: setEngineSourceVersion || setMorpheSourceVersion,
-    sourceVersions: Array.isArray(engineSourceVersions) ? engineSourceVersions : morpheSourceVersions,
-    onDownloadFromSource: onDownloadEngineFromSource || onDownloadMorpheFromSource,
-    sourceDownloadingNames: Array.isArray(engineSourceDownloadingNames) ? engineSourceDownloadingNames : morpheSourceDownloadingNames,
-    localFiles: Array.isArray(engineLocalFiles) ? engineLocalFiles : morpheLocalFiles,
-    deleteName: typeof engineDeleteName === "string" ? engineDeleteName : morpheDeleteName,
+    repo: engineSourceRepo,
+    repoOptions: Array.isArray(engineSourceRepoOptions) ? engineSourceRepoOptions : [],
+    repoDraft: typeof engineSourceRepoDraft === "string" ? engineSourceRepoDraft : "",
+    setRepoDraft: setEngineSourceRepoDraft,
+    onSelectRepo: onSelectEngineSourceRepo,
+    onAddRepo: onAddEngineSourceRepo,
+    onDeleteRepo: onDeleteEngineSourceRepo,
+    sourceVersion: typeof engineSourceVersion === "string" ? engineSourceVersion : "",
+    setSourceVersion: setEngineSourceVersion,
+    sourceVersions: Array.isArray(engineSourceVersions) ? engineSourceVersions : [],
+    onDownloadFromSource: onDownloadEngineFromSource,
+    sourceDownloadingNames: Array.isArray(engineSourceDownloadingNames) ? engineSourceDownloadingNames : [],
+    localFiles: Array.isArray(engineLocalFiles) ? engineLocalFiles : [],
+    deleteName: typeof engineDeleteName === "string" ? engineDeleteName : "",
   }
 
   const patchBundleSourceModel = {
-    repo: hasText(patchBundleSourceRepo) ? patchBundleSourceRepo : patchesSourceRepo,
-    repoOptions: Array.isArray(patchBundleSourceRepoOptions) ? patchBundleSourceRepoOptions : patchesSourceRepoOptions,
-    repoDraft: typeof patchBundleSourceRepoDraft === "string" ? patchBundleSourceRepoDraft : patchesSourceRepoDraft,
-    setRepoDraft: setPatchBundleSourceRepoDraft || setPatchesSourceRepoDraft,
-    onSelectRepo: onSelectPatchBundleSourceRepo || onSelectPatchesSourceRepo,
-    onAddRepo: onAddPatchBundleSourceRepo || onAddPatchesSourceRepo,
-    onDeleteRepo: onDeletePatchBundleSourceRepo || onDeletePatchesSourceRepo,
-    sourceVersion: typeof patchBundleSourceVersion === "string" ? patchBundleSourceVersion : patchesSourceVersion,
-    setSourceVersion: setPatchBundleSourceVersion || setPatchesSourceVersion,
-    sourceVersions: Array.isArray(patchBundleSourceVersions) ? patchBundleSourceVersions : patchesSourceVersions,
-    onDownloadFromSource: onDownloadPatchBundleFromSource || onDownloadPatchesFromSource,
-    sourceDownloadingNames: Array.isArray(patchBundleSourceDownloadingNames) ? patchBundleSourceDownloadingNames : patchesSourceDownloadingNames,
-    localFiles: Array.isArray(patchBundleLocalFiles) ? patchBundleLocalFiles : patchesLocalFiles,
-    deleteName: typeof patchBundleDeleteName === "string" ? patchBundleDeleteName : patchesDeleteName,
+    repo: patchBundleSourceRepo,
+    repoOptions: Array.isArray(patchBundleSourceRepoOptions) ? patchBundleSourceRepoOptions : [],
+    repoDraft: typeof patchBundleSourceRepoDraft === "string" ? patchBundleSourceRepoDraft : "",
+    setRepoDraft: setPatchBundleSourceRepoDraft,
+    onSelectRepo: onSelectPatchBundleSourceRepo,
+    onAddRepo: onAddPatchBundleSourceRepo,
+    onDeleteRepo: onDeletePatchBundleSourceRepo,
+    sourceVersion: typeof patchBundleSourceVersion === "string" ? patchBundleSourceVersion : "",
+    setSourceVersion: setPatchBundleSourceVersion,
+    sourceVersions: Array.isArray(patchBundleSourceVersions) ? patchBundleSourceVersions : [],
+    onDownloadFromSource: onDownloadPatchBundleFromSource,
+    sourceDownloadingNames: Array.isArray(patchBundleSourceDownloadingNames) ? patchBundleSourceDownloadingNames : [],
+    localFiles: Array.isArray(patchBundleLocalFiles) ? patchBundleLocalFiles : [],
+    deleteName: typeof patchBundleDeleteName === "string" ? patchBundleDeleteName : "",
   }
 
   const apkGroups = groupApksByPackage(downloadedApkFiles)
   const sectionMetaMap = buildSectionToPackageMetaMap(packageNameMetaMap)
-  const addRepoOpen = addRepoDialogType === "morphe" || addRepoDialogType === "patches"
+  const addRepoOpen = addRepoDialogType === "engine" || addRepoDialogType === "patches"
   const addRepoDraft = addRepoDialogType === "patches" ? patchBundleSourceModel.repoDraft : engineSourceModel.repoDraft
-  const morpheLocalFileNameSet = new Set(engineSourceModel.localFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
+  const engineLocalFileNameSet = new Set(engineSourceModel.localFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
   const patchesLocalFileNameSet = new Set(patchBundleSourceModel.localFiles.map((file) => String(file?.name || file?.fileName || "").trim().toLowerCase()).filter(Boolean))
-  const morpheMixedItems = buildSourceMixedItems(engineSourceModel.sourceVersions, engineSourceModel.localFiles, engineSourceModel.repo)
+  const engineMixedItems = buildSourceMixedItems(engineSourceModel.sourceVersions, engineSourceModel.localFiles, engineSourceModel.repo)
   const patchesMixedItems = buildSourceMixedItems(patchBundleSourceModel.sourceVersions, patchBundleSourceModel.localFiles, patchBundleSourceModel.repo)
   const manageRepoOptions = addRepoDialogType === "patches" ? patchBundleSourceModel.repoOptions : engineSourceModel.repoOptions
   const isPatchesManageDialog = addRepoDialogType === "patches"
@@ -138,7 +110,7 @@ export default function AssetsPage({
   async function onConfirmAddRepo() {
     if (addRepoBusy) return
     setAddRepoBusy(true)
-    if (addRepoDialogType === "morphe") {
+    if (addRepoDialogType === "engine") {
       const ok = await engineSourceModel.onAddRepo()
       if (ok) setAddRepoDialogType("")
       setAddRepoBusy(false)
@@ -159,16 +131,16 @@ export default function AssetsPage({
     engineSourceModel.onDeleteRepo(repo)
   }
 
-  function onChangeMorpheRepo(value) {
+  function onChangeEngineRepo(value) {
     if (value === ENGINE_ADD_CUSTOM_REPO_VALUE) {
-      setAddRepoDialogType("morphe")
+      setAddRepoDialogType("engine")
       return
     }
     if (value === ENGINE_LOCAL_SOURCE_VALUE) {
-      setMorpheRepoMode("local")
+      setEngineRepoMode("local")
       return
     }
-    setMorpheRepoMode("remote")
+    setEngineRepoMode("remote")
     engineSourceModel.onSelectRepo(value)
   }
 
@@ -185,11 +157,11 @@ export default function AssetsPage({
     patchBundleSourceModel.onSelectRepo(value)
   }
 
-  function onDownloadMorpheItem(fileName) {
+  function onDownloadEngineItem(fileName) {
     const next = String(fileName || "")
     engineSourceModel.setSourceVersion(next)
     if (!hasText(next)) return
-    if (morpheLocalFileNameSet.has(next.trim().toLowerCase())) return
+    if (engineLocalFileNameSet.has(next.trim().toLowerCase())) return
     engineSourceModel.onDownloadFromSource(next)
   }
 
@@ -216,7 +188,7 @@ export default function AssetsPage({
         <div className='space-y-2.5 rounded-xl bg-white p-2.5 dark:bg-slate-800/70'>
             <div className='flex items-center gap-2'>
               <div className='min-w-0 flex-1'>
-                <Select value={morpheRepoMode === "local" ? ENGINE_LOCAL_SOURCE_VALUE : hasText(engineSourceModel.repo) ? engineSourceModel.repo : DEFAULT_ENGINE_SOURCE_REPO} onValueChange={onChangeMorpheRepo}>
+                <Select value={engineRepoMode === "local" ? ENGINE_LOCAL_SOURCE_VALUE : hasText(engineSourceModel.repo) ? engineSourceModel.repo : DEFAULT_ENGINE_SOURCE_REPO} onValueChange={onChangeEngineRepo}>
                   <SelectTrigger className='border-0 bg-transparent shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent'>
                     <span className='inline-flex items-center gap-2 whitespace-nowrap pr-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300'>
                       <FolderGit2 className='h-3.5 w-3.5' />
@@ -230,7 +202,7 @@ export default function AssetsPage({
                     </SelectItem>
                     <SelectSeparator />
                     {engineSourceModel.repoOptions.map((repo) => (
-                      <SelectItem key={`assets-morphe-repo-${repo}`} value={repo} className='h-8'>
+                      <SelectItem key={`assets-engine-repo-${repo}`} value={repo} className='h-8'>
                         <span className='min-w-0 truncate'>{repo}</span>
                       </SelectItem>
                     ))}
@@ -242,14 +214,14 @@ export default function AssetsPage({
                 </Select>
               </div>
             </div>
-            {morpheRepoMode === "local" ? (
+            {engineRepoMode === "local" ? (
               <div className='space-y-2'>
                 {engineSourceModel.localFiles.length === 0 ? (
-                  <p className='text-sm text-muted-foreground'>{t("morphe.noLocalFiles")}</p>
+                  <p className='text-sm text-muted-foreground'>{t("engine.noLocalFiles")}</p>
                 ) : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
                     {engineSourceModel.localFiles.map((file) => (
-                      <div key={`assets-morphe-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
+                      <div key={`assets-engine-file-${file.fullPath}`} className='flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1'>
                         <div className='min-w-0 cursor-pointer' onClick={() => onOpenSourceFile("engine-cli", file)}>
                           <div className='flex min-w-0 items-center gap-2 text-sm'>
                             <span className='shrink-0 font-medium'>{file.name}</span>
@@ -264,7 +236,7 @@ export default function AssetsPage({
                             size='icon'
                             className='h-6 w-6 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'
                             disabled={engineSourceModel.deleteName === file.relativePath}
-                            onClick={() => openConfirmDialog("delete-morphe-file", t("confirm.deleteMorpheTitle"), t("confirm.deleteMorpheDesc", { path: file.relativePath }), file)}>
+                            onClick={() => openConfirmDialog("delete-engine-file", t("confirm.deleteEngineTitle"), t("confirm.deleteEngineDesc", { path: file.relativePath }), file)}>
                             {engineSourceModel.deleteName === file.relativePath ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
                           </Button>
                         </div>
@@ -275,17 +247,17 @@ export default function AssetsPage({
               </div>
             ) : (
               <div className='space-y-2'>
-                {morpheMixedItems.length === 0 ? null : (
+                {engineMixedItems.length === 0 ? null : (
                   <div className='assets-scroll max-h-56 space-y-1 overflow-y-auto rounded-lg p-2 pr-1'>
-                    {morpheMixedItems.map((item) => {
+                    {engineMixedItems.map((item) => {
                       const isDownloading = (Array.isArray(engineSourceModel.sourceDownloadingNames) ? engineSourceModel.sourceDownloadingNames : []).includes(String(item.fileName || "").trim())
                       const canDownload = item.isRemote && !item.hasLocal
                       const canOpenLocal = item.hasLocal && hasText(item.relativePath)
                       return (
                         <div
-                          key={`assets-morphe-mixed-${item.key}`}
+                          key={`assets-engine-mixed-${item.key}`}
                           className={`flex min-h-8 items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${(canDownload || canOpenLocal) ? "cursor-pointer hover:bg-muted/40" : ""}`}
-                          onClick={canDownload ? () => onDownloadMorpheItem(item.fileName) : canOpenLocal ? () => onOpenSourceFile("engine-cli", { relativePath: item.relativePath }) : undefined}>
+                          onClick={canDownload ? () => onDownloadEngineItem(item.fileName) : canOpenLocal ? () => onOpenSourceFile("engine-cli", { relativePath: item.relativePath }) : undefined}>
                           <div className='grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm'>
                             {item.hasLocal ? (
                               <Check className='h-4 w-4 shrink-0 text-emerald-600' />
@@ -435,7 +407,7 @@ export default function AssetsPage({
         addRepoBusy={addRepoBusy}
         addRepoDialogType={addRepoDialogType}
         setPatchesSourceRepoDraft={patchBundleSourceModel.setRepoDraft}
-        setMorpheSourceRepoDraft={engineSourceModel.setRepoDraft}
+        setEngineSourceRepoDraft={engineSourceModel.setRepoDraft}
         onConfirmAddRepo={onConfirmAddRepo}
         hasText={hasText}
       />
