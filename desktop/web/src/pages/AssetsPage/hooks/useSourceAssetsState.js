@@ -55,7 +55,7 @@ export default function useSourceAssetsState({
       const data = await listSourceFiles("engine-cli")
       setEngineLocalFiles(sortFilesByVersion(Array.isArray(data?.files) ? data.files : []))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -64,7 +64,7 @@ export default function useSourceAssetsState({
       const data = await listSourceFiles("patches")
       setPatchesLocalFiles(sortFilesByVersion(Array.isArray(data?.files) ? data.files : []))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -93,7 +93,7 @@ export default function useSourceAssetsState({
       })
     } catch (error) {
       setKeystoreFiles([])
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -132,7 +132,7 @@ export default function useSourceAssetsState({
     } catch (error) {
       setEngineSourceVersions([])
       setEngineSourceVersion("")
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -171,7 +171,7 @@ export default function useSourceAssetsState({
     } catch (error) {
       setPatchesSourceVersions([])
       setPatchesSourceVersion("")
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -186,7 +186,7 @@ export default function useSourceAssetsState({
       })
       return true
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
       return false
     }
   }
@@ -287,7 +287,7 @@ export default function useSourceAssetsState({
       await loadEngineLocalFiles()
       setMessage(t("msg.deleted", { name: relativePath }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setEngineDeleteName("")
     }
@@ -307,7 +307,7 @@ export default function useSourceAssetsState({
       await loadPatchesLocalFiles()
       setMessage(t("msg.deleted", { name: relativePath }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setPatchesDeleteName("")
     }
@@ -335,7 +335,7 @@ export default function useSourceAssetsState({
       setEngineSourceVersion("")
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setEngineSourceDownloadingNames((prev) =>
         (Array.isArray(prev) ? prev : []).filter((name) => String(name || "").trim() !== targetVersion),
@@ -365,7 +365,7 @@ export default function useSourceAssetsState({
       setPatchesSourceVersion("")
       setMessage(t("msg.downloadSaved", { name: data.fileName }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setPatchesSourceDownloadingNames((prev) =>
         (Array.isArray(prev) ? prev : []).filter((name) => String(name || "").trim() !== targetVersion),
@@ -377,13 +377,12 @@ export default function useSourceAssetsState({
     const target = String(kind || "").trim()
     if (!target) return
     try {
-      const data = await openAssetsDir(target)
-      setMessage(t("msg.opened", { path: data?.path || target }))
+      await openAssetsDir(target)
       if (target.toLowerCase() === "keystore") {
         loadKeystoreFiles()
       }
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 

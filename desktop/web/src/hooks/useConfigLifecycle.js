@@ -80,13 +80,10 @@ export default function useConfigLifecycle({
       const resolvedPath = String(data.path || configPath)
       const sourceRepoOptions = data && typeof data.sourceRepoOptions === "object" ? data.sourceRepoOptions : {}
       const nextForm = applyLoadedConfig({ content, resolvedPath, sourceRepoOptions })
-      if (!silent) {
-        setMessage(`Config loaded: ${resolvedPath}`)
-      }
       return { nextForm, resolvedPath, content }
     } catch (error) {
       if (!silent) {
-        setMessage(error.message || String(error))
+        setMessage(error.message || String(error), "error")
       }
       return null
     } finally {
@@ -109,7 +106,7 @@ export default function useConfigLifecycle({
       setRawOverrideMode(true)
       setMessage(`Raw reloaded latest config: ${resolvedPath}`)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setIsBusy(false)
     }

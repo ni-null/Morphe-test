@@ -70,10 +70,9 @@ export default function useTaskRuntime({
     if (!selectedTaskId) return
     setOpeningTaskFolder(true)
     try {
-      const data = await openTaskOutputDir(selectedTaskId)
-      setMessage(t("msg.opened", { path: data.path || taskOutputDir || selectedTaskId }))
+      await openTaskOutputDir(selectedTaskId)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setOpeningTaskFolder(false)
     }
@@ -83,10 +82,9 @@ export default function useTaskRuntime({
     if (!selectedTaskId || !relativePath) return
     setOpeningArtifactPath(relativePath)
     try {
-      const data = await openTaskArtifactDir(selectedTaskId, relativePath)
-      setMessage(t("msg.opened", { path: data.path || relativePath }))
+      await openTaskArtifactDir(selectedTaskId, relativePath)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setOpeningArtifactPath("")
     }
@@ -111,7 +109,7 @@ export default function useTaskRuntime({
       setMessage(t("msg.deletedTask", { id: taskId }))
       await refreshTasks()
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setDeletingTaskId("")
     }
@@ -129,7 +127,7 @@ export default function useTaskRuntime({
       setMessage(t("msg.deletedAllTasks"))
       await refreshTasks()
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setDeletingAllTasks(false)
     }
@@ -141,7 +139,7 @@ export default function useTaskRuntime({
       const data = await clearAllCache()
       setMessage(t("msg.cacheCleared", { path: data.path || "-" }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setClearingAllCache(false)
     }
@@ -194,7 +192,7 @@ export default function useTaskRuntime({
           setTaskOutputDir("")
           return
         } else {
-          setMessage(taskRes.reason?.message || String(taskRes.reason))
+          setMessage(taskRes.reason?.message || String(taskRes.reason), "error")
         }
 
         if (logRes.status === "fulfilled") {
@@ -218,7 +216,7 @@ export default function useTaskRuntime({
           setTaskOutputDir("")
           return
         }
-        setMessage(error.message || String(error))
+        setMessage(error.message || String(error), "error")
       }
     }
 
@@ -266,7 +264,7 @@ export default function useTaskRuntime({
           setLiveTaskLog("")
           return
         }
-        setMessage(error.message || String(error))
+        setMessage(error.message || String(error), "error")
       }
     }
 

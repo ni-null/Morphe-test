@@ -7,6 +7,7 @@ import HistoryPage from "./pages/HistoryPage"
 import AssetsPage from "./pages/AssetsPage"
 import KeystorePage from "./pages/KeystorePage"
 import Sidebar from "./components/layout/sidebar/Sidebar"
+import WindowAlertToast from "./components/feedback/WindowAlertToast"
 import AppSettingsDialog from "./pages/BuildPage/components/AppSettingsDialog"
 import ConfigPathDialog from "./pages/BuildPage/components/ConfigPathDialog"
 import ConfirmActionDialog from "./components/dialogs/ConfirmActionDialog"
@@ -38,6 +39,7 @@ function App() {
         <PatchesSettingsDialog {...patchBundleSettingsDialogProps} />
         <ConfirmActionDialog {...c.confirmActionDialogProps} />
       </main>
+      <WindowAlertToast t={c.t} hasText={c.hasText} message={c.message} onClose={c.clearMessage} />
     </div>
   )
 }

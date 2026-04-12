@@ -180,6 +180,14 @@ function createInvokeHandler(projectRoot) {
       });
     }
 
+    if (method === "importSourceFile") {
+      return await taskService.importSourceFile({
+        type: payload.type,
+        fileName: payload.fileName,
+        base64: payload.base64,
+      });
+    }
+
     if (method === "generateKeystore") {
       return await taskService.generateKeystore({
         fileName: payload.fileName,

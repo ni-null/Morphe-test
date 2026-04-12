@@ -103,7 +103,7 @@ export default function useBuildExecutionState({
       setMessage(t("msg.taskStarted"))
       await refreshTasks()
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setIsBusy(false)
       setBuildLaunchPending(false)
@@ -121,7 +121,7 @@ export default function useBuildExecutionState({
       setMessage(t("msg.stopRequested"))
       await refreshTasks()
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -141,12 +141,11 @@ export default function useBuildExecutionState({
     const relativePath = String(item?.relativePath || "").trim()
     if (!taskId || !relativePath) return
     try {
-      const data = await openTaskArtifactDir(taskId, relativePath)
-      setMessage(t("msg.opened", { path: data.path || relativePath }))
+      await openTaskArtifactDir(taskId, relativePath)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
-  }, [openTaskArtifactDir, setMessage, t])
+  }, [openTaskArtifactDir, setMessage])
 
   const completedBuildTaskSignature = useMemo(() => {
     return tasks

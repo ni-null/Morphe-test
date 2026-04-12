@@ -3,7 +3,7 @@ import { Button } from "../../ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { SUPPORTED_LOCALES } from "../../../i18n"
 
-export default function SidebarFooter({ t, javaEnv, hasText, locale, setLocale, theme, setTheme, message }) {
+export default function SidebarFooter({ t, javaEnv, hasText, locale, setLocale, theme, setTheme }) {
   return (
     <div className='mt-auto space-y-3'>
       <div className='space-y-2 rounded-md bg-slate-100/80 p-2.5 dark:bg-slate-800/70'>
@@ -46,7 +46,6 @@ export default function SidebarFooter({ t, javaEnv, hasText, locale, setLocale, 
           </Button>
         </div>
       </div>
-      {hasText(message) ? <p className='text-xs text-muted-foreground break-words'>{message}</p> : null}
     </div>
   )
 }

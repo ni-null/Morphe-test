@@ -314,6 +314,30 @@ function ensureKeystoreFileName(nameInput) {
   return safe.toLowerCase().endsWith(".keystore") ? safe : `${safe}.keystore`;
 }
 
+function ensureKeystoreImportFileName(nameInput) {
+  const raw = String(nameInput || "").trim();
+  const safe = safeFileName(raw);
+  if (!safe) {
+    throw new Error("Invalid keystore file name.");
+  }
+  if (!safe.toLowerCase().endsWith(".keystore")) {
+    throw new Error("Invalid keystore extension. Only .keystore files are allowed.");
+  }
+  return safe;
+}
+
+function ensureSourceImportFileName(spec, nameInput) {
+  const raw = String(nameInput || "").trim();
+  const safe = safeFileName(raw);
+  if (!safe) {
+    throw new Error(`Invalid ${spec.type} file name.`);
+  }
+  if (!safe.toLowerCase().endsWith(spec.ext)) {
+    throw new Error(`Invalid file extension for ${spec.type}. Only ${spec.ext} files are allowed.`);
+  }
+  return safe;
+}
+
 function decodeBase64Strict(base64Input) {
   const normalized = String(base64Input || "").replace(/\s+/gu, "");
   if (!normalized) {
@@ -755,7 +779,7 @@ class TaskService {
     await fsp.mkdir(targetDir, { recursive: true });
 
     const originalName = String(payload && payload.fileName ? payload.fileName : "").trim();
-    const fileName = ensureKeystoreFileName(originalName || `imported-${Date.now()}.keystore`);
+    const fileName = ensureKeystoreImportFileName(originalName);
     const content = decodeBase64Strict(payload && payload.base64 ? payload.base64 : "");
     const fullPath = path.join(targetDir, fileName);
     await fsp.writeFile(fullPath, content);
@@ -764,6 +788,31 @@ class TaskService {
       imported: true,
       fileName,
       fullPath,
+      sizeBytes: content.length,
+    };
+  }
+
+  async importSourceFile(payload) {
+    const spec = getSourceSpec(payload && payload.type ? payload.type : "");
+    if (spec.type !== "engine-cli" && spec.type !== "patches") {
+      throw new Error(`Unsupported source import type: ${spec.type}`);
+    }
+
+    const fileName = ensureSourceImportFileName(spec, payload && payload.fileName ? payload.fileName : "");
+    const content = decodeBase64Strict(payload && payload.base64 ? payload.base64 : "");
+    const targetRoot = this.workspacePaths[spec.folderKey];
+    const targetDir = path.join(targetRoot, "universal");
+    await fsp.mkdir(targetDir, { recursive: true });
+
+    const fullPath = path.join(targetDir, fileName);
+    await fsp.writeFile(fullPath, content);
+
+    return {
+      imported: true,
+      type: spec.type,
+      fileName,
+      fullPath,
+      relativePath: path.relative(targetRoot, fullPath),
       sizeBytes: content.length,
     };
   }

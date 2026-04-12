@@ -1,7 +1,8 @@
-import { Check, Download, FolderGit2, FolderOpen, Loader2, Package, Settings2, Trash2 } from "lucide-react"
-import { useState } from "react"
+import { Check, Download, FilePlus2, FolderGit2, FolderOpen, Loader2, Package, Settings2, Trash2, Upload } from "lucide-react"
+import { useRef, useState } from "react"
 import { Button } from "../../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "../../components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import packageNameMetaMap from "../../data/package-name-meta.json"
 import DownloadedApkCard from "./components/DownloadedApkCard"
 import ManageRepoDialog from "./components/ManageRepoDialog"
@@ -55,12 +56,16 @@ export default function AssetsPage({
   onOpenSourceFile,
   onOpenAssetsDir,
   apkDeletePath,
+  assetsImporting,
+  onImportAssetSourceFiles,
 }) {
+  const fileInputRef = useRef(null)
   const [addRepoDialogType, setAddRepoDialogType] = useState("")
   const [addRepoBusy, setAddRepoBusy] = useState(false)
   const [apkExpandedByGroup, setApkExpandedByGroup] = useState({})
   const [engineRepoMode, setEngineRepoMode] = useState("local")
   const [patchesRepoMode, setPatchesRepoMode] = useState("local")
+  const [dragActive, setDragActive] = useState(false)
   const engineSourceModel = {
     repo: engineSourceRepo,
     repoOptions: Array.isArray(engineSourceRepoOptions) ? engineSourceRepoOptions : [],
@@ -173,8 +178,76 @@ export default function AssetsPage({
     patchBundleSourceModel.onDownloadFromSource(next)
   }
 
+  async function handleImportFiles(items) {
+    const files = Array.isArray(items) ? items.filter(Boolean) : Array.from(items || []).filter(Boolean)
+    if (files.length === 0) return
+    await onImportAssetSourceFiles(files)
+  }
+
   return (
     <div className='space-y-4'>
+      <section className='space-y-2'>
+        <div className='flex items-center justify-between gap-2 px-1'>
+          <h2 className='text-base font-semibold flex items-center gap-2'>
+            <Upload className='h-4 w-4' />
+            {t("assets.importTitle")}
+          </h2>
+        </div>
+        <div className='space-y-2.5 rounded-xl bg-white p-3 dark:bg-slate-800/70'>
+          <div
+            className={`rounded-lg border-2 border-dashed p-5 text-center transition-colors ${
+              dragActive
+                ? "border-sky-500 bg-sky-50 dark:border-sky-400 dark:bg-sky-900/20"
+                : "border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-900/30"
+            }`}
+            onDragEnter={(event) => {
+              event.preventDefault()
+              setDragActive(true)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              setDragActive(true)
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault()
+              setDragActive(false)
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              setDragActive(false)
+              handleImportFiles(event.dataTransfer?.files || [])
+            }}>
+            <div className='flex flex-col items-center gap-2'>
+              <Upload className='h-6 w-6 text-slate-500 dark:text-slate-300' />
+              <p className='text-sm text-muted-foreground'>{t("assets.importHint")}</p>
+              <Button type='button' size='sm' variant='outline' disabled={assetsImporting} onClick={() => fileInputRef.current?.click()}>
+                {assetsImporting ? <Loader2 className='h-4 w-4 animate-spin' /> : <FilePlus2 className='h-4 w-4' />}
+                {t("assets.importAction")}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type='file'
+                multiple
+                accept='.jar,.mpp'
+                className='hidden'
+                onChange={(event) => {
+                  handleImportFiles(event.target.files || [])
+                  event.target.value = ""
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Tabs defaultValue='cli' className='space-y-3'>
+        <TabsList className='grid h-10 w-full grid-cols-3'>
+          <TabsTrigger value='cli'>{t("assets.cli")}</TabsTrigger>
+          <TabsTrigger value='patches'>{t("assets.patches")}</TabsTrigger>
+          <TabsTrigger value='apk'>{t("assets.apk")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value='cli' className='mt-0'>
       <section className='space-y-2'>
         <div className='flex items-center justify-between gap-2 px-1'>
           <h2 className='text-base flex items-center gap-2 font-semibold'>
@@ -278,7 +351,9 @@ export default function AssetsPage({
             )}
         </div>
       </section>
+        </TabsContent>
 
+        <TabsContent value='patches' className='mt-0'>
       <section className='space-y-2'>
         <div className='flex items-center justify-between gap-2 px-1'>
           <h2 className='text-base flex items-center gap-2 font-semibold'>
@@ -382,7 +457,9 @@ export default function AssetsPage({
             )}
         </div>
       </section>
+        </TabsContent>
 
+        <TabsContent value='apk' className='mt-0'>
       <DownloadedApkCard
         t={t}
         onOpenAssetsDir={onOpenAssetsDir}
@@ -395,6 +472,8 @@ export default function AssetsPage({
         openConfirmDialog={openConfirmDialog}
         apkDeletePath={apkDeletePath}
       />
+        </TabsContent>
+      </Tabs>
 
       <ManageRepoDialog
         t={t}

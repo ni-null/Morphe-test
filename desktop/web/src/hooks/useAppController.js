@@ -30,6 +30,7 @@ import {
   openAssetsDir,
   openSourceFile,
   importKeystore,
+  importSourceFile,
   generateKeystore,
   fetchKeystorePreview,
 } from "../lib/ipcClient"
@@ -87,10 +88,16 @@ export const NAV_HISTORY = "history"
 export const NAV_ASSETS = "assets"
 export const NAV_KEYSTORE = "keystore"
 
-function ensureKeystoreFileName(fileName) {
-  const name = String(fileName || "").trim()
-  if (!name) return `imported-${Date.now()}.keystore`
-  return name.toLowerCase().endsWith(".keystore") ? name : `${name}.keystore`
+function hasKeystoreExtension(fileName) {
+  const name = String(fileName || "").trim().toLowerCase()
+  return name.endsWith(".keystore")
+}
+
+function detectImportSourceTypeByName(fileName) {
+  const name = String(fileName || "").trim().toLowerCase()
+  if (name.endsWith(".jar")) return "engine-cli"
+  if (name.endsWith(".mpp")) return "patches"
+  return ""
 }
 
 async function browserFileToBase64(file) {
@@ -167,16 +174,29 @@ function useAppController() {
   const [keystoreViewing, setKeystoreViewing] = useState("")
   const [keystorePreviewOpen, setKeystorePreviewOpen] = useState(false)
   const [keystorePreviewData, setKeystorePreviewData] = useState(null)
+  const [assetsImporting, setAssetsImporting] = useState(false)
 
   const [isBusy, setIsBusy] = useState(false)
-  const [message, setSidebarMessage] = useState("")
+  const [message, setSidebarMessage] = useState(null)
   const t = useCallback((key, vars = {}) => translate(locale, key, vars), [locale])
-  const setMessage = useCallback((value) => {
+  const setMessage = useCallback((value, type = "success") => {
     const text = String(value ?? "").trim()
     if (text) {
       console.log(text)
     }
-    setSidebarMessage("")
+    if (!text) {
+      setSidebarMessage(null)
+      return
+    }
+    const level = String(type || "success").trim().toLowerCase() === "error" ? "error" : "success"
+    setSidebarMessage({
+      type: level,
+      text,
+      at: Date.now(),
+    })
+  }, [])
+  const clearMessage = useCallback(() => {
+    setSidebarMessage(null)
   }, [])
   const lastSavedSignatureRef = useRef("")
   const appSettingsCleanupTimerRef = useRef(null)
@@ -258,6 +278,8 @@ function useAppController() {
     setSelectedKeystorePath,
     setEngineSourceRepoOptions,
     setPatchesSourceRepoOptions,
+    loadEngineLocalFiles,
+    loadPatchesLocalFiles,
     loadKeystoreFiles,
     onOpenAssetsDir,
     onChangeKeystoreSelect,
@@ -533,7 +555,7 @@ function updateConfigSection(sectionKey, patch) {
         doAppendNewApps(templates)
       }
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -724,7 +746,7 @@ function updateConfigSection(sectionKey, patch) {
       setDownloadedApkFiles(files)
     } catch (error) {
       setDownloadedApkFiles([])
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -786,7 +808,7 @@ function updateConfigSection(sectionKey, patch) {
     } catch (error) {
       setMircrogVersions([])
       setMircrogSourceVersion("")
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setMircrogLoading(false)
     }
@@ -798,7 +820,7 @@ function updateConfigSection(sectionKey, patch) {
     try {
       await fetchSourceVersions({ type: "microg", repo })
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
       return false
     }
     const nextOptions = mergeRepoOptions(mircrogSourceRepoOptions, repo, DEFAULT_MICROG_SOURCE_REPO)
@@ -856,7 +878,7 @@ function updateConfigSection(sectionKey, patch) {
       setMircrogSourceVersion("")
       await loadMircrogVersions(mircrogSourceRepo)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setMircrogDownloadingNames((prev) =>
         (Array.isArray(prev) ? prev : []).filter((name) => String(name || "").trim() !== targetName),
@@ -873,7 +895,7 @@ function updateConfigSection(sectionKey, patch) {
       await loadMircrogVersions(mircrogSourceRepo)
       setMessage(t("msg.deleted", { name: relativePath }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setMircrogDeleteName("")
     }
@@ -884,10 +906,9 @@ function updateConfigSection(sectionKey, patch) {
     const relativePath = String(file?.relativePath || "").trim()
     if (!sourceType || !relativePath) return
     try {
-      const data = await openSourceFile(sourceType, relativePath)
-      setMessage(t("msg.opened", { path: String(data?.relativePath || relativePath) }))
+      await openSourceFile(sourceType, relativePath)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 
@@ -915,7 +936,7 @@ function updateConfigSection(sectionKey, patch) {
       await loadDownloadedApkFiles()
       setMessage(t("msg.deleted", { name: String(file?.name || file?.fileName || fullPath) }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setApkDeletePath("")
     }
@@ -929,17 +950,48 @@ function updateConfigSection(sectionKey, patch) {
       let importedCount = 0
       for (const file of files) {
         if (!file) continue
+        const originalName = String(file?.name || "").trim()
+        if (!hasKeystoreExtension(originalName)) {
+          throw new Error(t("keystore.invalidExtension", { name: originalName || t("keystore.unknownFile") }))
+        }
         const base64 = await browserFileToBase64(file)
-        const fileName = ensureKeystoreFileName(file.name)
-        await importKeystore(fileName, base64)
+        await importKeystore(originalName, base64)
         importedCount += 1
       }
       await loadKeystoreFiles()
       setMessage(t("keystore.imported", { count: importedCount }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setKeystoreImporting(false)
+    }
+  }
+
+  async function onImportAssetSourceFiles(fileList) {
+    const files = Array.isArray(fileList) ? fileList : Array.from(fileList || [])
+    if (files.length === 0) return
+    setAssetsImporting(true)
+    try {
+      let importedEngineCount = 0
+      let importedPatchesCount = 0
+      for (const file of files) {
+        if (!file) continue
+        const originalName = String(file?.name || "").trim()
+        const sourceType = detectImportSourceTypeByName(originalName)
+        if (!sourceType) {
+          throw new Error(t("assets.invalidImportExt", { name: originalName || t("keystore.unknownFile") }))
+        }
+        const base64 = await browserFileToBase64(file)
+        await importSourceFile(sourceType, originalName, base64)
+        if (sourceType === "engine-cli") importedEngineCount += 1
+        if (sourceType === "patches") importedPatchesCount += 1
+      }
+      await Promise.all([loadEngineLocalFiles(), loadPatchesLocalFiles()])
+      setMessage(t("assets.imported", { engine: importedEngineCount, patches: importedPatchesCount }))
+    } catch (error) {
+      setMessage(error.message || String(error), "error")
+    } finally {
+      setAssetsImporting(false)
     }
   }
 
@@ -951,7 +1003,7 @@ function updateConfigSection(sectionKey, patch) {
       await loadKeystoreFiles()
       setMessage(t("keystore.generated", { name: String(data?.fileName || generatedName) }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setKeystoreGenerating(false)
     }
@@ -966,7 +1018,7 @@ function updateConfigSection(sectionKey, patch) {
       setKeystorePreviewData(preview)
       setKeystorePreviewOpen(true)
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setKeystoreViewing("")
     }
@@ -981,7 +1033,7 @@ function updateConfigSection(sectionKey, patch) {
       await loadKeystoreFiles()
       setMessage(t("msg.deleted", { name: relativePath }))
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     } finally {
       setKeystoreDeleteName("")
     }
@@ -1256,6 +1308,7 @@ function updateConfigSection(sectionKey, patch) {
     theme,
     setTheme,
     message,
+    clearMessage,
     javaEnv,
     hasText,
     activeNav,
@@ -1373,6 +1426,8 @@ function updateConfigSection(sectionKey, patch) {
       onOpenSourceFile,
       onOpenAssetsDir,
       apkDeletePath,
+      assetsImporting,
+      onImportAssetSourceFiles,
     },
     keystorePageProps: {
       t,

@@ -198,7 +198,7 @@ export default function useAppPatchSettingsState({
       if (!data || data.canceled || !hasText(data.path)) return
       updateApp(app.id, { localApkCustomPath: String(data.path) })
     } catch (error) {
-      setMessage(error.message || String(error))
+      setMessage(error.message || String(error), "error")
     }
   }
 

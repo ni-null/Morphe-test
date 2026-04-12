@@ -131,7 +131,7 @@ export default function KeystorePage({
                 ref={fileInputRef}
                 type='file'
                 multiple
-                accept='.keystore,application/octet-stream'
+                accept='.keystore'
                 className='hidden'
                 onChange={(event) => {
                   handleFiles(event.target.files || [])

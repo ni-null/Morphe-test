@@ -230,6 +230,14 @@ export async function importKeystore(fileName, base64) {
   })
 }
 
+export async function importSourceFile(type, fileName, base64) {
+  return requestIpc("importSourceFile", {
+    type: String(type || ""),
+    fileName: String(fileName || ""),
+    base64: String(base64 || ""),
+  })
+}
+
 export async function generateKeystore(options = {}) {
   const payload = options && typeof options === "object" ? options : {}
   return requestIpc("generateKeystore", payload)

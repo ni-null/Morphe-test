@@ -34,7 +34,7 @@ export default function useConfigAutosave({
         }
         setMessage(t("msg.autoSavedConfig", { path: resolvedPath }))
       } catch (error) {
-        setMessage(error.message || String(error))
+        setMessage(error.message || String(error), "error")
       } finally {
         setIsAutoSavingConfig(false)
       }
