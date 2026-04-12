@@ -14,7 +14,6 @@ export default function useTaskRuntime({
   clearAllCache,
   openTaskOutputDir,
   openTaskArtifactDir,
-  liveBuildTaskIdKey,
 }) {
   const [tasks, setTasks] = useState([])
   const [selectedTaskId, setSelectedTaskId] = useState("")
@@ -278,14 +277,6 @@ export default function useTaskRuntime({
       clearInterval(timer)
     }
   }, [liveTaskId, fetchTask, fetchTaskLog, isNotFoundError, setMessage])
-
-  useEffect(() => {
-    if (!liveTaskId) {
-      localStorage.removeItem(liveBuildTaskIdKey)
-      return
-    }
-    localStorage.setItem(liveBuildTaskIdKey, liveTaskId)
-  }, [liveTaskId, liveBuildTaskIdKey])
 
   return {
     tasks,

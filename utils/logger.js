@@ -2,7 +2,40 @@
 
 const fs = require("fs");
 const path = require("path");
-const chalk = require("chalk");
+let chalk = null;
+
+function plain(text) {
+  return String(text);
+}
+
+function createFallbackChalk() {
+  return {
+    blueBright: {
+      underline: plain,
+    },
+    cyanBright: plain,
+    greenBright: plain,
+    bgBlue: {
+      black: plain,
+    },
+    bgYellow: {
+      black: plain,
+    },
+    bgMagenta: {
+      white: plain,
+    },
+    bgRed: {
+      white: plain,
+    },
+  };
+}
+
+try {
+  // Optional runtime dependency: fall back to plain text logs when unavailable.
+  chalk = require("chalk");
+} catch {
+  chalk = createFallbackChalk();
+}
 
 let logFileStream = null;
 

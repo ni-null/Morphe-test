@@ -12,6 +12,7 @@
     "test:patch-naming": "node ./tests/patch-naming.test.js",
     "test:env-aliases": "node ./tests/env-aliases.test.js",
     "test:providers": "node ./tests/providers.test.js",
+    "test:cli-connector": "node ./tests/cli-connector.test.js",
     "report:legacy-aliases": "node ./scripts/ci/report-legacy-aliases.js",
     "report:legacy-aliases:check": "node ./scripts/ci/report-legacy-aliases.js --fail-on-hits",
     "cli:start": "npm run start --workspace patcher-cli",
@@ -24,10 +25,12 @@
     "desktop:pack": "npm run web:build && npm run pack --workspace patcher-desktop",
     "i18n:patches:zh-TW": "npm run i18n:patches:zh-TW --workspace patcher-web-ui"
   },
-  "dependencies": {},
+  "dependencies": {
+    "chalk": "^4.1.2"
+  },
   "build": {
     "appId": "com.patcher.builder",
-    "productName": "APK Patcher",
+    "productName": "APK Patches Studio",
     "asar": true,
     "compression": "maximum",
     "electronLanguages": [
@@ -45,6 +48,7 @@
       "desktop/web/dist/**/*",
       "scripts/**/*",
       "utils/**/*",
+      "morphe-test.keystore",
       "package.json"
     ],
     "win": {

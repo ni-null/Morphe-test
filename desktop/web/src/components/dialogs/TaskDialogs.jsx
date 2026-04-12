@@ -66,7 +66,6 @@ export default function TaskDialogs({
   setLogDialogOpen,
   taskId,
   taskStatus,
-  taskProviderId,
   statusVariant,
   taskLog,
 }) {
@@ -82,7 +81,6 @@ export default function TaskDialogs({
           <DialogTitle className='flex items-center justify-between gap-2'>
             <div className='min-w-0'>
               <span className='block min-w-0 truncate'>{taskId ? t("dialog.taskId", { id: taskId }) : t("dialog.noTaskSelected")}</span>
-              {taskProviderId ? <span className='block text-xs font-normal text-muted-foreground'>{t("dialog.patchProvider", { id: taskProviderId })}</span> : null}
             </div>
             <Badge variant={statusVariant(taskStatus || "outline")} className={badgeClassName}>
               <Icon className={iconClassName} />

@@ -260,9 +260,9 @@ function getDefaultCacheDir() {
   return "";
 }
 
-function getDefaultOutputPath(locale) {
+function getDefaultOutputPath() {
   const webRoot = path.resolve(__dirname, "..", "..", "desktop", "web");
-  return path.join(webRoot, "i18n", "locales", `${locale}.json`);
+  return path.join(webRoot, "i18n", "patches", "_global.json");
 }
 
 async function readJsonSafe(filePath) {
@@ -297,22 +297,15 @@ async function collectPatchPairs(cacheDir) {
   return out;
 }
 
-function createTranslationRecord(locale, name, description) {
-  const translatedName = ZH_TW_NAME_MAP[name] || name;
-  const translatedDescription = locale === "zh-TW" ? ZH_TW_DESCRIPTION_MAP[description] || description : description;
-  return {
-    [locale]: {
-      name: translatedName,
-      description: translatedDescription,
-    },
-  };
+function normalizePatchKey(name) {
+  return String(name || "").trim().toLowerCase();
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cacheDir = args.cacheDir || getDefaultCacheDir();
   const locale = args.locale || "zh-TW";
-  const outputPath = args.output || getDefaultOutputPath(locale);
+  const outputPath = args.output || getDefaultOutputPath();
 
   if (!cacheDir) {
     throw new Error("cache dir is empty. Use --cache-dir.");
@@ -323,55 +316,76 @@ async function main() {
   }
 
   const pairs = await collectPatchPairs(cacheDir);
-  const localeDoc = (await readJsonSafe(outputPath)) || {};
-  const patchBlock =
-    localeDoc.__patchTranslations && typeof localeDoc.__patchTranslations === "object"
-      ? localeDoc.__patchTranslations
-      : {
-          _meta: {
-            note: "Key format is JSON.stringify([originalName, originalDescription]). If no match, UI falls back to original text.",
-          },
-          entries: {},
-        };
-  const entries = patchBlock.entries && typeof patchBlock.entries === "object" ? patchBlock.entries : {};
+  const currentDoc = (await readJsonSafe(outputPath)) || {};
+  const patches = currentDoc && typeof currentDoc.patches === "object" && currentDoc.patches
+    ? { ...currentDoc.patches }
+    : {};
 
   let added = 0;
   let updated = 0;
   for (const pair of pairs) {
-    const key = JSON.stringify([pair.name, pair.description]);
-    const current = entries[key] && typeof entries[key] === "object" ? entries[key] : {};
-    const nextLocale = createTranslationRecord(locale, pair.name, pair.description)[locale];
-    if (!current[locale]) {
-      entries[key] = { ...current, [locale]: nextLocale };
-      added += 1;
-      continue;
+    const key = normalizePatchKey(pair.name);
+    if (!key) continue;
+    const currentEntry = patches[key] && typeof patches[key] === "object" ? patches[key] : {};
+    const currentNameMap = currentEntry.name && typeof currentEntry.name === "object" ? { ...currentEntry.name } : {};
+    const currentDescriptions = currentEntry.descriptions && typeof currentEntry.descriptions === "object"
+      ? { ...currentEntry.descriptions }
+      : {};
+
+    const translatedName = locale === "zh-TW" ? (ZH_TW_NAME_MAP[pair.name] || pair.name) : pair.name;
+    const beforeEntry = JSON.stringify(currentEntry);
+
+    currentNameMap.en = String(currentNameMap.en || pair.name).trim() || pair.name;
+    currentNameMap[locale] = String(translatedName || pair.name).trim() || pair.name;
+
+    if (pair.description) {
+      const descKey = String(pair.description);
+      const currentDescMap = currentDescriptions[descKey] && typeof currentDescriptions[descKey] === "object"
+        ? { ...currentDescriptions[descKey] }
+        : {};
+      currentDescMap.en = String(currentDescMap.en || pair.description).trim() || pair.description;
+      const translatedDescription =
+        locale === "zh-TW" ? (ZH_TW_DESCRIPTION_MAP[pair.description] || pair.description) : pair.description;
+      currentDescMap[locale] = String(translatedDescription || pair.description).trim() || pair.description;
+      currentDescriptions[descKey] = currentDescMap;
     }
-    const before = JSON.stringify(current[locale]);
-    const after = JSON.stringify(nextLocale);
-    if (before !== after) {
-      entries[key] = { ...current, [locale]: nextLocale };
+
+    const nextEntry = {
+      ...currentEntry,
+      name: currentNameMap,
+      descriptions: currentDescriptions,
+    };
+    patches[key] = nextEntry;
+
+    if (beforeEntry === "{}") {
+      added += 1;
+    } else if (beforeEntry !== JSON.stringify(nextEntry)) {
       updated += 1;
     }
   }
 
-  const normalizedPatchBlock = {
-    ...patchBlock,
-    entries: Object.fromEntries(Object.entries(entries).sort((a, b) => a[0].localeCompare(b[0]))),
-  };
-  const normalizedLocaleDoc = {
-    ...localeDoc,
-    __patchTranslations: normalizedPatchBlock,
+  const normalizedDoc = {
+    patches: Object.fromEntries(
+      Object.entries(patches).sort((a, b) => a[0].localeCompare(b[0])),
+    ),
   };
   await fsp.mkdir(path.dirname(outputPath), { recursive: true });
-  await fsp.writeFile(outputPath, `${JSON.stringify(normalizedLocaleDoc, null, 2)}\n`, "utf8");
+  await fsp.writeFile(outputPath, `${JSON.stringify(normalizedDoc, null, 2)}\n`, "utf8");
 
   const missingDescriptions = [];
   for (const pair of pairs) {
     if (!pair.description) continue;
-    const key = JSON.stringify([pair.name, pair.description]);
-    const localized = normalizedPatchBlock.entries[key] && normalizedPatchBlock.entries[key][locale];
-    const translatedDescription =
-      localized && typeof localized.description === "string" ? String(localized.description).trim() : "";
+    const key = normalizePatchKey(pair.name);
+    const entry = normalizedDoc.patches[key] && typeof normalizedDoc.patches[key] === "object"
+      ? normalizedDoc.patches[key]
+      : null;
+    const descriptions = entry && entry.descriptions && typeof entry.descriptions === "object"
+      ? entry.descriptions
+      : {};
+    const localizedMap = descriptions[pair.description] && typeof descriptions[pair.description] === "object"
+      ? descriptions[pair.description]
+      : {};
+    const translatedDescription = String(localizedMap[locale] || "").trim();
     if (!translatedDescription || translatedDescription === pair.description) {
       missingDescriptions.push({
         name: pair.name,
@@ -379,7 +393,8 @@ async function main() {
       });
     }
   }
-  const missingPath = path.join(path.dirname(outputPath), `patch-translations.missing.${locale}.json`);
+  const missingPath = path.join(path.dirname(path.dirname(outputPath)), "tools", `patch-translations.missing.${locale}.json`);
+  await fsp.mkdir(path.dirname(missingPath), { recursive: true });
   await fsp.writeFile(
     missingPath,
     `${JSON.stringify(

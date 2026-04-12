@@ -1,0 +1,11 @@
+{
+  "missingNames": [
+    {
+      "nameEn": "SponsorBlock",
+      "expectedZh": "SponsorBlock",
+      "currentZh": "SponsorBlock",
+      "reason": "zh-TW equals en (not translated)"
+    }
+  ],
+  "missingDescriptions": []
+}

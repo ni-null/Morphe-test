@@ -16,8 +16,7 @@ function getDefaultWorkspaceRoot(env = process.env) {
   // Portable mode: use relative workspace folder next to executable/source
   const isPortable = portableValue === "1" ||
     env.PORTABLE_EXECUTABLE_DIR ||
-    env.DESKTOP_DEV ||
-    (process.resourcesPath && process.resourcesPath);
+    env.DESKTOP_DEV;
   if (isPortable) {
     const exeDir = env.PORTABLE_EXECUTABLE_DIR || process.cwd();
     return path.resolve(exeDir, "workspace");

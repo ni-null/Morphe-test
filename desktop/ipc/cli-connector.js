@@ -1,11 +1,20 @@
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 
 const TASK_DIR_PATTERN = /Task output directory:\s*(.+)$/u;
 const TASK_LOG_PATTERN = /Task log file:\s*(.+)$/u;
 const CLI_ENTRY_RELATIVE_PATH = path.join("cli", "main.js");
+
+function fileExists(targetPath) {
+  try {
+    return fs.statSync(targetPath).isFile();
+  } catch {
+    return false;
+  }
+}
 
 function buildCliArgs(projectRoot, options) {
   const configPath = options && options.configPath ? String(options.configPath) : path.join(projectRoot, "config.toml");
@@ -77,8 +86,10 @@ function wireStream(streamName, childStream, hooks) {
 function spawnCliTask(projectRoot, options, handlers) {
   const taskId = createDesktopTaskId();
   const args = buildCliArgs(projectRoot, options);
-  const child = spawn(process.execPath, args, {
-    cwd: projectRoot,
+  const execPath = resolveCliExecPath();
+  const cwd = resolveSpawnCwd(projectRoot, execPath);
+  const child = spawn(execPath, args, {
+    cwd,
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
     env: buildCliEnv(options),
@@ -97,10 +108,69 @@ function spawnCliTask(projectRoot, options, handlers) {
   return {
     taskId,
     args,
+    command: execPath,
+    cwd,
     child,
   };
 }
 
+function resolveSpawnCwd(projectRoot, execPathInput = "") {
+  const root = path.resolve(String(projectRoot || process.cwd()));
+
+  // Electron can expose app.asar as a virtual directory, but OS-level spawn cwd
+  // must be a real filesystem directory.
+  if (isAsarPath(root)) {
+    const resourcesDir = path.dirname(root);
+    if (isDirectory(resourcesDir)) return resourcesDir;
+  }
+  if (isDirectory(root)) return root;
+
+  // When packaged, projectRoot points to resources/app.asar (a file),
+  // but child_process cwd must be a directory.
+  if (root.toLowerCase().endsWith(".asar")) {
+    const resourcesDir = path.dirname(root);
+    if (isDirectory(resourcesDir)) return resourcesDir;
+  }
+
+  const fallback = process.resourcesPath ? String(process.resourcesPath) : process.cwd();
+  if (isDirectory(fallback)) return fallback;
+  const execDir = path.dirname(String(execPathInput || ""));
+  if (isDirectory(execDir)) return execDir;
+  return process.cwd();
+}
+
+function resolveCliExecPath(envInput = process.env, runtimeInput = {}) {
+  const env = envInput && typeof envInput === "object" ? envInput : process.env;
+  const runtime = runtimeInput && typeof runtimeInput === "object" ? runtimeInput : {};
+  const platform = String(runtime.platform || process.platform);
+  const processExecPath = String(runtime.execPath || process.execPath);
+  const fileExistsFn = typeof runtime.fileExists === "function" ? runtime.fileExists : fileExists;
+  const currentExec = processExecPath.trim();
+  if (currentExec && fileExistsFn(currentExec)) {
+    return currentExec;
+  }
+  const portableExecutable = String(env.PORTABLE_EXECUTABLE_FILE || "").trim();
+  if (platform === "win32" && portableExecutable && fileExistsFn(portableExecutable)) {
+    return portableExecutable;
+  }
+  return processExecPath;
+}
+
+function isDirectory(targetPath) {
+  try {
+    return fs.statSync(targetPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isAsarPath(targetPath) {
+  const normalized = String(targetPath || "").replace(/\\/g, "/").toLowerCase();
+  return normalized === ".asar" || normalized.endsWith(".asar") || normalized.includes(".asar/");
+}
+
 module.exports = {
   spawnCliTask,
+  resolveCliExecPath,
+  resolveSpawnCwd,
 };

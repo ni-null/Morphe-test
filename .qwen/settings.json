@@ -6,7 +6,8 @@
       "Bash(rmdir *)",
       "Bash(npm run *)",
       "Bash(ls *)",
-      "Bash(rm *)"
+      "Bash(rm *)",
+      "Bash(node *)"
     ]
   },
   "$version": 3

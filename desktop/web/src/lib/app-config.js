@@ -1,4 +1,4 @@
-import { hasText, resolveDisplayName, mergeRepoOptions, packageToSectionName } from "./app-utils"
+import { hasText, resolveDisplayName, packageToSectionName } from "./app-utils"
 import {
   RESERVED_SECTIONS,
   DEFAULT_ENGINE_SOURCE_REPO,
@@ -97,17 +97,6 @@ function readTomlString(section, keys) {
     }
   }
   return ""
-}
-
-function readTomlStringArray(section, keys) {
-  if (!section) return []
-  for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(section, key)) continue
-    const raw = section[key]
-    if (Array.isArray(raw)) return raw.map((item) => String(item || "").trim()).filter(Boolean)
-    if (hasText(raw)) return String(raw).split(",").map((item) => item.trim()).filter(Boolean)
-  }
-  return []
 }
 
 export function normalizeAppMode(rawMode) {
@@ -244,20 +233,6 @@ export function configFormFromToml(content) {
   }
   const engineSourceRepo = readTomlString(engineSourceCfg, ["source_repo", "source-repo", "repo", "patches_repo"])
   if (hasText(engineSourceRepo)) defaults.patchCli.patchesRepo = engineSourceRepo
-  const engineSourceRepoOptions = readTomlStringArray(engineSourceCfg, [
-    "source_repo_options",
-    "source-repo-options",
-    "source_repos",
-    "source-repos",
-    "repo_options",
-    "repo-options",
-    "repos",
-  ])
-  defaults.patchCli.repoOptions = mergeRepoOptions(
-    engineSourceRepoOptions,
-    defaults.patchCli.patchesRepo,
-    DEFAULT_ENGINE_SOURCE_REPO,
-  )
   defaults.patchCli.path = readTomlString(engineSourceCfg, ["path"])
 
   const patchBundleMode = readTomlString(patchBundleCfg, ["mode"]).toLowerCase()
@@ -266,20 +241,6 @@ export function configFormFromToml(content) {
   }
   const patchBundleRepo = readTomlString(patchBundleCfg, ["source_repo", "source-repo", "repo", "patches_repo"])
   if (hasText(patchBundleRepo)) defaults.patches.patchesRepo = patchBundleRepo
-  const patchBundleRepoOptions = readTomlStringArray(patchBundleCfg, [
-    "source_repo_options",
-    "source-repo-options",
-    "source_repos",
-    "source-repos",
-    "repo_options",
-    "repo-options",
-    "repos",
-  ])
-  defaults.patches.repoOptions = mergeRepoOptions(
-    patchBundleRepoOptions,
-    defaults.patches.patchesRepo,
-    DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
-  )
   defaults.patches.path = readTomlString(patchBundleCfg, ["path"])
 
   const signingCfg = parsed.signing || parsed.sign || {}
@@ -316,11 +277,6 @@ export function configFormToToml(configForm) {
     pushTomlEntry(engineSourceEntries, "patches_repo", true, patchCliCfg.patchesRepo)
     pushTomlEntry(engineSourceEntries, "source_repo", true, patchCliCfg.patchesRepo)
   }
-  const engineSourceRepoOptions = mergeRepoOptions(patchCliCfg.repoOptions, patchCliCfg.patchesRepo, DEFAULT_ENGINE_SOURCE_REPO)
-  if (engineSourceRepoOptions.length > 0) {
-    engineSourceEntries.push(["repo_options", engineSourceRepoOptions])
-    engineSourceEntries.push(["source_repo_options", engineSourceRepoOptions])
-  }
   const engineSourceLines = buildTomlSectionLines("engine", engineSourceEntries)
   if (engineSourceLines.length) blocks.push(engineSourceLines)
 
@@ -331,11 +287,6 @@ export function configFormToToml(configForm) {
   } else {
     pushTomlEntry(patchesEntries, "patches_repo", true, patchBundleCfg.patchesRepo)
     pushTomlEntry(patchesEntries, "source_repo", true, patchBundleCfg.patchesRepo)
-  }
-  const patchesRepoOptions = mergeRepoOptions(patchBundleCfg?.repoOptions, patchBundleCfg?.patchesRepo, DEFAULT_PATCH_BUNDLE_SOURCE_REPO)
-  if (patchesRepoOptions.length > 0) {
-    patchesEntries.push(["repo_options", patchesRepoOptions])
-    patchesEntries.push(["source_repo_options", patchesRepoOptions])
   }
   const patchesLines = buildTomlSectionLines("patches", patchesEntries)
   if (patchesLines.length) blocks.push(patchesLines)

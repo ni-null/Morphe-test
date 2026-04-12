@@ -21,56 +21,20 @@ export default function useSourceAssetsState({
   fetchAndSaveSource,
   deleteSourceFile,
   openAssetsDir,
-  storageKeys,
   defaults,
 }) {
   const currentEngineSettingsOpen = Boolean(engineSettingsOpen)
   const currentPatchesSettingsOpen = Boolean(patchBundleSettingsOpen)
   const currentPatchCliCfg = configForm?.patchCli || {}
 
-  const readStorageWithFallback = (primaryKey) => {
-    try {
-      const primaryValue = String(globalThis?.localStorage?.getItem(primaryKey) || "")
-      if (primaryValue) return primaryValue
-    } catch {
-      return ""
-    }
-    return ""
-  }
-
-  const writeStorageValue = (primaryKey, value) => {
-    localStorage.setItem(primaryKey, value)
-  }
-
-  const removeStorageValue = (primaryKey) => {
-    localStorage.removeItem(primaryKey)
-  }
-
   const [engineLocalFiles, setEngineLocalFiles] = useState([])
   const [patchesLocalFiles, setPatchesLocalFiles] = useState([])
   const [keystoreFiles, setKeystoreFiles] = useState([])
-  const [selectedKeystorePath, setSelectedKeystorePath] = useState(() => {
-    try {
-      return String(
-        readStorageWithFallback(storageKeys.keystoreSelectedPathKey) || "",
-      ).trim()
-    } catch {
-      return ""
-    }
-  })
+  const [selectedKeystorePath, setSelectedKeystorePath] = useState("")
   const [engineDeleteName, setEngineDeleteName] = useState("")
   const [patchesDeleteName, setPatchesDeleteName] = useState("")
   const [engineSourceRepoOptions, setEngineSourceRepoOptions] = useState(() => {
-    try {
-      const raw = String(
-        readStorageWithFallback(storageKeys.engineSourceReposKey) || "",
-      )
-      if (!raw) return [defaults.engineSourceRepo]
-      const parsed = JSON.parse(raw)
-      return mergeRepoOptions(parsed, defaults.engineSourceRepo, defaults.engineSourceRepo)
-    } catch {
-      return [defaults.engineSourceRepo]
-    }
+    return [defaults.engineSourceRepo]
   })
   const [engineSourceRepo, setEngineSourceRepo] = useState(defaults.engineSourceRepo)
   const [engineSourceRepoDraft, setEngineSourceRepoDraft] = useState("")
@@ -78,16 +42,7 @@ export default function useSourceAssetsState({
   const [engineSourceVersion, setEngineSourceVersion] = useState("")
   const [engineSourceDownloadingNames, setEngineSourceDownloadingNames] = useState([])
   const [patchesSourceRepoOptions, setPatchesSourceRepoOptions] = useState(() => {
-    try {
-      const raw = String(
-        readStorageWithFallback(storageKeys.patchesSourceReposKey) || "",
-      )
-      if (!raw) return [defaults.patchesSourceRepo]
-      const parsed = JSON.parse(raw)
-      return mergeRepoOptions(parsed, defaults.patchesSourceRepo, defaults.patchesSourceRepo)
-    } catch {
-      return [defaults.patchesSourceRepo]
-    }
+    return [defaults.patchesSourceRepo]
   })
   const [patchesSourceRepo, setPatchesSourceRepo] = useState(defaults.patchesSourceRepo)
   const [patchesSourceRepoDraft, setPatchesSourceRepoDraft] = useState("")
@@ -244,7 +199,6 @@ export default function useSourceAssetsState({
     const nextOptions = mergeRepoOptions(engineSourceRepoOptions, repo, defaults.engineSourceRepo)
     setEngineSourceRepoOptions(nextOptions)
     setEngineSourceRepo(repo)
-    updateConfigSection("patchCli", { repoOptions: nextOptions })
     loadEngineSourceVersions(repo)
     setEngineSourceRepoDraft("")
     return true
@@ -254,7 +208,6 @@ export default function useSourceAssetsState({
     const repo = String(value || "").trim()
     const nextOptions = mergeRepoOptions(engineSourceRepoOptions, value, defaults.engineSourceRepo)
     setEngineSourceRepoOptions(nextOptions)
-    updateConfigSection("patchCli", { repoOptions: nextOptions })
     setEngineSourceRepo(repo)
     loadEngineSourceVersions(repo)
   }
@@ -277,9 +230,6 @@ export default function useSourceAssetsState({
     const nextRepo = currentSelected.toLowerCase() === target.toLowerCase() ? String(nextOptions[0] || defaults.engineSourceRepo) : currentSelected
     setEngineSourceRepoOptions(nextOptions)
     setEngineSourceRepo(nextRepo)
-    updateConfigSection("patchCli", {
-      repoOptions: nextOptions,
-    })
   }
 
   async function onAddPatchesSourceRepo() {
@@ -290,7 +240,6 @@ export default function useSourceAssetsState({
     const nextOptions = mergeRepoOptions(patchesSourceRepoOptions, repo, defaults.patchesSourceRepo)
     setPatchesSourceRepoOptions(nextOptions)
     setPatchesSourceRepo(repo)
-    updateConfigSection("patches", { repoOptions: nextOptions })
     loadPatchesSourceVersions(repo)
     setPatchesSourceRepoDraft("")
     return true
@@ -300,7 +249,6 @@ export default function useSourceAssetsState({
     const repo = String(value || "").trim()
     const nextOptions = mergeRepoOptions(patchesSourceRepoOptions, value, defaults.patchesSourceRepo)
     setPatchesSourceRepoOptions(nextOptions)
-    updateConfigSection("patches", { repoOptions: nextOptions })
     setPatchesSourceRepo(repo)
     loadPatchesSourceVersions(repo)
   }
@@ -323,9 +271,6 @@ export default function useSourceAssetsState({
     const nextRepo = currentSelected.toLowerCase() === target.toLowerCase() ? String(nextOptions[0] || defaults.patchesSourceRepo) : currentSelected
     setPatchesSourceRepoOptions(nextOptions)
     setPatchesSourceRepo(nextRepo)
-    updateConfigSection("patches", {
-      repoOptions: nextOptions,
-    })
   }
 
   async function onDeleteEngineFile(file) {
@@ -449,45 +394,29 @@ export default function useSourceAssetsState({
   }
 
   useEffect(() => {
-    writeStorageValue(
-      storageKeys.engineSourceReposKey,
-      JSON.stringify(engineSourceRepoOptions),
-    )
-  }, [engineSourceRepoOptions, storageKeys.engineSourceReposKey])
-
-  useEffect(() => {
-    writeStorageValue(
-      storageKeys.patchesSourceReposKey,
-      JSON.stringify(patchesSourceRepoOptions),
-    )
-  }, [patchesSourceRepoOptions, storageKeys.patchesSourceReposKey])
-
-  useEffect(() => {
-    if (!hasText(selectedKeystorePath)) {
-      removeStorageValue(storageKeys.keystoreSelectedPathKey)
-      return
-    }
-    writeStorageValue(
-      storageKeys.keystoreSelectedPathKey, selectedKeystorePath)
-  }, [
-    selectedKeystorePath,
-    hasText,
-    storageKeys.keystoreSelectedPathKey,
-  ])
-
-  useEffect(() => {
     if (currentEngineSettingsOpen) {
-      const nextOptions = mergeRepoOptions(currentPatchCliCfg?.repoOptions, "", defaults.engineSourceRepo)
+      const nextOptions = mergeRepoOptions(engineSourceRepoOptions, currentPatchCliCfg?.patchesRepo, defaults.engineSourceRepo)
+      const configSelected = String(currentPatchCliCfg?.patchesRepo || "").trim()
       const current = String(engineSourceRepo || "")
         .trim()
         .toLowerCase()
+      const hasSelected = nextOptions.some(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() === configSelected.toLowerCase(),
+      )
       const hasCurrent = nextOptions.some(
         (item) =>
           String(item || "")
             .trim()
             .toLowerCase() === current,
       )
-      const nextRepo = hasCurrent ? engineSourceRepo : String(nextOptions[0] || defaults.engineSourceRepo)
+      const nextRepo = hasSelected
+        ? configSelected
+        : hasCurrent
+          ? engineSourceRepo
+          : String(nextOptions[0] || defaults.engineSourceRepo)
       setEngineSourceRepoOptions(nextOptions)
       setEngineSourceRepo(nextRepo)
       loadEngineLocalFiles()
@@ -502,17 +431,28 @@ export default function useSourceAssetsState({
 
   useEffect(() => {
     if (currentPatchesSettingsOpen) {
-      const nextOptions = mergeRepoOptions(configForm?.patches?.repoOptions, "", defaults.patchesSourceRepo)
+      const configSelected = String(configForm?.patches?.patchesRepo || "").trim()
+      const nextOptions = mergeRepoOptions(patchesSourceRepoOptions, configSelected, defaults.patchesSourceRepo)
       const current = String(patchesSourceRepo || "")
         .trim()
         .toLowerCase()
+      const hasSelected = nextOptions.some(
+        (item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase() === configSelected.toLowerCase(),
+      )
       const hasCurrent = nextOptions.some(
         (item) =>
           String(item || "")
             .trim()
             .toLowerCase() === current,
       )
-      const nextRepo = hasCurrent ? patchesSourceRepo : String(nextOptions[0] || defaults.patchesSourceRepo)
+      const nextRepo = hasSelected
+        ? configSelected
+        : hasCurrent
+          ? patchesSourceRepo
+          : String(nextOptions[0] || defaults.patchesSourceRepo)
       setPatchesSourceRepoOptions(nextOptions)
       setPatchesSourceRepo(nextRepo)
       loadPatchesLocalFiles()

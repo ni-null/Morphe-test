@@ -186,7 +186,13 @@ async function ensureWorkspaceDefaultKeystore(workspacePaths, projectRoot) {
   const sourcePath = path.join(String(projectRoot || ""), "morphe-test.keystore");
   if (!(await fileExists(sourcePath))) return;
 
-  await fsp.copyFile(sourcePath, targetPath);
+  try {
+    await fsp.copyFile(sourcePath, targetPath);
+  } catch {
+    // Fallback for virtual sources (e.g. app.asar) where copyFile may fail on some setups.
+    const content = await fsp.readFile(sourcePath);
+    await fsp.writeFile(targetPath, content);
+  }
 }
 
 async function readJsonIfExists(targetPath) {
@@ -302,6 +308,32 @@ function getSourceSpec(type) {
   throw new Error(`Unsupported source type: ${type}`);
 }
 
+function ensureKeystoreFileName(nameInput) {
+  const raw = String(nameInput || "").trim();
+  const safe = safeFileName(raw || `keystore-${Date.now()}.keystore`);
+  return safe.toLowerCase().endsWith(".keystore") ? safe : `${safe}.keystore`;
+}
+
+function decodeBase64Strict(base64Input) {
+  const normalized = String(base64Input || "").replace(/\s+/gu, "");
+  if (!normalized) {
+    throw new Error("base64 is required.");
+  }
+  if (!/^[A-Za-z0-9+/=]+$/u.test(normalized)) {
+    throw new Error("Invalid base64 characters.");
+  }
+  const decoded = Buffer.from(normalized, "base64");
+  if (!decoded || decoded.length === 0) {
+    throw new Error("Base64 decoded to empty content.");
+  }
+  const normalizedNoPad = normalized.replace(/=+$/u, "");
+  const roundTripNoPad = decoded.toString("base64").replace(/=+$/u, "");
+  if (normalizedNoPad !== roundTripNoPad) {
+    throw new Error("Invalid base64 payload.");
+  }
+  return decoded;
+}
+
 function isGitHubRateLimitError(err) {
   const text = String(err && err.message ? err.message : err || "").toLowerCase();
   return text.includes("rate limit exceeded") || text.includes("api.github.com") && text.includes("http 403");
@@ -374,9 +406,50 @@ class TaskService {
     this.versionsCacheDir = path.join(this.cacheDir, "compatible-versions");
     this.patchEntriesCacheDir = path.join(this.cacheDir, "patch-entries");
     this.sourceReleaseMetadataPath = path.join(this.workspacePaths.runtime, "source-release-times.json");
+    this.sourceRepoOptionsPath = path.join(this.workspacePaths.runtime, "source-repo-options.json");
+    this.uiStatePath = path.join(this.workspacePaths.runtime, "ui-state.json");
     this.patchEntriesParserVersion = "v5";
     this.tasks = new Map();
-    this.startupCleanupPromise = this.cleanupStalePatchTemporaryDirs().catch(() => {});
+    this.startupCleanupPromise = Promise.all([
+      this.cleanupStalePatchTemporaryDirs().catch(() => {}),
+      ensureWorkspaceDefaultKeystore(this.workspacePaths, this.projectRoot).catch(() => {}),
+    ]);
+  }
+
+  normalizeUiState(payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    const locale = String(source.locale || "").trim() === "zh-TW" ? "zh-TW" : "en";
+    const theme = String(source.theme || "").trim() === "dark" ? "dark" : "light";
+    return { locale, theme };
+  }
+
+  async readUiState() {
+    await fsp.mkdir(this.workspacePaths.runtime, { recursive: true });
+    if (!(await fileExists(this.uiStatePath))) {
+      return this.normalizeUiState({});
+    }
+    try {
+      const raw = await fsp.readFile(this.uiStatePath, "utf8");
+      const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
+      const state = parsed && typeof parsed === "object" && parsed.state && typeof parsed.state === "object"
+        ? parsed.state
+        : parsed;
+      return this.normalizeUiState(state);
+    } catch {
+      return this.normalizeUiState({});
+    }
+  }
+
+  async writeUiState(payload) {
+    await fsp.mkdir(this.workspacePaths.runtime, { recursive: true });
+    const state = this.normalizeUiState(payload);
+    const data = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      state,
+    };
+    await fsp.writeFile(this.uiStatePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+    return state;
   }
 
   async ensureStartupCleanup() {
@@ -584,6 +657,46 @@ class TaskService {
     return this.patchProvider.mergePatchEntries(withOptionsEntries, defaultEntries);
   }
 
+  normalizeSourceRepoOptions(payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    const normalizeArray = (value) =>
+      Array.isArray(value)
+        ? Array.from(
+            new Set(
+              value
+                .map((item) => String(item || "").trim())
+                .filter((item) => item.length > 0),
+            ),
+          )
+        : [];
+    return {
+      engine: normalizeArray(source.engine),
+      patches: normalizeArray(source.patches),
+      microg: normalizeArray(source.microg),
+    };
+  }
+
+  async readSourceRepoOptions() {
+    await fsp.mkdir(this.workspacePaths.runtime, { recursive: true });
+    if (!(await fileExists(this.sourceRepoOptionsPath))) {
+      return { engine: [], patches: [], microg: [] };
+    }
+    try {
+      const raw = await fsp.readFile(this.sourceRepoOptionsPath, "utf8");
+      const parsed = JSON.parse(raw.replace(/^\uFEFF/u, ""));
+      return this.normalizeSourceRepoOptions(parsed);
+    } catch {
+      return { engine: [], patches: [], microg: [] };
+    }
+  }
+
+  async writeSourceRepoOptions(payload) {
+    await fsp.mkdir(this.workspacePaths.runtime, { recursive: true });
+    const normalized = this.normalizeSourceRepoOptions(payload);
+    await fsp.writeFile(this.sourceRepoOptionsPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+    return normalized;
+  }
+
   createTaskContext(runtime) {
     return {
       hasValue,
@@ -633,6 +746,123 @@ class TaskService {
           publishedAt: String(release && release.publishedAt ? release.publishedAt : ""),
         };
       }),
+    };
+  }
+
+  async importKeystore(payload) {
+    await ensureWorkspaceDefaultKeystore(this.workspacePaths, this.projectRoot);
+    const targetDir = this.workspacePaths.keystore;
+    await fsp.mkdir(targetDir, { recursive: true });
+
+    const originalName = String(payload && payload.fileName ? payload.fileName : "").trim();
+    const fileName = ensureKeystoreFileName(originalName || `imported-${Date.now()}.keystore`);
+    const content = decodeBase64Strict(payload && payload.base64 ? payload.base64 : "");
+    const fullPath = path.join(targetDir, fileName);
+    await fsp.writeFile(fullPath, content);
+
+    return {
+      imported: true,
+      fileName,
+      fullPath,
+      sizeBytes: content.length,
+    };
+  }
+
+  async generateKeystore(payload) {
+    await ensureWorkspaceDefaultKeystore(this.workspacePaths, this.projectRoot);
+    const targetDir = this.workspacePaths.keystore;
+    await fsp.mkdir(targetDir, { recursive: true });
+
+    const baseName = String(payload && payload.fileName ? payload.fileName : "").trim();
+    const desiredName = ensureKeystoreFileName(baseName || `generated-${Date.now()}.keystore`);
+    let targetPath = path.join(targetDir, desiredName);
+    let suffix = 2;
+    while (await fileExists(targetPath)) {
+      const nextName = desiredName.replace(/\.keystore$/iu, `-${suffix}.keystore`);
+      targetPath = path.join(targetDir, nextName);
+      suffix += 1;
+    }
+
+    const storePassword = String(payload && payload.storePassword ? payload.storePassword : "123456").trim() || "123456";
+    const entryPassword = String(payload && payload.entryPassword ? payload.entryPassword : storePassword).trim() || storePassword;
+    const entryAlias = String(payload && payload.entryAlias ? payload.entryAlias : "morphe").trim() || "morphe";
+    const dname = String(payload && payload.dname ? payload.dname : "CN=Morphe, OU=Desktop, O=Morphe, L=Taipei, ST=Taipei, C=TW").trim();
+
+    const args = [
+      "-genkeypair",
+      "-keystore", targetPath,
+      "-storepass", storePassword,
+      "-keypass", entryPassword,
+      "-alias", entryAlias,
+      "-dname", dname,
+      "-validity", "10000",
+      "-keyalg", "RSA",
+      "-keysize", "2048",
+      "-storetype", "PKCS12",
+      "-noprompt",
+    ];
+
+    const result = await new Promise((resolve) => {
+      const child = spawn("keytool", args, {
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      const stdoutChunks = [];
+      const stderrChunks = [];
+      child.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
+      child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+      child.on("error", (error) => {
+        resolve({
+          ok: false,
+          code: -1,
+          message: error && error.message ? String(error.message) : String(error),
+          stdout: "",
+          stderr: "",
+        });
+      });
+      child.on("close", (code) => {
+        resolve({
+          ok: code === 0,
+          code: typeof code === "number" ? code : -1,
+          message: "",
+          stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+          stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        });
+      });
+    });
+
+    if (!result.ok) {
+      throw new Error(
+        `keytool failed (${result.code}): ${String(result.message || result.stderr || result.stdout || "unknown error").trim()}`,
+      );
+    }
+
+    const stat = await fsp.stat(targetPath);
+    return {
+      generated: true,
+      fileName: path.basename(targetPath),
+      fullPath: targetPath,
+      sizeBytes: stat.size,
+      entryAlias,
+      storeType: "PKCS12",
+    };
+  }
+
+  async getKeystorePreview(payload) {
+    const resolved = this.resolveSourceFileAbsolutePath({
+      type: "keystore",
+      relativePath: payload && payload.relativePath ? payload.relativePath : "",
+    });
+    if (!(await fileExists(resolved.fullPath))) {
+      throw new Error(`Keystore not found: ${resolved.relativePath}`);
+    }
+    const content = await fsp.readFile(resolved.fullPath);
+    const base64 = content.toString("base64");
+    return {
+      relativePath: resolved.relativePath,
+      fileName: path.basename(resolved.fullPath),
+      sizeBytes: content.length,
+      base64,
     };
   }
 
@@ -1614,7 +1844,8 @@ class TaskService {
     return toTaskSummary(task);
   }
 
-  startTask(options) {
+  async startTask(options) {
+    await this.ensureStartupCleanup();
     const configPath = this.resolveConfigPath(options && options.configPath ? options.configPath : "");
     const workspacePathInput = options && options.workspacePath ? String(options.workspacePath) : "";
     const workspacePath = hasValue(workspacePathInput) ? workspacePathInput : this.workspacePaths.root;
@@ -1675,6 +1906,8 @@ class TaskService {
       taskOutputDir: null,
       taskFolderName: null,
       taskLogPath: null,
+      command: spawned.command || "",
+      cwd: spawned.cwd || "",
       args: spawned.args,
       persistLogs,
       stopRequested: false,
@@ -1686,6 +1919,16 @@ class TaskService {
     };
 
     this.tasks.set(spawned.taskId, taskRecord);
+    this.appendTaskLine(
+      taskRecord,
+      "stdout",
+      `Spawn command: ${String(taskRecord.command || process.execPath)}`,
+    );
+    this.appendTaskLine(
+      taskRecord,
+      "stdout",
+      `Spawn cwd: ${String(taskRecord.cwd || process.cwd())}`,
+    );
 
     spawned.child.on("error", (err) => {
       const task = this.tasks.get(spawned.taskId);
@@ -1694,6 +1937,11 @@ class TaskService {
       task.finishedAt = new Date().toISOString();
       task.exitCode = -1;
       this.appendTaskLine(task, "stderr", err && err.message ? err.message : String(err));
+      this.appendTaskLine(
+        task,
+        "stderr",
+        `Spawn debug -> command: ${String(task.command || process.execPath)}; cwd: ${String(task.cwd || process.cwd())}`,
+      );
     });
 
     spawned.child.on("close", (code) => {

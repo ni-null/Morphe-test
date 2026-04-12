@@ -31,11 +31,20 @@ function createInvokeHandler(projectRoot) {
         await fsp.writeFile(configPath, "", "utf8");
       }
       const content = await fsp.readFile(configPath, "utf8");
-      return { path: configPath, content };
+      const sourceRepoOptions = await taskService.readSourceRepoOptions();
+      return { path: configPath, content, sourceRepoOptions };
     }
 
     if (method === "fetchPackageMap") {
       return { map: taskService.getPackageMetaMap() };
+    }
+
+    if (method === "fetchUiState") {
+      return { state: await taskService.readUiState() };
+    }
+
+    if (method === "saveUiState") {
+      return { state: await taskService.writeUiState(payload.state) };
     }
 
     if (method === "checkJavaVersion") {
@@ -47,7 +56,11 @@ function createInvokeHandler(projectRoot) {
       const content = String(payload.content || "");
       await fsp.mkdir(path.dirname(configPath), { recursive: true });
       await fsp.writeFile(configPath, content, "utf8");
-      return { path: configPath, saved: true };
+      let sourceRepoOptions = null;
+      if (payload && Object.prototype.hasOwnProperty.call(payload, "sourceRepoOptions")) {
+        sourceRepoOptions = await taskService.writeSourceRepoOptions(payload.sourceRepoOptions);
+      }
+      return { path: configPath, saved: true, sourceRepoOptions };
     }
 
     if (method === "listTasks") {
@@ -59,7 +72,7 @@ function createInvokeHandler(projectRoot) {
       const persistLogs = Object.prototype.hasOwnProperty.call(payload, "persistLogs")
         ? normalizeBoolean(payload.persistLogs)
         : true;
-      const task = taskService.startTask({
+      const task = await taskService.startTask({
         configPath: payload.configPath,
         workspacePath: payload.workspacePath,
         migrateWorkspace: normalizeBoolean(payload.migrateWorkspace),
@@ -158,6 +171,29 @@ function createInvokeHandler(projectRoot) {
 
     if (method === "listSourceFiles" || method === "listArtifactSourceFiles") {
       return await taskService.listSourceFiles(payload.type);
+    }
+
+    if (method === "importKeystore") {
+      return await taskService.importKeystore({
+        fileName: payload.fileName,
+        base64: payload.base64,
+      });
+    }
+
+    if (method === "generateKeystore") {
+      return await taskService.generateKeystore({
+        fileName: payload.fileName,
+        storePassword: payload.storePassword,
+        entryPassword: payload.entryPassword,
+        entryAlias: payload.entryAlias,
+        dname: payload.dname,
+      });
+    }
+
+    if (method === "fetchKeystorePreview") {
+      return await taskService.getKeystorePreview({
+        relativePath: payload.relativePath,
+      });
     }
 
     if (method === "fetchAndSaveSource" || method === "fetchAndSaveArtifactSource") {

@@ -11,6 +11,8 @@ export default function useConfigLifecycle({
   setSelectedKeystorePath,
   setEngineSourceRepoOptions,
   setPatchesSourceRepoOptions,
+  setMircrogSourceRepoOptions,
+  setMircrogSourceRepo,
   lastSavedSignatureRef,
   setConfigLoaded,
   setMessage,
@@ -19,24 +21,34 @@ export default function useConfigLifecycle({
   mergeRepoOptions,
   defaultEngineSourceRepo,
   defaultPatchesSourceRepo,
+  defaultMircrogSourceRepo,
 }) {
   const updateEngineSourceRepoOptions = setEngineSourceRepoOptions
   const engineSourceRepoDefault = defaultEngineSourceRepo
   const applyLoadedConfig = useCallback(
-    ({ content, resolvedPath }) => {
+    ({ content, resolvedPath, sourceRepoOptions }) => {
       const nextForm = configFormFromToml(content)
       const nextPatchCli = nextForm?.patchCli || {}
+      const repoOptions = sourceRepoOptions && typeof sourceRepoOptions === "object" ? sourceRepoOptions : {}
       setConfigPath(resolvedPath)
       setRawConfigInput(content)
       setConfigForm(nextForm)
       setSelectedKeystorePath(String(nextForm?.signing?.keystorePath || "").trim())
       updateEngineSourceRepoOptions(
-        mergeRepoOptions(nextPatchCli?.repoOptions, nextPatchCli?.patchesRepo, engineSourceRepoDefault),
+        mergeRepoOptions(repoOptions?.engine, nextPatchCli?.patchesRepo, engineSourceRepoDefault),
       )
       setPatchesSourceRepoOptions(
-        mergeRepoOptions(nextForm?.patches?.repoOptions, nextForm?.patches?.patchesRepo, defaultPatchesSourceRepo),
+        mergeRepoOptions(repoOptions?.patches, nextForm?.patches?.patchesRepo, defaultPatchesSourceRepo),
       )
-      lastSavedSignatureRef.current = `${resolvedPath}\n${content}`
+      const nextMircrogRepoOptions = mergeRepoOptions(repoOptions?.microg, defaultMircrogSourceRepo, defaultMircrogSourceRepo)
+      setMircrogSourceRepoOptions(nextMircrogRepoOptions)
+      setMircrogSourceRepo(String(nextMircrogRepoOptions[0] || defaultMircrogSourceRepo))
+      const sourceRepoSignature = JSON.stringify({
+        engine: mergeRepoOptions(repoOptions?.engine, nextPatchCli?.patchesRepo, engineSourceRepoDefault),
+        patches: mergeRepoOptions(repoOptions?.patches, nextForm?.patches?.patchesRepo, defaultPatchesSourceRepo),
+        microg: nextMircrogRepoOptions,
+      })
+      lastSavedSignatureRef.current = `${resolvedPath}\n${content}\n${sourceRepoSignature}`
       setConfigLoaded(true)
       return nextForm
     },
@@ -48,9 +60,12 @@ export default function useConfigLifecycle({
       setSelectedKeystorePath,
       updateEngineSourceRepoOptions,
       setPatchesSourceRepoOptions,
+      setMircrogSourceRepoOptions,
+      setMircrogSourceRepo,
       mergeRepoOptions,
       engineSourceRepoDefault,
       defaultPatchesSourceRepo,
+      defaultMircrogSourceRepo,
       lastSavedSignatureRef,
       setConfigLoaded,
     ],
@@ -63,7 +78,8 @@ export default function useConfigLifecycle({
       const data = await fetchConfig(configPath)
       const content = String(data.content || "")
       const resolvedPath = String(data.path || configPath)
-      const nextForm = applyLoadedConfig({ content, resolvedPath })
+      const sourceRepoOptions = data && typeof data.sourceRepoOptions === "object" ? data.sourceRepoOptions : {}
+      const nextForm = applyLoadedConfig({ content, resolvedPath, sourceRepoOptions })
       if (!silent) {
         setMessage(`Config loaded: ${resolvedPath}`)
       }
@@ -88,7 +104,8 @@ export default function useConfigLifecycle({
       const data = await fetchConfig(configPath)
       const content = String(data.content || "")
       const resolvedPath = String(data.path || configPath)
-      applyLoadedConfig({ content, resolvedPath })
+      const sourceRepoOptions = data && typeof data.sourceRepoOptions === "object" ? data.sourceRepoOptions : {}
+      applyLoadedConfig({ content, resolvedPath, sourceRepoOptions })
       setRawOverrideMode(true)
       setMessage(`Raw reloaded latest config: ${resolvedPath}`)
     } catch (error) {

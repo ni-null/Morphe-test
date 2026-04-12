@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Archive, Database, Download, Hammer } from "lucide-react"
+import { Archive, Database, Download, Hammer, KeyRound } from "lucide-react"
 import {
   fetchConfig,
   fetchPackageMap,
+  fetchUiState,
+  saveUiState,
   saveConfig,
   fetchAppCompatibleVersions,
   fetchAppPatchOptions,
@@ -27,6 +29,9 @@ import {
   listSourceFiles,
   openAssetsDir,
   openSourceFile,
+  importKeystore,
+  generateKeystore,
+  fetchKeystorePreview,
 } from "../lib/ipcClient"
 import { t as translate } from "../i18n"
 import { useUiStore } from "../stores/uiStore"
@@ -42,11 +47,6 @@ import useBuildSourceSelectors from "../pages/BuildPage/hooks/useBuildSourceSele
 import { BUILD_STAGE_DEFINITIONS, detectBuildStageIndexFromLine } from "../pages/BuildPage/utils/buildProgressUtils"
 import { formatBytes, formatTaskLabel, isNotFoundError, statusVariant } from "../lib/task-format-core"
 import {
-  LIVE_BUILD_TASK_ID_KEY,
-  ENGINE_SOURCE_REPOS_KEY,
-  PATCH_BUNDLE_SOURCE_REPOS_KEY,
-  SIGNING_SELECTED_KEYSTORE_PATH_KEY,
-  MICROG_SOURCE_REPOS_KEY,
   DEFAULT_ENGINE_SOURCE_REPO,
   DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
   DEFAULT_MICROG_SOURCE_REPO,
@@ -85,6 +85,27 @@ export const NAV_BUILD = "build"
 export const NAV_MIRCROG = "mircrog"
 export const NAV_HISTORY = "history"
 export const NAV_ASSETS = "assets"
+export const NAV_KEYSTORE = "keystore"
+
+function ensureKeystoreFileName(fileName) {
+  const name = String(fileName || "").trim()
+  if (!name) return `imported-${Date.now()}.keystore`
+  return name.toLowerCase().endsWith(".keystore") ? name : `${name}.keystore`
+}
+
+async function browserFileToBase64(file) {
+  const input = file && typeof file === "object" ? file : null
+  if (!input) throw new Error("Invalid file.")
+  const buffer = await input.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ""
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+  return btoa(binary)
+}
 
 function useAppController() {
   const activeNav = useUiStore((state) => state.activeNav)
@@ -133,20 +154,19 @@ function useAppController() {
   const [mircrogLocalFiles, setMircrogLocalFiles] = useState([])
   const [mircrogLoading, setMircrogLoading] = useState(false)
   const [mircrogSourceRepoOptions, setMircrogSourceRepoOptions] = useState(() => {
-    try {
-      const raw = String(globalThis?.localStorage?.getItem(MICROG_SOURCE_REPOS_KEY) || "")
-      if (!raw) return [DEFAULT_MICROG_SOURCE_REPO]
-      const parsed = JSON.parse(raw)
-      return mergeRepoOptions(parsed, DEFAULT_MICROG_SOURCE_REPO, DEFAULT_MICROG_SOURCE_REPO)
-    } catch {
-      return [DEFAULT_MICROG_SOURCE_REPO]
-    }
+    return [DEFAULT_MICROG_SOURCE_REPO]
   })
   const [mircrogSourceRepo, setMircrogSourceRepo] = useState(DEFAULT_MICROG_SOURCE_REPO)
   const [mircrogSourceRepoDraft, setMircrogSourceRepoDraft] = useState("")
   const [mircrogSourceVersion, setMircrogSourceVersion] = useState("")
   const [mircrogDownloadingNames, setMircrogDownloadingNames] = useState([])
   const [mircrogDeleteName, setMircrogDeleteName] = useState("")
+  const [keystoreImporting, setKeystoreImporting] = useState(false)
+  const [keystoreGenerating, setKeystoreGenerating] = useState(false)
+  const [keystoreDeleteName, setKeystoreDeleteName] = useState("")
+  const [keystoreViewing, setKeystoreViewing] = useState("")
+  const [keystorePreviewOpen, setKeystorePreviewOpen] = useState(false)
+  const [keystorePreviewData, setKeystorePreviewData] = useState(null)
 
   const [isBusy, setIsBusy] = useState(false)
   const [message, setSidebarMessage] = useState("")
@@ -160,6 +180,7 @@ function useAppController() {
   }, [])
   const lastSavedSignatureRef = useRef("")
   const appSettingsCleanupTimerRef = useRef(null)
+  const uiStateHydratedRef = useRef(false)
 
   const {
     tasks,
@@ -199,7 +220,6 @@ function useAppController() {
     clearAllCache,
     openTaskOutputDir,
     openTaskArtifactDir,
-    liveBuildTaskIdKey: LIVE_BUILD_TASK_ID_KEY,
   })
 
   const {
@@ -238,6 +258,7 @@ function useAppController() {
     setSelectedKeystorePath,
     setEngineSourceRepoOptions,
     setPatchesSourceRepoOptions,
+    loadKeystoreFiles,
     onOpenAssetsDir,
     onChangeKeystoreSelect,
   } = useSourceAssetsState({
@@ -261,11 +282,6 @@ function useAppController() {
     fetchAndSaveSource,
     deleteSourceFile,
     openAssetsDir,
-    storageKeys: {
-      engineSourceReposKey: ENGINE_SOURCE_REPOS_KEY,
-      patchesSourceReposKey: PATCH_BUNDLE_SOURCE_REPOS_KEY,
-      keystoreSelectedPathKey: SIGNING_SELECTED_KEYSTORE_PATH_KEY,
-    },
     defaults: {
       engineSourceRepo: DEFAULT_ENGINE_SOURCE_REPO,
       patchesSourceRepo: DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
@@ -283,6 +299,8 @@ function useAppController() {
     setSelectedKeystorePath,
     setEngineSourceRepoOptions: setEngineSourceRepoOptions,
     setPatchesSourceRepoOptions,
+    setMircrogSourceRepoOptions,
+    setMircrogSourceRepo,
     lastSavedSignatureRef,
     setConfigLoaded,
     setMessage,
@@ -291,6 +309,7 @@ function useAppController() {
     mergeRepoOptions,
     defaultEngineSourceRepo: DEFAULT_ENGINE_SOURCE_REPO,
     defaultPatchesSourceRepo: DEFAULT_PATCH_BUNDLE_SOURCE_REPO,
+    defaultMircrogSourceRepo: DEFAULT_MICROG_SOURCE_REPO,
   })
 
   const {
@@ -902,15 +921,101 @@ function updateConfigSection(sectionKey, patch) {
     }
   }
 
+  async function onImportKeystoreFiles(fileList) {
+    const files = Array.isArray(fileList) ? fileList : Array.from(fileList || [])
+    if (files.length === 0) return
+    setKeystoreImporting(true)
+    try {
+      let importedCount = 0
+      for (const file of files) {
+        if (!file) continue
+        const base64 = await browserFileToBase64(file)
+        const fileName = ensureKeystoreFileName(file.name)
+        await importKeystore(fileName, base64)
+        importedCount += 1
+      }
+      await loadKeystoreFiles()
+      setMessage(t("keystore.imported", { count: importedCount }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setKeystoreImporting(false)
+    }
+  }
+
+  async function onGenerateKeystore() {
+    setKeystoreGenerating(true)
+    try {
+      const generatedName = `generated-${Date.now()}.keystore`
+      const data = await generateKeystore({ fileName: generatedName })
+      await loadKeystoreFiles()
+      setMessage(t("keystore.generated", { name: String(data?.fileName || generatedName) }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setKeystoreGenerating(false)
+    }
+  }
+
+  async function onViewKeystoreFile(file) {
+    const relativePath = String(file?.relativePath || "").trim()
+    if (!relativePath) return
+    setKeystoreViewing(relativePath)
+    try {
+      const preview = await fetchKeystorePreview(relativePath)
+      setKeystorePreviewData(preview)
+      setKeystorePreviewOpen(true)
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setKeystoreViewing("")
+    }
+  }
+
+  async function onDeleteKeystoreFile(file) {
+    const relativePath = String(file?.relativePath || file?.name || "").trim()
+    if (!relativePath) return
+    setKeystoreDeleteName(relativePath)
+    try {
+      await deleteSourceFile("keystore", relativePath)
+      await loadKeystoreFiles()
+      setMessage(t("msg.deleted", { name: relativePath }))
+    } catch (error) {
+      setMessage(error.message || String(error))
+    } finally {
+      setKeystoreDeleteName("")
+    }
+  }
+
   useEffect(() => {
     loadConfig()
     refreshTasks()
-    const persistedId = localStorage.getItem(LIVE_BUILD_TASK_ID_KEY)
-    if (persistedId) {
-      setLiveTaskId(persistedId)
-      setSelectedTaskId((prev) => prev || persistedId)
-    }
   }, [])
+
+  useEffect(() => {
+    let canceled = false
+    fetchUiState()
+      .then((data) => {
+        if (canceled) return
+        const state = data && typeof data.state === "object" ? data.state : {}
+        setLocale(state?.locale)
+        setTheme(state?.theme)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!canceled) {
+          uiStateHydratedRef.current = true
+        }
+      })
+    return () => {
+      canceled = true
+    }
+  }, [setLocale, setTheme])
+
+  useEffect(() => {
+    if (!uiStateHydratedRef.current) return
+    saveUiState({ locale, theme }).catch(() => {})
+  }, [locale, theme])
 
   useEffect(() => {
     let canceled = false
@@ -939,6 +1044,11 @@ function updateConfigSection(sectionKey, patch) {
     setMessage,
     t,
     saveConfig,
+    sourceRepoOptions: {
+      engine: engineSourceRepoOptions,
+      patches: patchBundleSourceRepoOptions,
+      microg: mircrogSourceRepoOptions,
+    },
   })
 
 
@@ -956,6 +1066,8 @@ function updateConfigSection(sectionKey, patch) {
         await onDeleteDownloadedApkFile(payload)
       } else if (action === "delete-microg-file") {
         await onDeleteMircrogFile(payload)
+      } else if (action === "delete-keystore-file") {
+        await onDeleteKeystoreFile(payload)
       } else if (action === "delete-task") {
         await onDeleteTask(String(payload || ""))
       } else if (action === "delete-all-tasks") {
@@ -981,8 +1093,9 @@ function updateConfigSection(sectionKey, patch) {
   }, [activeNav])
 
   useEffect(() => {
-    localStorage.setItem(MICROG_SOURCE_REPOS_KEY, JSON.stringify(mircrogSourceRepoOptions))
-  }, [mircrogSourceRepoOptions])
+    if (activeNav !== NAV_KEYSTORE) return
+    loadKeystoreFiles()
+  }, [activeNav])
 
   useEffect(() => {
     if (!appSettingsOpen) return
@@ -1006,6 +1119,7 @@ function updateConfigSection(sectionKey, patch) {
     { key: NAV_BUILD, label: t("nav.build"), icon: Hammer },
     { key: NAV_MIRCROG, label: t("nav.mircrog"), icon: Download },
     { key: NAV_ASSETS, label: t("nav.assets"), icon: Database },
+    { key: NAV_KEYSTORE, label: t("nav.keystore"), icon: KeyRound },
     { key: NAV_HISTORY, label: t("nav.history"), icon: Archive },
   ]
   const getPackageIcon = useCallback((packageName) => {
@@ -1151,6 +1265,7 @@ function updateConfigSection(sectionKey, patch) {
       build: NAV_BUILD,
       mircrog: NAV_MIRCROG,
       assets: NAV_ASSETS,
+      keystore: NAV_KEYSTORE,
       history: NAV_HISTORY,
     },
     mircrogPageProps: {
@@ -1258,6 +1373,24 @@ function updateConfigSection(sectionKey, patch) {
       onOpenSourceFile,
       onOpenAssetsDir,
       apkDeletePath,
+    },
+    keystorePageProps: {
+      t,
+      hasText,
+      formatBytes,
+      keystoreFiles,
+      keystoreDeleteName,
+      keystoreImporting,
+      keystoreGenerating,
+      keystoreViewing,
+      keystorePreviewOpen,
+      keystorePreviewData,
+      onKeystorePreviewOpenChange: setKeystorePreviewOpen,
+      onImportKeystoreFiles,
+      onGenerateKeystore,
+      onViewKeystoreFile,
+      openConfirmDialog,
+      onOpenAssetsDir,
     },
     historyPageProps: {
       t,

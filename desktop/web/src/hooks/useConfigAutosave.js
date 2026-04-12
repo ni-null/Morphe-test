@@ -12,11 +12,13 @@ export default function useConfigAutosave({
   setMessage,
   t,
   saveConfig,
+  sourceRepoOptions,
 }) {
   useEffect(() => {
     if (!configLoaded) return undefined
     const content = rawOverrideMode ? rawConfigInput : generatedToml
-    const signature = `${configPath}\n${content}`
+    const sourceRepoSignature = JSON.stringify(sourceRepoOptions || {})
+    const signature = `${configPath}\n${content}\n${sourceRepoSignature}`
     if (signature === lastSavedSignatureRef.current) {
       return undefined
     }
@@ -24,9 +26,9 @@ export default function useConfigAutosave({
     const timer = setTimeout(async () => {
       setIsAutoSavingConfig(true)
       try {
-        const data = await saveConfig({ path: configPath, content })
+        const data = await saveConfig({ path: configPath, content, sourceRepoOptions })
         const resolvedPath = String(data.path || configPath)
-        lastSavedSignatureRef.current = `${resolvedPath}\n${content}`
+        lastSavedSignatureRef.current = `${resolvedPath}\n${content}\n${sourceRepoSignature}`
         if (resolvedPath !== configPath) {
           setConfigPath(resolvedPath)
         }
@@ -48,6 +50,7 @@ export default function useConfigAutosave({
     lastSavedSignatureRef,
     setIsAutoSavingConfig,
     saveConfig,
+    sourceRepoOptions,
     setConfigPath,
     setMessage,
     t,

@@ -558,6 +558,12 @@ function getMaxCfRetries() {
   return isCiEnvironment() ? 2 : 3;
 }
 
+function isUnsupportedCurlFeature(stderrText, optionName) {
+  const text = String(stderrText || "").toLowerCase();
+  const option = String(optionName || "").toLowerCase();
+  return text.includes(option) && text.includes("does not support this");
+}
+
 async function curlFetchHtml(url, referer, appName, state, ctx) {
   if (typeof ctx.runCommandCapture !== "function") {
     throw new Error(`[${appName}] runCommandCapture is required for curl mode.`);
@@ -586,6 +592,20 @@ async function curlFetchHtml(url, referer, appName, state, ctx) {
     if (result.code !== 0) {
       const stderr = String(result.stderr || "").trim();
       const stdout = String(result.stdout || "").trim().slice(0, 300);
+      if (state.supportsHttp2 && isUnsupportedCurlFeature(stderr, "--http2")) {
+        state.supportsHttp2 = false;
+        if (typeof ctx.logWarn === "function") {
+          ctx.logWarn(`[${appName}] curl runtime does not support --http2, retry without it.`);
+        }
+        continue;
+      }
+      if (state.supportsTls13 && isUnsupportedCurlFeature(stderr, "--tlsv1.3")) {
+        state.supportsTls13 = false;
+        if (typeof ctx.logWarn === "function") {
+          ctx.logWarn(`[${appName}] curl runtime does not support --tlsv1.3, retry without it.`);
+        }
+        continue;
+      }
       lastError = new Error(`[${appName}] curl request failed: ${url}\n${stderr || stdout}`);
       // Network-level failure, no point retrying CF-specific logic
       throw lastError;

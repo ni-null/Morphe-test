@@ -1,15 +1,22 @@
-[morphe-cli]
+[engine]
 mode = "stable"
 patches_repo = "MorpheApp/morphe-cli"
+source_repo = "MorpheApp/morphe-cli"
 repo_options = ["MorpheApp/morphe-cli"]
+source_repo_options = ["MorpheApp/morphe-cli"]
 
 [patches]
-mode = "stable"
+mode = "dev"
 patches_repo = "MorpheApp/morphe-patches"
+source_repo = "MorpheApp/morphe-patches"
 repo_options = ["MorpheApp/morphe-patches"]
+source_repo_options = ["MorpheApp/morphe-patches"]
+
+[signing]
+keystore_path = "C:\\web\\yt-patcher-apk-builder\\workspace\\keystore\\morphe-test.keystore"
 
 [youtube]
-mode = false
+mode = "remote"
 package_name = "com.google.android.youtube"
 apkmirror-dlurl = "https://www.apkmirror.com/apk/google-inc/youtube"
 uptodown-dlurl = "https://youtube.en.uptodown.com/android"

@@ -41,12 +41,20 @@ export async function fetchPackageMap() {
   return requestIpc("fetchPackageMap")
 }
 
+export async function fetchUiState() {
+  return requestIpc("fetchUiState")
+}
+
+export async function saveUiState(state) {
+  return requestIpc("saveUiState", { state: state && typeof state === "object" ? state : {} })
+}
+
 export async function checkJavaVersion() {
   return requestIpc("checkJavaVersion")
 }
 
-export async function saveConfig({ path, content }) {
-  return requestIpc("saveConfig", { path, content })
+export async function saveConfig({ path, content, sourceRepoOptions }) {
+  return requestIpc("saveConfig", { path, content, sourceRepoOptions })
 }
 
 export async function listTasks(limit = 50) {
@@ -213,6 +221,24 @@ export async function fetchEnginePatchOptions(configPath, app) {
 
 export async function listSourceFiles(type) {
   return requestIpc("listSourceFiles", { type: String(type || "") })
+}
+
+export async function importKeystore(fileName, base64) {
+  return requestIpc("importKeystore", {
+    fileName: String(fileName || ""),
+    base64: String(base64 || ""),
+  })
+}
+
+export async function generateKeystore(options = {}) {
+  const payload = options && typeof options === "object" ? options : {}
+  return requestIpc("generateKeystore", payload)
+}
+
+export async function fetchKeystorePreview(relativePath) {
+  return requestIpc("fetchKeystorePreview", {
+    relativePath: String(relativePath || ""),
+  })
 }
 
 export async function listArtifactSourceFiles(type) {

@@ -1,5 +1,5 @@
 import defaultPackageMetaMap from "../data/package-name-meta.json"
-import sourceRepoDefaults from "../../data/source-repo-defaults.json"
+import sourceRepoDefaults from "../data/source-repo-defaults.json"
 
 export const DEFAULT_PACKAGE_META_MAP =
   defaultPackageMetaMap && typeof defaultPackageMetaMap === "object" ? defaultPackageMetaMap : {}
@@ -13,12 +13,6 @@ export const RESERVED_SECTIONS = new Set([
   "signing",
   "sign",
 ])
-
-export const LIVE_BUILD_TASK_ID_KEY = "patcher.liveBuildTaskId"
-export const ENGINE_SOURCE_REPOS_KEY = "engine.source.repos"
-export const PATCH_BUNDLE_SOURCE_REPOS_KEY = "patch-bundle.source.repos"
-export const SIGNING_SELECTED_KEYSTORE_PATH_KEY = "signing.keystore.path"
-export const MICROG_SOURCE_REPOS_KEY = "microg.source.repos"
 
 const SOURCE_REPO_DEFAULTS = sourceRepoDefaults && typeof sourceRepoDefaults === "object" ? sourceRepoDefaults : {}
 export const DEFAULT_ENGINE_SOURCE_REPO = String(SOURCE_REPO_DEFAULTS?.engine?.defaultRepo || "MorpheApp/morphe-cli").trim()

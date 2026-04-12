@@ -163,7 +163,6 @@ function GeneratedApksSection({
                 </thead>
                 <tbody>
                   {filteredRows.map((item) => {
-                    const providerId = String(item?.patchProviderId || "").trim()
                     return (
                       <tr key={`${item.taskId}:${item.relativePath}:${item.fileName}`} className='hover:bg-muted/30'>
                         <td className='px-3 py-1.5'>
@@ -180,7 +179,6 @@ function GeneratedApksSection({
                             <span className='min-w-0' title={`${resolveAppLabel(item.appKey)} / ${item.fileName}`}>
                               <span className='sr-only'>{resolveAppLabel(item.appKey)} </span>
                               <span className='block truncate'>{item.fileName}</span>
-                              {providerId ? <span className='block text-[11px] text-muted-foreground'>{t("build.generated.provider", { id: providerId })}</span> : null}
                             </span>
                           </span>
                         </td>

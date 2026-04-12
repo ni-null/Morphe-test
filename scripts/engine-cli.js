@@ -186,7 +186,7 @@ async function resolveEngineCliJar(params) {
     ctx.logInfo(`DryRun: would fetch latest engine-cli jar from ${repo} with mode=${mode}`);
     ctx.logInfo(`DryRun: save path keeps original release filename under ${saveDir}`);
     return ctx.resolveAbsolutePath(
-      path.join(DEFAULT_ENGINE_CLI_DIR_REL, repoDirName, mode === "dev" ? "morphe-cli-dev-latest-all.jar" : "morphe-cli-latest-all.jar"),
+      path.join(DEFAULT_ENGINE_CLI_DIR_REL, repoDirName, mode === "dev" ? "engine-cli-dev-latest-all.jar" : "engine-cli-latest-all.jar"),
       workspaceDir || configDir,
     );
   }

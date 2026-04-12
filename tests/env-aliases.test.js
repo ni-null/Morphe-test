@@ -134,6 +134,28 @@ async function main() {
     assert.strictEqual(path.normalize(resolved), path.normalize(path.join(portableDir, "workspace")));
   });
 
+  await runTest("getDefaultWorkspaceRoot does not force portable in packaged runtime", async () => {
+    const env = {
+      LOCALAPPDATA: path.join(os.tmpdir(), "local-appdata"),
+      XDG_DATA_HOME: path.join(os.tmpdir(), "xdg-data-home"),
+    };
+    const baseline = getDefaultWorkspaceRoot(env);
+    const original = process.resourcesPath;
+    Object.defineProperty(process, "resourcesPath", {
+      configurable: true,
+      value: path.join(os.tmpdir(), "fake-resources"),
+    });
+    try {
+      const resolved = getDefaultWorkspaceRoot(env);
+      assert.strictEqual(path.normalize(resolved), path.normalize(baseline));
+    } finally {
+      Object.defineProperty(process, "resourcesPath", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
   await runTest("runtime timeout aliases prefer PATCH_* keys", async () => {
     const env = {
       PATCH_PAGE_TIMEOUT_MS: "12000",

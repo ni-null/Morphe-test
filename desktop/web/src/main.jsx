@@ -5,6 +5,7 @@ import BuildPage from "./pages/BuildPage"
 import MircrogPage from "./pages/MircrogPage"
 import HistoryPage from "./pages/HistoryPage"
 import AssetsPage from "./pages/AssetsPage"
+import KeystorePage from "./pages/KeystorePage"
 import Sidebar from "./components/layout/sidebar/Sidebar"
 import AppSettingsDialog from "./pages/BuildPage/components/AppSettingsDialog"
 import ConfigPathDialog from "./pages/BuildPage/components/ConfigPathDialog"
@@ -27,6 +28,7 @@ function App() {
         {c.activeNav === c.navKeys.build ? <BuildPage {...c.buildPageProps} /> : null}
         {c.activeNav === c.navKeys.mircrog ? <MircrogPage {...c.mircrogPageProps} /> : null}
         {c.activeNav === c.navKeys.assets ? <AssetsPage {...c.assetsPageProps} /> : null}
+        {c.activeNav === c.navKeys.keystore ? <KeystorePage {...c.keystorePageProps} /> : null}
         {c.activeNav === c.navKeys.history ? <HistoryPage {...c.historyPageProps} /> : null}
 
         <TaskDialogs {...c.taskDialogsProps} />
